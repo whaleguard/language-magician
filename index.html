@@ -2,43 +2,303 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#113d33">
-<meta name="description" content="언어의 마술사 · Language Magician — 내 말로 쓰고 상대의 언어로 전하는 외국인 친구 대화 도우미. 번역, 답장 조언, 지난 대화 기억, 인맥·기념일 관리, 사주 궁합.">
-<title>언어의 마술사 · Language Magician</title>
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="css/app.css">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>언어의 마술사 · 내 말로 쓰고, 상대의 언어로 답하세요</title>
+<meta name="description" content="카톡·위챗·LINE에서 받은 외국어 메시지를 붙여넣으면 번역과 뉘앙스, 지난 대화 기억, 답장 추천까지. 쓰던 메신저 그대로 외국 친구와 대화하세요.">
+<meta property="og:title" content="언어의 마술사 — 내 말로 쓰고, 상대의 언어로 답하세요">
+<meta property="og:description" content="받은 말 번역·뉘앙스 · 지난 대화 기억 · 답장 추천 · 인맥·기념일·약속 관리">
+<meta property="og:image" content="assets/og.jpg">
+<meta name="theme-color" content="#145746">
+<link rel="icon" href="icon.svg">
+<script>
+  // 예전 앱 주소(#/...)로 들어오면 앱으로 보냅니다.
+  if (/^#\//.test(location.hash)) location.replace('app.html' + location.hash);
+</script>
+<style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+:root { --green:#145746; --green-deep:#103e33; --ink:#172a25; --muted:#4d625b; --bg:#f7f8f5; --line:#dce5de; --mint:#e7f3ec; --paper:#fff; --warm:#fff1db }
+* { box-sizing:border-box }
+html { scroll-behavior:smooth }
+body { margin:0; color:var(--ink); font:17px/1.65 Pretendard,"Noto Sans KR",system-ui,sans-serif; word-break:keep-all; overflow-wrap:anywhere; background:var(--paper) }
+h1,h2,h3,p,figure { margin:0 }
+a { color:inherit; text-decoration:none }
+a:focus-visible,summary:focus-visible { outline:2px solid var(--green); outline-offset:4px }
+img,video { display:block; max-width:100% }
+.site-head { position:sticky; top:0; z-index:10; background:rgba(255,255,255,.92); backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--line) }
+.wrap { width:min(1180px,calc(100% - 48px)); margin-inline:auto }
+.top,.row { display:flex; align-items:center; gap:14px; flex-wrap:wrap }
+.top { min-height:72px; justify-content:space-between; padding-block:10px }
+.brand { display:inline-flex; align-items:center; font-size:19px; font-weight:800; letter-spacing:-.045em }
+.mark { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:8px; margin-right:8px; background:var(--green); color:#fff; font-size:17px }
+.site-head nav { display:flex; flex-wrap:wrap; gap:24px; font-size:15px; font-weight:650 }
+.site-head nav a:hover,footer a:hover { text-decoration:underline }
+.head-actions { display:flex; gap:10px; align-items:center }
+.lang { border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:7px 10px; font:inherit; font-size:14px }
+.cta { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:46px; padding:10px 18px; border:1px solid var(--green); border-radius:8px; background:var(--green); color:#fff; font-size:15px; font-weight:750; transition:background .15s }
+.cta:hover { background:var(--green-deep) }
+.cta.ghost { background:transparent; color:var(--green) }
+.cta.ghost:hover { background:var(--mint) }
+.cta.lg { min-height:54px; padding:12px 24px; font-size:17px }
+.hero { position:relative; background:var(--bg); padding:76px 0 64px; overflow:hidden }
+.hero-grid { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:48px; align-items:center }
+.eyebrow { display:inline-flex; gap:8px; align-items:center; padding:5px 12px; border-radius:999px; background:var(--mint); color:var(--green); font-size:14px; font-weight:750; margin-bottom:18px }
+.hero h1 { font-size:clamp(36px,5.1vw,68px); letter-spacing:-.065em; line-height:1.14 }
+.hero h1 em { font-style:normal; color:var(--green) }
+.hero p.lead { max-width:640px; margin:20px 0 28px; color:var(--muted); font-size:clamp(17px,1.7vw,21px) }
+.hero-note { margin-top:14px; color:var(--muted); font-size:14px }
+.hero-media { position:relative; border-radius:20px; overflow:hidden; aspect-ratio:4/3.2; background:#dfe9e2; box-shadow:0 30px 60px -20px rgba(20,46,36,.35) }
+.hero-media img,.hero-media video { width:100%; height:100%; object-fit:cover }
+.hero-media .float { position:absolute; left:16px; right:16px; bottom:16px; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,.94); backdrop-filter:blur(8px); font-size:14px; box-shadow:0 8px 24px rgba(0,0,0,.12) }
+.hero-media .float small { display:block; color:var(--green); font-weight:750; font-size:12px }
+.preview { margin-top:56px; display:grid; grid-template-columns:minmax(0,1fr) 300px; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 14px 36px #142e2410; background:var(--paper) }
+.preview-head { grid-column:1/-1; display:flex; justify-content:space-between; padding:12px 20px; font-size:14px; font-weight:750; border-bottom:1px solid var(--line) }
+.preview-head span { color:var(--muted); font-weight:600 }
+.preview-thread { padding:20px; display:grid; gap:12px; background:var(--bg) }
+.sample { padding:10px 14px; border-radius:12px; border:1px solid var(--line); width:fit-content; max-width:92%; font-size:15px; background:var(--paper) }
+.sample.out { justify-self:end; background:var(--mint); border-color:#c9ddd1 }
+.sample p+p { margin-top:4px; color:var(--muted); border-top:1px solid var(--line); padding-top:4px }
+.sample small { color:var(--green); font-weight:750 }
+.sug { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px }
+.sug span { padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:var(--paper); font-size:13px }
+.sug b { display:block; font-size:13px }
+.preview-side { padding:16px; background:#fbfcfa; border-left:1px solid var(--line); font-size:14px }
+.preview-side strong { display:block; margin-bottom:6px }
+.pv-item { display:flex; justify-content:space-between; gap:8px; padding:9px 8px; border-radius:9px }
+.pv-item.on { background:var(--mint) }
+.tag { font-size:11px; font-weight:750; padding:2px 6px; border-radius:5px; background:#edf2ef; color:var(--green); white-space:nowrap; align-self:center }
+.tag.wait { background:var(--warm); color:#735019 }
+.tag.new { background:#e7edfa; color:#344c80 }
+.pv-card { margin-top:10px; padding:10px; border:1px solid var(--line); border-radius:9px; background:var(--paper); font-size:13px }
+.band { padding:80px 0; border-top:1px solid var(--line) }
+.tinted { background:var(--bg) }
+.split { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:40px; align-items:start }
+h2 { font-size:clamp(28px,3.2vw,42px); letter-spacing:-.055em; line-height:1.2 }
+h3 { font-size:19px; letter-spacing:-.025em }
+.section-copy { color:var(--muted); margin-top:10px; font-size:18px }
+.grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:28px }
+.card { border:1px solid var(--line); background:var(--paper); border-radius:14px; padding:22px }
+.card p { margin-top:6px; color:var(--muted); font-size:16px }
+.card .ic { display:grid; place-items:center; width:42px; height:42px; border-radius:10px; background:var(--mint); color:var(--green); font-size:20px; margin-bottom:12px }
+.feature-img { border-radius:14px; overflow:hidden; aspect-ratio:16/10; background:#dfe9e2; margin-top:28px }
+.feature-img img,.feature-img video { width:100%; height:100%; object-fit:cover }
+.steps { list-style:none; padding:0; counter-reset:step }
+.steps li { counter-increment:step }
+.steps li::before { content:counter(step,decimal-leading-zero); display:block; color:var(--green); font-size:14px; font-weight:800; margin-bottom:6px }
+.pills { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 26px }
+.pill { padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--paper); font-size:15px; font-weight:700 }
+.plans { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.plans .pro { border-color:var(--green); background:var(--mint) }
+.plans ul { margin:12px 0 0; padding-left:18px; color:var(--muted); font-size:15px }
+.price { font-size:28px; font-weight:800; letter-spacing:-.04em; margin-top:6px }
+details { padding:14px 0; border-bottom:1px solid var(--line) }
+summary { cursor:pointer; font-weight:700 }
+details p { margin:8px 0 0; color:var(--muted) }
+.final { text-align:center; background:var(--green); color:#fff; border:0 }
+.final h2 { color:#fff }
+.final p { color:#cfe4d9; margin:12px auto 26px; max-width:620px }
+.final .cta { background:#fff; color:var(--green); border-color:#fff }
+.final .cta:hover { background:var(--mint) }
+footer { padding:36px 0; background:#102c24; color:#e2ede7 }
+footer a { text-decoration:underline; text-underline-offset:3px }
+footer p { max-width:850px; margin-top:10px; font-size:14px; color:#bcd2c6 }
+footer .brand { display:block; margin-bottom:8px }
+@media(max-width:960px) {
+  .hero-grid { grid-template-columns:minmax(0,1fr) }
+  .hero-media { aspect-ratio:16/10 }
+  .preview { grid-template-columns:minmax(0,1fr) }
+  .preview-side { border-left:0; border-top:1px solid var(--line) }
+}
+@media(max-width:760px) {
+  .wrap { width:calc(100% - 32px) }
+  .site-head nav { display:none }
+  .lang { display:none }
+  .hero { padding:44px 0 36px }
+  .band { padding:44px 0 }
+  .split,.grid,.plans { grid-template-columns:minmax(0,1fr); gap:10px }
+  .sug { grid-template-columns:minmax(0,1fr) }
+}
+</style>
 </head>
 <body>
-<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-  <symbol id="i-brand" viewBox="0 0 24 24"><path d="M3 5h12v9H8l-4 3v-3H3zM17 9h4v10h-2v3l-4-3h-4v-3"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
-  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 4v4m8-4v4M4 11h16m-12 4h2m4 0h2"/></symbol>
-  <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 14a3 3 0 0 1-3 3h-6l-5 4v-4a3 3 0 0 1-2-3V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3zM8 9h8m-8 4h5"/></symbol>
-  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-7 9 7M5 10v10h5v-6h4v6h5V10"/></symbol>
-  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="17" r="2" fill="currentColor"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M5 17h14l-2-3V9A5 5 0 0 0 7 9v5zm5 3h4"/></symbol>
-  <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m4 17 5-4 4 3 3-5 4 4"/></symbol>
-</svg>
-<div class="app" id="app" aria-live="polite"></div>
-<noscript>JavaScript가 필요합니다. / JavaScript is required.</noscript>
-<script src="js/config.js"></script>
-<script src="js/i18n.js"></script>
-<script src="js/data.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/saju.js"></script>
-<script src="js/store.js"></script>
-<script src="js/admin.js"></script>
-<script src="js/app.js"></script>
+<header class="site-head">
+  <div class="wrap top">
+    <a class="brand" href="#top"><span class="mark" aria-hidden="true">言</span>언어의 마술사</a>
+    <nav aria-label="페이지 메뉴">
+      <a href="#how">사용 방법</a><a href="#features">기능</a><a href="#plans">요금제</a><a href="#faq">FAQ</a>
+    </nav>
+    <div class="head-actions">
+      <select class="lang" id="lang" aria-label="앱 표시 언어">
+        <option value="ko">한국어</option><option value="zh" lang="zh-Hans">简体中文</option><option value="ja" lang="ja">日本語</option><option value="vi" lang="vi">Tiếng Việt</option><option value="en" lang="en">English</option>
+      </select>
+      <a class="cta" href="app.html" data-app>바로 써보기</a>
+    </div>
+  </div>
+</header>
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <span class="eyebrow">KakaoTalk · WeChat · LINE · WhatsApp · Zalo</span>
+          <h1 id="hero-title">내 말로 쓰고,<br><em>상대의 언어로</em> 답하세요.</h1>
+          <p class="lead">카톡·위챗에서 받은 말을 붙여넣으세요. 번역과 말의 뉘앙스를 확인하고, 지난 대화를 이어가는 답장을 만들어 원래 메신저에서 보내세요.</p>
+          <div class="row">
+            <a class="cta lg" href="app.html" data-app>바로 써보기 (가입 없이)</a>
+            <a class="cta lg ghost" href="#how">어떻게 쓰나요?</a>
+          </div>
+          <p class="hero-note">게스트로 바로 시작 · 실명 가입 없음 · PC 2모니터와 모바일 모두 지원</p>
+        </div>
+        <figure class="hero-media" aria-label="외국 친구와 메신저로 대화하는 모습">
+          <video id="hero-video" autoplay muted loop playsinline poster="assets/hero.jpg" preload="metadata">
+            <source src="assets/hero.mp4" type="video/mp4">
+          </video>
+          <figcaption class="float"><small>WeChat / 林 Lin · 받은 말</small><span lang="zh-Hans">好呀，周六四点在圣水站二号出口见？</span><br>좋아요, 토요일 4시에 성수역 2번 출구에서 만날까요?</figcaption>
+        </figure>
+      </div>
+
+      <figure class="preview" aria-label="번역과 답장을 보여주는 제품 화면 예시">
+        <figcaption class="preview-head">대화 작업 화면 · WeChat / 林 Lin <span>중국어 ↔ 한국어</span></figcaption>
+        <div class="preview-thread">
+          <div class="sample">
+            <small>받은 말</small>
+            <p lang="zh-Hans">上次说的那家咖啡店，你这周还想去吗？</p>
+            <p>지난번에 얘기한 카페, 이번 주에도 가고 싶어요?</p>
+          </div>
+          <div class="sample out">
+            <small>내 답장 · 답장 완료</small>
+            <p lang="zh-Hans">想去！周六下午怎么样？</p>
+            <p>가고 싶어요! 토요일 오후 어때요?</p>
+          </div>
+          <div class="sample">
+            <small>받은 말 · 새로 가져옴</small>
+            <p lang="zh-Hans">好呀，周六四点在圣水站二号出口见？</p>
+            <p>좋아요, 토요일 4시에 성수역 2번 출구에서 만날까요?</p>
+          </div>
+          <div class="sug" aria-label="답장 추천">
+            <span><b>시간·장소 확인</b>좋아요, 4시에 2번 출구에서 봐요!</span>
+            <span><b>시간 바꾸기</b>혹시 5시는 괜찮아요?</span>
+            <span><b>다시 확인</b>오후 4시 맞죠?</span>
+          </div>
+          <div class="sample out">
+            <small>내 답장 · 복사할 중국어</small>
+            <p lang="zh-Hans">好，四点在二号出口见！</p>
+            <p>좋아요, 4시에 2번 출구에서 봐요!</p>
+          </div>
+        </div>
+        <aside class="preview-side" aria-label="진행 중인 대화 예시">
+          <strong>진행 중인 대화</strong>
+          <div class="pv-item on"><span>WeChat / 林 Lin</span><span class="tag wait">답장 필요</span></div>
+          <div class="pv-item"><span>LINE / <span lang="ja">はるか</span></span><span class="tag new">새로 가져옴</span></div>
+          <div class="pv-item"><span>Zalo / Minh</span><span class="tag">복사함</span></div>
+          <div class="pv-item"><span>Instagram DM / Alex</span><span class="tag">답장 완료</span></div>
+          <div class="pv-card"><b>다음 약속</b><br>11월 28일 토 16:00 · 성수역 2번 출구</div>
+          <div class="pv-card"><b>지난 대화 기억</b><br>지난번에 말한 카페가 이번 약속의 출발점이에요.</div>
+        </aside>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="problem">
+    <div class="wrap split">
+      <h2 id="problem">뜻은 알겠는데,<br>뭐라고 답할지 막힐 때.</h2>
+      <div>
+        <p class="section-copy">번역기를 껐다 켜고, 지난 대화를 다시 찾다 보면 답장 한 줄에 시간이 걸립니다. 언어의 마술사는 상대별로 번역과 답장 초안을 한곳에 모아, 어디까지 이야기했는지 바로 보여줍니다.</p>
+        <div class="feature-img"><img src="assets/problem.jpg" alt="두 개의 모니터에 메신저와 언어의 마술사를 띄워놓고 대화하는 모습" loading="lazy" onerror="this.parentNode.hidden=true"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band tinted" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title">받은 말에서 답장까지</h2>
+      <ol class="grid steps">
+        <li class="card"><h3>붙여넣기</h3><p>대화 상대를 고르고 메신저에서 받은 말을 가져오세요. 스크린샷을 올려도 됩니다.</p></li>
+        <li class="card"><h3>번역·분석</h3><p>내 언어로 뜻과 말투를 읽고, 앞서 나눈 이야기나 약속을 확인하세요.</p></li>
+        <li class="card"><h3>답장 복사</h3><p>내 말로 쓰거나 추천 초안을 고르세요. 상대 언어로 만든 문장을 확인한 뒤 원래 메신저에 붙여넣으세요.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title">다음 대화에 필요한 것까지</h2>
+      <div class="grid">
+        <article class="card"><div class="ic" aria-hidden="true">文</div><h3>번역과 뉘앙스</h3><p>원문과 번역을 나란히 확인하고, 부탁인지 가벼운 제안인지 말투를 읽어요.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">↺</div><h3>지난 대화 기억</h3><p>이미 물어본 것과 아직 답하지 않은 질문을 가져온 기록에서 찾아요.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">♡</div><h3>상대 성향과 관계 코칭</h3><p>대화에서 보이는 소통 방식을 참고해 친구·연인·비즈니스 상황에 맞는 표현을 골라요.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">◷</div><h3>연락처·기념일·약속</h3><p>사람별로 챙길 일을 모아두고, 대화에 나온 약속의 시간과 장소를 확인해요.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">☯</div><h3>사주·궁합과 문화 가이드</h3><p>사주·궁합은 문화 콘텐츠로 즐기고, 호칭·인사·약속 예문은 대화에 써요.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">▣</div><h3>PC 2모니터 작업 화면</h3><p>한쪽엔 메신저, 한쪽엔 언어의 마술사. 대화 중인 상대 목록과 상대 정보를 한 화면에서 봐요.</p></article>
+      </div>
+      <div class="feature-img"><video autoplay muted loop playsinline poster="assets/feature.jpg" preload="none" onerror="this.parentNode.hidden=true"><source src="assets/feature.mp4" type="video/mp4"></video></div>
+    </div>
+  </section>
+
+  <section class="band tinted" aria-labelledby="channels-title">
+    <div class="wrap">
+      <h2 id="channels-title">쓰던 메신저에서 계속 대화하세요</h2>
+      <div class="pills" aria-label="텍스트 붙여넣기로 이용하는 메신저">
+        <span class="pill">KakaoTalk</span><span class="pill">WeChat</span><span class="pill">LINE</span><span class="pill">WhatsApp</span><span class="pill">Instagram DM</span><span class="pill">Telegram</span><span class="pill">Zalo</span><span class="pill">Messenger</span><span class="pill">기타</span>
+      </div>
+      <h3>앱 표시 언어</h3>
+      <div class="pills">
+        <span class="pill">한국어</span><span class="pill" lang="zh-Hans">简体中文</span><span class="pill" lang="ja">日本語</span><span class="pill" lang="vi">Tiếng Việt</span><span class="pill" lang="en">English</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="plans" aria-labelledby="plans-title">
+    <div class="wrap">
+      <h2 id="plans-title">요금제</h2>
+      <div class="grid plans">
+        <article class="card"><h3>무료</h3><div class="price">₩0</div><p>게스트로 번역과 답장 준비를 체험해 보세요.</p>
+          <ul><li>받은 말 번역·답장 번역</li><li>상대별 대화 기록</li><li>기념일·약속 알림</li></ul></article>
+        <article class="card pro"><h3>프로 · 출시 예정</h3><div class="price">곧 안내</div><p>가격과 제공 범위는 출시 시 안내합니다.</p>
+          <ul><li>AI 뉘앙스 분석·답장 추천</li><li>스크린샷 인식(OCR)</li><li>여러 기기 동기화</li></ul></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="faq" aria-labelledby="faq-title">
+    <div class="wrap split">
+      <h2 id="faq-title">자주 묻는 질문</h2>
+      <div>
+        <details><summary>가입 없이도 쓸 수 있나요?</summary><p>게스트로 시작할 수 있습니다. 대화 기록을 입력하기 전 운영 열람 안내와 동의를 확인합니다.</p></details>
+        <details><summary>메신저 계정을 연결해야 하나요?</summary><p>메신저에서 텍스트를 복사해 가져오면 됩니다. 작성한 답장도 복사한 뒤 쓰던 메신저에서 직접 보냅니다.</p></details>
+        <details><summary>앱 언어와 상대 언어를 따로 고를 수 있나요?</summary><p>앱 메뉴는 내 언어로 보고, 답장은 상대에 맞는 언어로 준비할 수 있습니다.</p></details>
+        <details><summary>가져온 대화는 누가 볼 수 있나요?</summary><p>권한을 받은 운영자가 앱에 제출한 대화를 관리 목적으로 열람할 수 있습니다. 열람 시 관리자·대화·시각·사유가 기록됩니다.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="band final" aria-labelledby="final-title">
+    <div class="wrap">
+      <h2 id="final-title">오늘 받은 메시지부터 붙여넣어 보세요.</h2>
+      <p>가입 없이 게스트로 바로 시작합니다. 내 말로 쓰면, 상대의 언어로 바뀝니다.</p>
+      <a class="cta lg" href="app.html" data-app>바로 써보기 (가입 없이)</a>
+    </div>
+  </section>
+</main>
+<footer id="privacy">
+  <div class="wrap">
+    <span class="brand">언어의 마술사 <span lang="en">Language Magician</span></span>
+    <div class="row"><a href="#consent">운영 열람 동의</a><a href="#privacy-note">개인정보 안내</a><a href="app.html#/admin">운영자</a></div>
+    <p id="consent">서비스 관리, 번역·답장 개선, 악용 대응을 위해 권한 있는 운영자가 앱에 제출한 모든 대화를 열람할 수 있습니다. 첫 이용 시 필수 동의를 받습니다.</p>
+    <p id="privacy-note">연락처는 직접 입력한 메신저와 닉네임으로 관리합니다. 필요한 대화만 붙여넣고 민감한 내용은 입력 전에 가려 주세요.</p>
+    <p>© 2026 주식회사 고래등</p>
+  </div>
+</footer>
 <script>
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
-  }
+  // 선택한 표시 언어로 앱을 엽니다.
+  (function () {
+    var sel = document.getElementById('lang');
+    var nav = (navigator.language || 'ko').slice(0, 2);
+    if (['ko', 'zh', 'ja', 'vi', 'en'].indexOf(nav) >= 0) sel.value = nav;
+    function upd() { document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + sel.value; }); }
+    sel.addEventListener('change', upd); upd();
+    var v = document.getElementById('hero-video');
+    v.addEventListener('error', function () {}, true);
+  })();
 </script>
 </body>
 </html>

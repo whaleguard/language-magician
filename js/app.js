@@ -7,7 +7,13 @@
   const $app = document.getElementById('app');
 
   /* ================= 공통 유틸 ================= */
-  let uiLang = (Store.me() && Store.me().lang) || pickBrowserLang();
+  const _qLang = (location.search.match(/[?&]lang=(ko|zh|ja|vi|en)/) || [])[1];
+  let uiLang = (Store.me() && Store.me().lang) || _qLang || pickBrowserLang();
+  function langUi(code) {
+    if (!code) return '';
+    try { const dn = new Intl.DisplayNames([uiLang === 'zh' ? 'zh-Hans' : uiLang], { type: 'language' }); const v = dn.of(code); if (v && v !== code) return v.replace(/\s*[（(].*[）)]/, ''); } catch (e) {}
+    return langName(code);
+  }
   function pickBrowserLang() {
     const n = (navigator.language || 'en').toLowerCase();
     if (n.startsWith('ko')) return 'ko'; if (n.startsWith('zh')) return 'zh'; if (n.startsWith('ja')) return 'ja'; if (n.startsWith('vi')) return 'vi';
@@ -35,6 +41,7 @@
     return tpl.replace('{y}', d.getFullYear()).replace('{m}', d.getMonth() + 1).replace('{d}', d.getDate()).replace('{mon}', MONTHS_EN[d.getMonth()]);
   }
   function fmtDateW(d) { if (typeof d === 'string') d = parseYmd(d); if (!d) return ''; return fmtDate(d) + ' (' + t('weekdays')[d.getDay()] + ')'; }
+  function shortTs(ts) { const d = new Date(ts); const n = new Date(); if (d.toDateString() === n.toDateString()) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); const y = new Date(n); y.setDate(n.getDate() - 1); if (d.toDateString() === y.toDateString()) return t('yesterday'); return (d.getMonth() + 1) + '/' + d.getDate(); }
   function fmtTs(ts) { const d = new Date(ts); return fmtDate(d) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
   function today() { return Engine.ymd(new Date()); }
   function daysBetween(a, b) { return Math.round((parseYmd(b) - parseYmd(a)) / 86400000); }
@@ -92,15 +99,90 @@
     document.documentElement.lang = uiLang === 'zh' ? 'zh-Hans' : uiLang;
     document.title = t('brand') + ' · ' + t('tagline');
     if (u.status === 'banned') return renderBlocked(u);
-    const pages = { home: renderHome, helper: renderHelper, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings };
-    (pages[r.name] || renderHome)(r);
-    window.scrollTo(0, 0);
+    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings };
+    (pages[r.name] || renderChat)(r);
+    window.scrollTo(0, 0); const _mn = document.querySelector('.ws-main'); if (_mn) _mn.scrollTop = 0;
   }
 
+  const WIDE = window.matchMedia('(min-width: 1100px)');
+  WIDE.addEventListener('change', () => render());
   function shell(inner, active, opts) {
-    const nav = [['home', 'home', 'nav_home'], ['helper', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
+    const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
+    if (WIDE.matches && !(opts && opts.noNav)) {
+      document.body.classList.add('is-wide');
+      $app.innerHTML = `<div class="ws">
+        <aside class="ws-rail" aria-label="main"><span class="mark" style="margin:4px auto 14px">${icon('brand')}</span>
+          ${nav.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}">${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
+        </aside>
+        <main class="ws-main"><div class="screen">${inner}</div></main>
+        <aside class="ws-side">${sideHtml()}</aside>
+      </div>`;
+      return;
+    }
+    document.body.classList.remove('is-wide');
     $app.innerHTML = `<div class="screen">${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${nav.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
   }
+
+  /* 데스크탑 오른쪽 패널: 대화 중인 상대 목록 + 선택한 상대 정보 */
+  function sideHtml() {
+    const u = Store.me(); if (!u) return '';
+    const r = route();
+    const curId = (r.name === 'chat' || r.name === 'contact' || r.name === 'coach' || r.name === 'saju' || r.name === 'gift') ? (r.id || (r.name === 'chat' ? helperState.contactId : '') || '') : (helperState.contactId || '');
+    const rows = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); const last = ms[ms.length - 1]; return { c, last, ts: last ? last.ts : c.createdAt }; }).sort((a, b) => b.ts - a.ts);
+    const c = curId && curId !== 'none' ? u.contacts.find((x) => x.id === curId) : null;
+    let info = '';
+    if (c) {
+      const ms = Store.messagesOf(c.id, u);
+      const pf = Engine.profile(ms);
+      const td = today();
+      const nextP = u.promises.filter((p) => p.contactId === c.id && !p.done && p.date >= td).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 2);
+      const ann = annivList(u, c.id).slice(0, 3);
+      const rc = Engine.recall({ text: '', dir: 'in', messages: ms, promises: [] });
+      const stageKey = STAGES[c.relation || 'friend'][c.stage || 0];
+      const tips = (COACH[uiLang] || COACH.en)[stageKey];
+      info = `<div class="ws-card">
+        <div class="row">${avatar(c)}<div class="grow" style="min-width:0"><strong class="ellipsis" style="display:block" lang="${esc(c.lang)}">${esc(c.nickname)}</strong><span class="tiny muted">${esc(appName(c.app))} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</span></div></div>
+        <div class="row wrap" style="gap:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${c.metAt ? `<span class="badge gray">${esc(t('c_days_met', { n: daysBetween(c.metAt, td) + 1 }))}</span>` : ''}</div>
+        ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
+      </div>
+      ${pf.count >= 3 ? `<div class="ws-card"><span class="ws-h">${t('c_analysis')}</span>
+        <div class="ws-kv"><span>${t('st_formal')}</span><b>${t(pf.formality === 'polite' ? 'formal_polite' : 'formal_casual')}</b></div>
+        <div class="ws-kv"><span>${t('st_reply')}</span><b>${dur(pf.replyMinutes)}</b></div>
+        <div class="ws-kv"><span>${t('st_mood')}</span><b>${t('mood_' + pf.mood)}</b></div>
+        <div class="ws-kv"><span>${t('st_active')}</span><b>${pf.activeHour !== null ? t('hour_at', { n: pf.activeHour }) : '—'}</b></div>
+        <div class="stack-xs"><div class="between tiny"><span>${t('st_depth')}</span><b>${pf.depth}/100</b></div><div class="bar"><span style="width:${pf.depth}%"></span></div></div>
+        ${pf.topics.length ? `<div class="row wrap" style="gap:4px">${pf.topics.slice(0, 5).map((x) => `<span class="chip" style="font-size:12px;padding:3px 8px">${esc(x)}</span>`).join('')}</div>` : ''}
+      </div>` : ''}
+      <div class="ws-card"><span class="ws-h">${t('c_dates')}</span>
+        ${nextP.map((p) => `<div class="small">📅 ${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.place ? `<br><span class="tiny muted">${esc(p.place)}</span>` : ''}</div>`).join('')}
+        ${ann.map((a) => `<div class="small">🎉 ${esc(a.label)} · <b>${a.inDays === 0 ? t('d_today') : t('d_day', { n: a.inDays })}</b></div>`).join('')}
+        ${!nextP.length && !ann.length ? `<p class="tiny muted">${t('none')}</p>` : ''}
+        <div class="row" style="gap:8px"><button class="btn sm secondary" type="button" data-go="#/agenda?c=${c.id}">${t('add_promise')}</button><button class="btn sm secondary" type="button" data-go="#/gift/${c.id}">🎁</button><button class="btn sm secondary" type="button" data-go="#/saju/${c.id}">☯</button></div>
+      </div>
+      ${rc.unanswered.length ? `<div class="ws-card" style="background:var(--warm);border-color:#efdfc5"><span class="ws-h" style="color:var(--warm-ink)">${t('mem_unanswered')}</span>${rc.unanswered.slice(-3).map((m) => `<div class="small">💬 ${esc((m.translation || m.text).slice(0, 70))}</div>`).join('')}</div>` : ''}
+      <div class="ws-card"><span class="ws-h">${t('coach_next')}</span><p class="small">${esc(tips[0])}</p><p class="tiny" style="color:var(--warm-ink)">⚠ ${esc(tips[1])}</p><button class="link" type="button" data-go="#/coach/${c.id}" style="min-height:28px">${t('coach_link')} ${icon('arrow', 'sm')}</button></div>
+      ${c.note ? `<div class="ws-card"><span class="ws-h">${t('c_note')}</span><p class="small" style="white-space:pre-wrap">${esc(c.note)}</p></div>` : ''}`;
+    }
+    return `<div class="ws-side-in">
+      <div class="between"><span class="ws-h" style="font-size:13px">${t('all_chat')}</span><button class="link" type="button" data-go="#/contact-edit/new" style="min-height:28px;font-size:13px">+ ${t('add_contact')}</button></div>
+      <div class="row" style="gap:6px"><input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}"><button type="button" class="chip ${chatState.needOnly ? 'on' : ''}" id="ws-need" aria-pressed="${chatState.needOnly}">${t('filter_need')}</button></div>
+      <div class="ws-list ${chatState.infoClosed || !c ? 'tall' : ''}" id="ws-list">${wsRows(u, curId)}</div>
+      ${c ? `<button type="button" class="ws-toggle" id="ws-info-toggle" aria-expanded="${!chatState.infoClosed}"><span>${t('c_info')}</span><span>${chatState.infoClosed ? '▴' : '▾'}</span></button>${chatState.infoClosed ? '' : info}` : ''}
+    </div>`;
+  }
+  function wsRows(u, curId) {
+    const q = (chatState.q || '').trim().toLowerCase();
+    const rows = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); const last = ms[ms.length - 1]; return { c, last, st: convStatus(ms), ts: last ? last.ts : c.createdAt }; })
+      .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app)).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new'))
+      .sort((a, b) => b.ts - a.ts);
+    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''}" data-go="#/chat/${x.id}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><span class="row between" style="gap:6px"><strong class="ellipsis" lang="${esc(x.lang)}">${esc(x.nickname)}</strong><span class="tiny muted" style="flex:0 0 auto">${last ? esc(shortTs(last.ts)) : ''}</span></span><span class="tiny muted ellipsis" style="display:block"><b class="ws-app">${esc(appName(x.app))}</b> · ${last ? esc(last.dir === 'in' ? (last.translation || last.text) : last.text) : ''}</span>${st ? `<span class="ws-st">${statusBadge(st)}</span>` : ''}</span>${st === 'need' || st === 'new' ? '<span class="ws-dot" aria-hidden="true"></span>' : ''}</button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
+  }
+  document.addEventListener('input', (e) => { if (e.target.id === 'ws-search') { chatState.q = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#ws-need')) { chatState.needOnly = !chatState.needOnly; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); }
+    if (e.target.closest('#ws-info-toggle')) { chatState.infoClosed = !chatState.infoClosed; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); }
+  });
+
   function topBar(title, back, right) {
     return `<header class="top between"><div class="row grow" style="min-width:0">${back ? `<button class="icon-btn" type="button" data-go="${back}" aria-label="${t('back')}">${icon('back')}</button>` : `<span class="brand"><span class="mark">${icon('brand')}</span>${esc(t('brand'))}</span>`}${title ? `<strong class="ellipsis">${title}</strong>` : ''}</div>${right || ''}</header>`;
   }
@@ -249,6 +331,13 @@
     return out.filter((x) => x.c || x.type === 'custom').sort((a, b) => a.inDays - b.inDays);
   }
 
+  function itemText(it) {
+    const who = it.c ? esc(it.c.nickname) + ' · ' : '';
+    if (it.kind === 'overdue' || it.kind === 'today' || it.kind === 'upcoming') return (it.kind === 'overdue' ? '⏰ ' : '📅 ') + who + (it.kind === 'today' ? t('d_today') : fmtDateW(it.p.date)) + ' ' + esc(it.p.time || '') + ' ' + esc(it.p.title);
+    if (it.kind === 'anniv') return '🎉 ' + who + (it.a.inDays === 0 ? t('d_today') : t('d_day', { n: it.a.inDays })) + ' ' + esc(it.a.label);
+    if (it.kind === 'unanswered') return '💬 ' + who + esc(t('unanswered_from'));
+    return '';
+  }
   function itemHtml(it) {
     const c = it.c;
     const av = c ? avatar(c) : `<span class="avatar">${icon('calendar')}</span>`;
@@ -262,7 +351,7 @@
       return `<li><button class="list-row" type="button" data-go="#/gift/${c ? c.id : ''}">${av}<span class="grow">${lab}<br><strong>${a.inDays === 0 ? t('d_today') : t('d_day', { n: a.inDays })} · ${esc(a.label)}</strong><br><span class="small muted">${fmtDateW(a.date)}</span></span>${icon('arrow', 'chev')}</button></li>`;
     }
     if (it.kind === 'unanswered') {
-      return `<li><button class="list-row" type="button" data-go="#/helper?c=${c.id}&m=${it.m.id}">${av}<span class="grow">${lab}<br><strong>${t('unanswered_from')}</strong><br><span class="small muted ellipsis" style="display:block">${esc(it.m.translation || it.m.text)}</span></span>${icon('arrow', 'chev')}</button></li>`;
+      return `<li><button class="list-row" type="button" data-go="#/chat/${c.id}">${av}<span class="grow">${lab}<br><strong>${t('unanswered_from')}</strong><br><span class="small muted ellipsis" style="display:block">${esc(it.m.translation || it.m.text)}</span></span>${icon('arrow', 'chev')}</button></li>`;
     }
     return '';
   }
@@ -272,11 +361,11 @@
     const c = selId ? u.contacts.find((x) => x.id === selId) : null;
     return `<div class="card stack-sm ${c ? 'edge-' + c.color : ''}">
       <div class="row">${c ? avatar(c) : `<span class="avatar">${icon('person')}</span>`}
-        <div class="grow"><label class="label" for="${idName}">${t('pick_contact')}</label><div>${c ? `<strong>${esc(appName(c.app))}</strong> / <span lang="${esc(c.lang)}">${esc(c.nickname)}</span> · <span class="small muted">${esc(langName(c.lang))}</span>` : `<span class="small muted">${t('no_contact')}</span>`}</div></div>
+        <div class="grow"><label class="label" for="${idName}">${t('pick_contact')}</label><div>${c ? `<strong>${esc(appName(c.app))}</strong> / <span lang="${esc(c.lang)}">${esc(c.nickname)}</span> · <span class="small muted">${esc(langUi(c.lang))}</span>` : `<span class="small muted">${t('no_contact')}</span>`}</div></div>
       </div>
       <select class="field" id="${idName}">
         <option value="">${t('no_contact')}</option>
-        ${u.contacts.map((x) => `<option value="${x.id}" ${x.id === selId ? 'selected' : ''}>${esc(appName(x.app))} / ${esc(x.nickname)} (${esc(langName(x.lang))})</option>`).join('')}
+        ${u.contacts.map((x) => `<option value="${x.id}" ${x.id === selId ? 'selected' : ''}>${esc(appName(x.app))} / ${esc(x.nickname)} (${esc(langUi(x.lang))})</option>`).join('')}
       </select>
       <button class="link" type="button" data-go="#/contact-edit/new">${icon('person', 'sm')} ${t('add_contact')}</button>
     </div>`;
@@ -359,7 +448,7 @@
       spinBtn(ev.currentTarget, false);
     });
     document.getElementById('in-helper').addEventListener('click', () => {
-      go('#/helper?' + (homeContact ? 'c=' + homeContact + '&' : '') + (lastIn ? 'm=' + lastIn.id : ''));
+      go('#/chat/' + (homeContact || 'none'));
     });
     let outText = '';
     document.getElementById('out-go').addEventListener('click', async (ev) => {
@@ -398,7 +487,7 @@
     return `<ul class="list card" style="padding-block:2px">${rows.map(({ c, last }) => {
       const stageName = STAGE_NAMES[uiLang][STAGES[c.relation || 'friend'][c.stage || 0]] || '';
       const unanswered = last && last.dir === 'in';
-      return `<li><button class="list-row" type="button" data-go="#/contact/${c.id}">${avatar(c)}<span class="grow" style="min-width:0"><span class="row" style="gap:6px"><strong class="ellipsis" lang="${esc(c.lang)}">${esc(c.nickname)}</strong>${unanswered ? '<span class="badge warning">●</span>' : ''}</span><span class="small muted ellipsis" style="display:block">${esc(appName(c.app))} · ${esc(langName(c.lang))} · ${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(stageName)}</span>${last ? `<span class="small ellipsis" style="display:block">${esc(last.dir === 'in' ? (last.translation || last.text) : last.text)}</span>` : ''}</span>${icon('arrow', 'chev')}</button></li>`;
+      return `<li><button class="list-row" type="button" data-go="#/contact/${c.id}">${avatar(c)}<span class="grow" style="min-width:0"><span class="row" style="gap:6px"><strong class="ellipsis" lang="${esc(c.lang)}">${esc(c.nickname)}</strong>${unanswered ? '<span class="badge warning">●</span>' : ''}</span><span class="small muted ellipsis" style="display:block">${esc(appName(c.app))} · ${esc(langUi(c.lang))} · ${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(stageName)}</span>${last ? `<span class="small ellipsis" style="display:block">${esc(last.dir === 'in' ? (last.translation || last.text) : last.text)}</span>` : ''}</span>${icon('arrow', 'chev')}</button></li>`;
     }).join('')}</ul>`;
   }
 
@@ -560,10 +649,10 @@
     return parts.join(' ');
   }
 
-  async function analyzeIncoming(c, text) {
+  async function analyzeIncoming(c, text, opts) {
     const u = Store.me();
     const from = Engine.detect(text);
-    const history = c ? Store.messagesOf(c.id) : [];
+    const history = c ? Store.messagesOf(c.id).filter((x) => !(opts && opts.existing) || x.ts < opts.existing.ts) : [];
     const res = { text, from, provider: 'mt' };
     let ai = null;
     if (Engine.aiConfig().key && c) {
@@ -646,11 +735,14 @@
     res.coach = ai && ai.coach ? ai.coach : null;
     res.avoid = ai && ai.avoid ? ai.avoid : null;
     // 저장(관리자 모니터링 대상)
-    const msg = Store.addMessage({
+    const fields = {
       contactId: c ? c.id : null, dir: 'in', text, lang: from, translation: res.translation, trLang: uiLang,
       source: helperState.source || 'paste', intents: res.intents, risk: res.risk, provider: res.provider,
       suggestions: replies.map((r) => r.text), nuance: res.nuance.join(' '),
-    });
+    };
+    let msg;
+    if (opts && opts.existing) { msg = opts.existing; Object.assign(msg, fields, { source: msg.source || fields.source, translation: msg.translation || fields.translation }); Store.save(); }
+    else msg = Store.addMessage(fields);
     helperState.msgId = msg.id;
     helperState.source = null;
     res.msgId = msg.id;
@@ -813,6 +905,248 @@
     });
   }
 
+  /* ================= 대화방: 받은 말·보낼 말을 한 흐름으로 ================= */
+  const XT = {
+    ko: { chat_title: '대화방', chat_pick: '누구와의 대화인가요?', chat_none: '연락처 없이 번역만', smart_ph: '상대 메시지를 붙여넣거나, 내 말을 쓰세요', smart_hint: '상대 언어로 붙여넣으면 받은 말, 내 언어로 쓰면 보낼 말로 자동 인식해요.', det_in: '받은 말로 인식', det_out: '보낼 말로 인식', det_switch: '바꾸기', send: '넣기', use_reply: '이걸로 답장', copy: '복사', copied_short: '복사됨', analysis: '분석과 답장 추천', open_chat: '대화방 열기', chat_empty: '아직 대화가 없어요. 상대가 보낸 메시지를 붙여넣어 보세요.', all_chat: '전체 대화', thread_count: '대화 {n}건', pick_first: '대화 상대를 먼저 고르세요', translating: '번역 중…', show_more: '이전 대화 더 보기' },
+    zh: { chat_title: '对话', chat_pick: '和谁的对话？', chat_none: '不选联系人，仅翻译', smart_ph: '粘贴对方的消息，或写下你想说的话', smart_hint: '用对方语言粘贴会识别为收到的话，用你的语言写会识别为要发的话。', det_in: '识别为收到的话', det_out: '识别为要发的话', det_switch: '切换', send: '添加', use_reply: '用这句回复', copy: '复制', copied_short: '已复制', analysis: '分析与回复建议', open_chat: '打开对话', chat_empty: '还没有对话。粘贴对方发来的消息试试。', all_chat: '全部对话', thread_count: '共 {n} 条', pick_first: '请先选择联系人', translating: '翻译中…', show_more: '查看更早的对话' },
+    ja: { chat_title: 'トーク', chat_pick: '誰との会話ですか？', chat_none: '連絡先なしで翻訳だけ', smart_ph: '相手のメッセージを貼り付けるか、自分の言葉を書いてください', smart_hint: '相手の言語で貼ると「届いた言葉」、自分の言語で書くと「送る言葉」として自動で判別します。', det_in: '届いた言葉として判別', det_out: '送る言葉として判別', det_switch: '切り替え', send: '追加', use_reply: 'これで返信', copy: 'コピー', copied_short: 'コピー済み', analysis: '分析と返信案', open_chat: 'トークを開く', chat_empty: 'まだ会話がありません。相手のメッセージを貼り付けてみましょう。', all_chat: 'すべての会話', thread_count: '{n}件', pick_first: '先に相手を選んでください', translating: '翻訳中…', show_more: '以前の会話を表示' },
+    vi: { chat_title: 'Trò chuyện', chat_pick: 'Trò chuyện với ai?', chat_none: 'Chỉ dịch, không chọn liên hệ', smart_ph: 'Dán tin nhắn của họ hoặc viết điều bạn muốn nói', smart_hint: 'Dán bằng tiếng của họ sẽ là tin nhận được, viết bằng tiếng của bạn sẽ là tin để gửi.', det_in: 'Nhận diện: tin nhận được', det_out: 'Nhận diện: tin để gửi', det_switch: 'Đổi', send: 'Thêm', use_reply: 'Trả lời bằng câu này', copy: 'Sao chép', copied_short: 'Đã sao chép', analysis: 'Phân tích và gợi ý trả lời', open_chat: 'Mở trò chuyện', chat_empty: 'Chưa có tin nhắn. Hãy dán tin nhắn họ gửi.', all_chat: 'Toàn bộ hội thoại', thread_count: '{n} tin', pick_first: 'Hãy chọn người trò chuyện trước', translating: 'Đang dịch…', show_more: 'Xem tin cũ hơn' },
+    en: { chat_title: 'Chat', chat_pick: 'Who is this chat with?', chat_none: 'No contact, just translate', smart_ph: 'Paste their message, or write what you want to say', smart_hint: 'Paste in their language and it\'s a received message. Write in yours and it\'s a reply to send.', det_in: 'Detected: received', det_out: 'Detected: to send', det_switch: 'Switch', send: 'Add', use_reply: 'Reply with this', copy: 'Copy', copied_short: 'Copied', analysis: 'Analysis and reply ideas', open_chat: 'Open chat', chat_empty: 'No messages yet. Paste a message they sent.', all_chat: 'Full conversation', thread_count: '{n} messages', pick_first: 'Pick who you are talking to first', translating: 'Translating…', show_more: 'Show earlier messages' },
+  };
+  Object.keys(XT).forEach((l) => Object.assign(T[l], XT[l]));
+
+
+  const ST_T = {"ko": {"search_ph": "이름·앱 검색", "no_result": "결과 없음", "c_info": "상대 정보", "st_new": "새로 가져옴", "st_need": "답장 필요", "st_copied": "복사함", "st_done": "답장 완료", "mark_sent": "보냈어요", "filter_need": "답장 필요만"}, "zh": {"search_ph": "搜索名字或应用", "no_result": "没有结果", "c_info": "对方信息", "st_new": "新导入", "st_need": "需要回复", "st_copied": "已复制", "st_done": "已回复", "mark_sent": "已发送", "filter_need": "只看需回复"}, "ja": {"search_ph": "名前・アプリで検索", "no_result": "見つかりません", "c_info": "相手の情報", "st_new": "新着", "st_need": "返信が必要", "st_copied": "コピー済み", "st_done": "返信済み", "mark_sent": "送信済みにする", "filter_need": "返信待ちのみ"}, "vi": {"search_ph": "Tìm tên hoặc ứng dụng", "no_result": "Không có kết quả", "c_info": "Thông tin người này", "st_new": "Mới nhập", "st_need": "Cần trả lời", "st_copied": "Đã sao chép", "st_done": "Đã trả lời", "mark_sent": "Đã gửi", "filter_need": "Chỉ cần trả lời"}, "en": {"search_ph": "Search name or app", "no_result": "No results", "c_info": "Contact info", "st_new": "New", "st_need": "Needs reply", "st_copied": "Copied", "st_done": "Replied", "mark_sent": "Mark sent", "filter_need": "Needs reply only"}};
+  Object.keys(ST_T).forEach((l) => Object.assign(T[l], ST_T[l]));
+  /* 상대별 대화 상태: 새로 가져옴 / 답장 필요 / 복사함 / 답장 완료 */
+  function convStatus(ms) {
+    const last = ms[ms.length - 1]; if (!last) return null;
+    if (last.dir === 'in') return (Date.now() - last.ts < 30 * 60000 && !last.analysis) ? 'new' : 'need';
+    return last.sent ? 'done' : 'copied';
+  }
+  function statusBadge(st) { if (!st) return ''; const cls = { new: 'lilac', need: 'warning', copied: 'gray', done: '' }[st]; return `<span class="badge ${cls} st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>`; }
+  const CH_T = {"ko": {"dir_label": "처리 방향", "dir_auto": "자동 감지", "dir_in": "받은 말 · {from} → {to}", "dir_out": "내 답장 · {from} → {to}", "draft_of": "{who} · 이 대화의 초안", "btn_in": "받은 말 넣기", "btn_out": "{lang}로 번역·복사", "copy_lang": "{lang} 복사", "suggest_title": "답장 추천", "show_sug": "답장 추천 보기", "insight": "뉘앙스·상황·지난 대화", "reply_hint": "번역을 확인하고 복사해 {app}에서 보내세요.", "me_reply": "내 답장", "sug_fill": "입력창에 채웠어요. 확인 후 번역·복사를 누르세요.", "contact_info": "상대 정보", "lang_pair": "{a} ↔ {b}"}, "zh": {"dir_label": "处理方向", "dir_auto": "自动识别", "dir_in": "收到的话 · {from} → {to}", "dir_out": "我的回复 · {from} → {to}", "draft_of": "{who} · 本对话草稿", "btn_in": "添加收到的话", "btn_out": "翻译成{lang}并复制", "copy_lang": "复制{lang}", "suggest_title": "回复建议", "show_sug": "查看回复建议", "insight": "语气·情况·以前的对话", "reply_hint": "确认翻译后复制，到{app}发送。", "me_reply": "我的回复", "sug_fill": "已填入输入框。确认后点击翻译并复制。", "contact_info": "对方信息", "lang_pair": "{a} ↔ {b}"}, "ja": {"dir_label": "処理の方向", "dir_auto": "自動判別", "dir_in": "届いた言葉 · {from} → {to}", "dir_out": "自分の返信 · {from} → {to}", "draft_of": "{who} · この会話の下書き", "btn_in": "届いた言葉を追加", "btn_out": "{lang}に翻訳してコピー", "copy_lang": "{lang}をコピー", "suggest_title": "返信案", "show_sug": "返信案を見る", "insight": "ニュアンス・状況・前の会話", "reply_hint": "翻訳を確認してコピーし、{app}で送ってください。", "me_reply": "自分の返信", "sug_fill": "入力欄に入れました。確認して翻訳・コピーを押してください。", "contact_info": "相手の情報", "lang_pair": "{a} ↔ {b}"}, "vi": {"dir_label": "Hướng xử lý", "dir_auto": "Tự nhận diện", "dir_in": "Tin nhận được · {from} → {to}", "dir_out": "Trả lời của tôi · {from} → {to}", "draft_of": "{who} · bản nháp của cuộc trò chuyện này", "btn_in": "Thêm tin nhận được", "btn_out": "Dịch sang {lang} và sao chép", "copy_lang": "Sao chép {lang}", "suggest_title": "Gợi ý trả lời", "show_sug": "Xem gợi ý trả lời", "insight": "Sắc thái · tình huống · trò chuyện trước", "reply_hint": "Kiểm tra bản dịch, sao chép rồi gửi trong {app}.", "me_reply": "Trả lời của tôi", "sug_fill": "Đã điền vào ô nhập. Kiểm tra rồi bấm dịch và sao chép.", "contact_info": "Thông tin người này", "lang_pair": "{a} ↔ {b}"}, "en": {"dir_label": "Direction", "dir_auto": "Auto-detect", "dir_in": "Received · {from} → {to}", "dir_out": "My reply · {from} → {to}", "draft_of": "{who} · draft for this chat", "btn_in": "Add received message", "btn_out": "Translate to {lang} & copy", "copy_lang": "Copy {lang}", "suggest_title": "Reply ideas", "show_sug": "Show reply ideas", "insight": "Nuance · situation · past chats", "reply_hint": "Check the translation, copy it and send in {app}.", "me_reply": "My reply", "sug_fill": "Filled in the box. Check it, then translate & copy.", "contact_info": "Contact info", "lang_pair": "{a} ↔ {b}"}};
+  Object.keys(CH_T).forEach((l) => Object.assign(T[l], CH_T[l]));
+  const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {} };
+
+  function renderChat(r) {
+    const u = Store.me();
+    let id = r.id || (r.q && r.q.c) || helperState.contactId || '';
+    if (!id && WIDE.matches && u.contacts.length) {
+      const recent = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); return { c, ts: ms.length ? ms[ms.length - 1].ts : c.createdAt }; }).sort((a, b) => b.ts - a.ts)[0];
+      id = recent.c.id;
+    }
+    if (!id) return renderChatPicker();
+    const c = id === 'none' ? null : Store.contact(id);
+    if (id !== 'none' && !c) return renderChatPicker();
+    helperState.contactId = c ? c.id : null;
+    const ms = c ? Store.messagesOf(c.id) : u.messages.filter((m) => !m.contactId).sort((a, b) => a.ts - b.ts);
+    const shown = ms.slice(-chatState.limit);
+    const lastIn = [...ms].reverse().find((m) => m.dir === 'in');
+    const rc = c ? Engine.recall({ text: '', dir: 'in', messages: ms, promises: u.promises.filter((p) => p.contactId === c.id) }) : null;
+    const target = c ? c.lang : (chatState.target || (uiLang === 'en' ? 'ko' : 'en'));
+    const draft = chatState.draft[id] || '';
+    const ai = !!Engine.aiConfig().key;
+    const st = c ? convStatus(ms) : null;
+    let lastDay = '';
+    const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>`; } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
+    shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
+        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis"><span class="app-name">${esc(appName(c.app))}</span> / <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn" type="button" data-go="#/contact/${c.id}" aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}">${icon('person')}</button>` : ''}</div></header>
+      <div class="content chat-scroll" style="padding-bottom:12px">
+        ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
+          ${rc.upcomingPromises.slice(0, 2).map((p) => `<span class="pin">📅 ${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.place ? ' · ' + esc(p.place) : ''}</span>`).join('')}
+          ${rc.overduePromises.slice(0, 2).map((p) => `<span class="pin warn">⏰ ${t('mem_overdue')} · ${esc(p.title)}</span>`).join('')}
+        </div>` : ''}
+        ${!c ? `<label class="small row">${t('send_lang')} <select class="field" id="ch-target" style="width:auto">${Object.keys(Engine.LANGS).filter((l) => l !== uiLang).map((l) => `<option value="${l}" ${l === target ? 'selected' : ''}>${esc(langName(l))}</option>`).join('')}</select></label>` : ''}
+        ${ms.length > shown.length ? `<button class="link" type="button" id="ch-more" style="justify-self:center">${t('show_more')}</button>` : ''}
+        <div class="thread" id="thread">
+          ${shown.length ? threadHtml : `<div class="empty small">${t('chat_empty')}</div>`}
+        </div>
+      </div>
+      <div class="dock"><div class="composer" id="composer">
+        <div class="tools"><div class="row" style="gap:8px"><label class="tiny muted" for="ch-dir">${t('dir_label')}</label>
+          <select class="field sel-sm" id="ch-dir"><option value="">${t('dir_auto')}</option><option value="in">${esc(t('dir_in', { from: langUi(target), to: langUi(uiLang) }))}</option><option value="out">${esc(t('dir_out', { from: langUi(uiLang), to: langUi(target) }))}</option></select></div>
+          <span class="badge gray" id="ch-det">${t('smart_hint')}</span></div>
+        <label class="tiny muted" for="ch-input" style="font-weight:700">${esc(t('draft_of', { who: c ? appName(c.app) + ' / ' + c.nickname : t('chat_none') }))}</label>
+        <textarea class="field" id="ch-input" rows="2" placeholder="${esc(t('smart_ph'))}">${esc(draft)}</textarea>
+        <div class="tools">
+          <div class="row wrap" style="gap:2px 14px">
+            <button class="link" type="button" id="ch-paste" style="min-height:32px;font-size:13px">${icon('copy', 'sm')} ${t('paste_btn')}</button>
+            <label class="link" style="cursor:pointer;min-height:32px;font-size:13px">${icon('image', 'sm')} ${t('upload_shot')}<input type="file" id="ch-shot" accept="image/*" hidden></label>
+            <span class="tiny muted">${ai ? t('ai_on') : t('ai_off')}</span>
+          </div>
+          <button class="btn primary-btn" type="button" id="ch-send">${t('send')}</button>
+        </div>
+        <p class="tiny muted" id="h-ocr" hidden></p>
+      </div></div>`, 'chat');
+    if (!WIDE.matches) { const bn = $app.querySelector('nav.bottom'); if (bn) bn.remove(); }
+    if (c && lastIn && !lastIn.analysis && !chatState.auto[lastIn.id] && ms[ms.length - 1] === lastIn) {
+      chatState.auto[lastIn.id] = true;
+      analyzeExisting(c, lastIn).then((res) => { const mm = Store.me().messages.find((x) => x.id === lastIn.id); if (mm) { mm.analysis = slimAnalysis(res); Store.save(); } if (helperState.contactId === c.id && /^#\/(chat|home)?/.test(location.hash || '#/')) renderChat({ id: c.id }); }).catch(() => {});
+    }
+    bindChat(c, id, target);
+    const th = document.getElementById('thread');
+    if (th && th.lastElementChild) requestAnimationFrame(() => { const mn = document.querySelector('.ws-main'); if (mn) mn.scrollTop = mn.scrollHeight; else { window.scrollTo(0, document.documentElement.scrollHeight); } });
+  }
+
+  function bubbleHtml(c, m, isLatestIn) {
+    const a = m.analysis;
+    const risk = m.risk && m.risk.length;
+    const hm = (ts) => { const d = new Date(ts); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    if (m.dir === 'out') {
+      const tl = langUi(m.trLang || (c && c.lang) || '');
+      return `<article class="entry mine" data-mid="${m.id}"><div class="meta"><strong>${t('me_reply')}</strong><time>${hm(m.ts)}</time>${m.sent ? statusBadge('done') : statusBadge('copied')}</div>
+        <div class="bubble out"><p lang="${esc(m.trLang)}" class="b-main">${esc(m.translation || m.text)}</p>
+        ${m.translation ? `<p class="meaning" lang="${esc(m.lang)}">${esc(m.text)}</p>` : ''}
+        <div class="b-acts">${m.translation ? `<button class="btn sm secondary" type="button" data-copy-msg="${m.id}">${icon('copy', 'sm')} ${esc(t('copy_lang', { lang: tl }))}</button>` : ''}${m.sent ? '' : `<button class="btn sm ghost" type="button" data-sent="${m.id}">✓ ${t('mark_sent')}</button>`}</div></div></article>`;
+    }
+    const open = chatState.open[m.id] !== undefined ? chatState.open[m.id] : (isLatestIn && !!a);
+    const isNew = isLatestIn && Date.now() - m.ts < 30 * 60000 && !a;
+    return `<article class="entry" data-mid="${m.id}"><div class="meta"><strong lang="${esc(c ? c.lang : '')}">${c ? esc(c.nickname) : '?'}</strong><time>${hm(m.ts)}</time>${isNew ? statusBadge('new') : ''}${risk ? `<span class="badge alert">⚠ ${m.risk.includes('money') ? t('risk_money') : t('risk_off')}</span>` : ''}</div>
+      <div class="bubble in ${risk ? 'risk' : ''}"><p lang="${esc(m.lang)}" class="b-main">${esc(m.text)}</p>
+        ${m.translation ? `<p class="meaning" lang="${esc(m.trLang)}">${esc(m.translation)}</p>` : ''}
+        ${open ? '' : `<div class="b-acts"><button class="link" type="button" data-analyze="${m.id}" style="min-height:28px;font-size:13px">💡 ${a ? t('show_sug') : t('analysis')}</button></div>`}
+      </div>
+      ${open ? (a ? analysisHtml(c, m) : `<div class="small muted" data-need="${m.id}"><span class="spinner" style="border-color:rgba(20,87,70,.2);border-top-color:var(--primary);display:inline-block;vertical-align:middle"></span> ${t('analyzing')}</div>`) : ''}
+    </article>`;
+  }
+
+  function analysisHtml(c, m) {
+    const a = m.analysis;
+    const u = Store.me();
+    const ms = c ? Store.messagesOf(c.id).filter((x) => x.ts < m.ts) : [];
+    const rc = c ? Engine.recall({ text: m.text, textTranslated: m.translation, dir: 'in', messages: ms, promises: u.promises.filter((p) => p.contactId === c.id) }) : null;
+    const promiseAdded = u.promises.some((p) => p.sourceMsgId === m.id);
+    const facts = [a.situation || ''].concat(a.facts || []).filter(Boolean).join(' ');
+    return `<div class="insight">
+      ${rc && rc.related.length ? `<div class="mem-line">↺ <b>${t('mem_related')}</b> ${rc.related.slice(0, 1).map((x) => `<span class="muted">${esc(fmtDate(new Date(x.msg.ts)))}</span> ${esc(x.msg.dir === 'in' ? (x.msg.translation || x.msg.text) : x.msg.text)}`).join('')}</div>` : ''}
+      ${rc && rc.contradictions.length ? `<div class="mem-line warn">⚠ ${rc.contradictions.map((x) => esc(t('mem_conflict_txt', { old: fmtDate(x.promise.date) + ' ' + x.promise.time, new: x.newTime }))).join(' ')}</div>` : ''}
+      ${a.when ? `<div class="mem-line warn between"><span>📅 ${esc(fmtWhenUi(a.when))}${a.place ? ' · ' + esc(a.place) : ''}</span><button class="btn sm ${promiseAdded ? 'secondary' : ''}" type="button" data-add-promise="${m.id}" ${promiseAdded ? 'disabled' : ''}>${promiseAdded ? '✓ ' + t('added_reminder') : t('add_reminder')}</button></div>` : ''}
+      <details class="nuance"><summary>${t('insight')}</summary>
+        <p class="small">${esc((a.nuance || []).join(' '))}</p>
+        ${facts ? `<p class="small">${esc(facts)} <span class="badge">${t('fact')}</span></p>` : ''}
+        ${(a.inferences || []).length ? `<p class="small muted">${esc(a.inferences.join(' '))} <span class="badge warning">${t('inferred')}</span></p>` : ''}
+        ${a.culture ? `<p class="tiny muted">🌏 ${esc(typeof a.culture === 'string' ? a.culture : a.culture.title + ' — ' + a.culture.body)}</p>` : ''}
+      </details>
+      <div class="sug-h"><h2>${t('suggest_title')}</h2><button class="link" type="button" data-analyze="${m.id}" style="min-height:24px;font-size:12px">▲</button></div>
+      <div class="sug-grid">${(a.replies || []).slice(0, 3).map((rp, i) => `<div class="sug-card ${m.chosen === rp.text ? 'on' : ''}">
+        <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span><small lang="${esc(a.target)}">${esc(rp.text)}</small></button>
+        <button type="button" class="sug-copy" data-use="${m.id}|${i}" title="${esc(t('use_reply'))}">${icon('copy', 'sm')} ${t('use_reply')}</button></div>`).join('')}</div>
+      ${m.risk && m.risk.length ? `<button class="btn danger-btn sm" type="button" data-report="${m.id}">${t('c_report')}</button>` : ''}
+    </div>`;
+  }
+
+  function detectDir(text, override) {
+    if (override) return override;
+    if (!text.trim()) return null;
+    return Engine.detect(text) === uiLang ? 'out' : 'in';
+  }
+
+  function bindChat(c, id, target) {
+    const input = document.getElementById('ch-input');
+    const det = document.getElementById('ch-det');
+    const dsel = document.getElementById('ch-dir');
+    const sendBtn = document.getElementById('ch-send');
+    chatState.dirOverride = null;
+    const refreshDet = () => {
+      const d = detectDir(input.value, chatState.dirOverride);
+      chatState.draft[id] = input.value;
+      sendBtn.textContent = d === 'in' ? t('btn_in') : t('btn_out', { lang: langUi(target) });
+      if (!d) { det.textContent = t('smart_hint'); det.className = 'badge gray'; return; }
+      det.textContent = (d === 'in' ? '⬅ ' + t('det_in') + ' · ' + langName(Engine.detect(input.value)) : '➡ ' + t('det_out') + ' → ' + langName(target));
+      det.className = 'badge ' + (d === 'in' ? 'lilac' : '');
+    };
+    input.addEventListener('input', () => { if (!dsel.value) chatState.dirOverride = null; refreshDet(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendBtn.click(); } });
+    dsel.addEventListener('change', () => { chatState.dirOverride = dsel.value || null; refreshDet(); });
+    refreshDet();
+    const tg = document.getElementById('ch-target'); if (tg) tg.addEventListener('change', () => { chatState.target = tg.value; renderChat({ id }); });
+    const more = document.getElementById('ch-more'); if (more) more.addEventListener('click', () => { chatState.limit += 60; renderChat({ id }); });
+    document.getElementById('ch-paste').addEventListener('click', async () => { try { const s = await navigator.clipboard.readText(); if (s) { input.value = s; refreshDet(); } } catch (e) { input.focus(); } });
+    document.getElementById('ch-shot').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) { await runOcr(f, input); chatState.dirOverride = 'in'; refreshDet(); } });
+    document.getElementById('ch-send').addEventListener('click', async (ev) => {
+      const text = input.value.trim(); if (!text) { input.focus(); return; }
+      const d = detectDir(text, chatState.dirOverride);
+      const btn = ev.currentTarget; spinBtn(btn, true, '');
+      try {
+        if (d === 'in') {
+          const res = await analyzeIncoming(c, text);
+          const msg = Store.me().messages.find((x) => x.id === res.msgId);
+          if (msg) { msg.analysis = slimAnalysis(res); Store.save(); chatState.open[msg.id] = true; }
+        } else {
+          const pr = chatState.prepared[id];
+          const r2 = pr && pr.meaning === text ? { text: pr.text } : await tr(text, target, uiLang, { tone: helperState.tone, relation: c ? c.relation : '' });
+          const m = Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text, lang: uiLang, translation: r2.text, trLang: target, source: pr && pr.meaning === text ? 'reply' : 'write', replyTo: pr && pr.meaning === text ? pr.mid : undefined });
+          if (pr && pr.meaning === text) { const om = Store.me().messages.find((x) => x.id === pr.mid); if (om) om.chosen = pr.text; }
+          delete chatState.prepared[id];
+          await copyText(r2.text);
+          toast(t('copied', { app: c ? appName(c.app) : 'messenger' }));
+          m.copied = true;
+        }
+        chatState.draft[id] = '';
+        renderChat({ id });
+      } catch (e) { console.error(e); toast(t('trans_fail')); spinBtn(btn, false); }
+    });
+    // 말풍선 동작
+    $app.querySelectorAll('[data-copy-msg]').forEach((b) => b.addEventListener('click', async () => { const m = Store.me().messages.find((x) => x.id === b.dataset.copyMsg); if (m) { await copyText(m.translation || m.text); toast(t('copied', { app: c ? appName(c.app) : 'messenger' })); } }));
+    $app.querySelectorAll('[data-analyze]').forEach((b) => b.addEventListener('click', async () => {
+      const mid = b.dataset.analyze; const m = Store.me().messages.find((x) => x.id === mid);
+      const isOpen = chatState.open[mid] !== undefined ? chatState.open[mid] : false;
+      chatState.open[mid] = !isOpen || (!m.analysis && isOpen === false);
+      if (chatState.open[mid] && !m.analysis) {
+        renderChat({ id });
+        try { const res = await analyzeExisting(c, m); m.analysis = slimAnalysis(res); Store.save(); } catch (e) { toast(t('trans_fail')); chatState.open[mid] = false; }
+      }
+      renderChat({ id });
+    }));
+    $app.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', async () => {
+      const [mid, i] = b.dataset.use.split('|'); const m = Store.me().messages.find((x) => x.id === mid); const rp = m.analysis.replies[Number(i)];
+      await copyText(rp.text);
+      Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: rp.meaning || rp.text, lang: uiLang, translation: rp.text, trLang: m.analysis.target, source: 'reply', replyTo: m.id });
+      m.chosen = rp.text; chatState.open[mid] = false; Store.save();
+      toast(t('copied', { app: c ? appName(c.app) : 'messenger' }));
+      renderChat({ id });
+    }));
+    $app.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+      const [mid, i] = b.dataset.edit.split('|'); const m = Store.me().messages.find((x) => x.id === mid); const rp = m.analysis.replies[Number(i)];
+      input.value = rp.meaning || rp.text; chatState.dirOverride = 'out'; dsel.value = 'out'; chatState.prepared[id] = { meaning: input.value, text: rp.text, mid }; refreshDet(); input.focus(); toast(t('sug_fill'));
+    }));
+    $app.querySelectorAll('[data-add-promise]').forEach((b) => b.addEventListener('click', () => {
+      const m = Store.me().messages.find((x) => x.id === b.dataset.addPromise); const a = m.analysis;
+      Store.addPromise({ contactId: c ? c.id : null, title: (c ? c.nickname + ' · ' : '') + t('promise'), date: a.when.date || today(), time: a.when.time || '', place: a.place || '', sourceMsgId: m.id });
+      toast(t('added_reminder')); askNotify(); renderChat({ id });
+    }));
+    $app.querySelectorAll('[data-report]').forEach((b) => b.addEventListener('click', () => openReport(c, b.dataset.report)));
+    $app.querySelectorAll('[data-sent]').forEach((b) => b.addEventListener('click', () => { const m = Store.me().messages.find((x) => x.id === b.dataset.sent); if (m) { m.sent = true; Store.save(); renderChat({ id }); } }));
+    const draft = chatState.draft[id]; if (draft && !input.value) { input.value = draft; refreshDet(); }
+  }
+
+  function slimAnalysis(res) {
+    return { nuance: res.nuance, facts: res.facts, situation: res.situation || '', inferences: res.inferences, when: res.when, place: res.place, replies: res.replies, target: res.target, culture: res.culture, provider: res.provider, risk: res.risk };
+  }
+
+  // 이미 저장된 받은 메시지를 분석 (중복 저장 없이)
+  async function analyzeExisting(c, m) {
+    const res = await analyzeIncoming(c, m.text, { existing: m });
+    // analyzeIncoming 이 같은 메시지를 갱신하므로 별도 처리 불필요
+    return res;
+  }
+
+  function renderChatPicker() {
+    const u = Store.me();
+    const none = u.messages.filter((m) => !m.contactId);
+    const items = agendaItems(u).filter((x) => x.kind !== 'upcoming').slice(0, 3);
+    shell(`${topBar('', null, `<button class="btn sm" type="button" data-go="#/contact-edit/new">+ ${t('add_contact')}</button>`)}
+      <div class="content stack">
+        ${items.length ? `<button type="button" class="today-strip" data-go="#/agenda"><span class="ws-h">${t('today')}</span>${items.map((x) => `<span class="small ellipsis">${itemText(x)}</span>`).join('')}</button>` : ''}
+        <div class="row" style="gap:6px"><input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}"><button type="button" class="chip ${chatState.needOnly ? 'on' : ''}" id="ws-need-m" aria-pressed="${chatState.needOnly}">${t('filter_need')}</button></div>
+        <div class="ws-list tall card" id="ws-list" style="padding:4px">${wsRows(u, '')}</div>
+        <button class="list-row card" type="button" data-go="#/chat/none" style="padding:10px 12px"><span class="avatar">?</span><span class="grow"><strong>${t('chat_none')}</strong>${none.length ? `<br><span class="small muted">${esc(t('thread_count', { n: none.length }))}</span>` : ''}</span></button>
+      </div>`, 'chat');
+    const nb = document.getElementById('ws-need-m'); if (nb) nb.addEventListener('click', () => { chatState.needOnly = !chatState.needOnly; renderChatPicker(); });
+  }
+
   /* ================= 연락처 상세 ================= */
   function renderContact(r) {
     const u = Store.me();
@@ -832,9 +1166,9 @@
     shell(`${topBar(esc(t('contact_title')), '#/contacts', `<button class="link" type="button" data-go="#/contact-edit/${c.id}">${t('c_edit')}</button>`)}
       <div class="content stack-lg">
         <div class="card soft stack">
-          <div class="row">${avatar(c, 'lg')}<div class="grow"><h1 lang="${esc(c.lang)}">${esc(c.nickname)}</h1><p class="small muted">${esc(appName(c.app))} / ${esc(c.nickname)} · ${esc(langName(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</p>
+          <div class="row">${avatar(c, 'lg')}<div class="grow"><h1 lang="${esc(c.lang)}">${esc(c.nickname)}</h1><p class="small muted">${esc(appName(c.app))} / ${esc(c.nickname)} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</p>
             <div class="row wrap" style="gap:6px;margin-top:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${daysMet ? `<span class="badge gray">${esc(t('c_days_met', { n: daysMet }))}</span>` : ''}</div></div></div>
-          <div class="two"><button class="btn" type="button" data-go="#/helper?c=${c.id}&mode=in">${t('c_import')}</button><button class="btn secondary" type="button" data-go="#/coach/${c.id}">${t('coach_link')}</button></div>
+          <div class="two"><button class="btn" type="button" data-go="#/chat/${c.id}">${t('c_import')}</button><button class="btn secondary" type="button" data-go="#/coach/${c.id}">${t('coach_link')}</button></div>
         </div>
         <div class="card stack">
           <h2>${t('c_dates')}</h2>
@@ -865,7 +1199,7 @@
         <div class="card stack">
           <div class="between wrap"><h2>${t('c_recent')}</h2>${who(c)}</div>
           ${recent.length ? `<div class="thread">${recent.map((m) => `<div class="bubble ${m.dir}"><div lang="${esc(m.lang)}">${esc(m.text)}</div>${m.translation ? `<div class="tr" lang="${esc(m.trLang)}">${esc(m.translation)}</div>` : ''}<div class="tiny muted" style="margin-top:4px">${fmtTs(m.ts)}</div></div>`).join('')}</div>` : `<p class="small muted">${t('memory_none')}</p>`}
-          <button class="link" type="button" data-go="#/helper?c=${c.id}&mode=in">${t('c_import')} ${icon('arrow', 'sm')}</button>
+          <button class="link" type="button" data-go="#/chat/${c.id}">${t('c_import')} ${icon('arrow', 'sm')}</button>
         </div>
         <div class="card stack">
           <h2>${t('c_myinfo')}</h2>
@@ -984,10 +1318,10 @@
         <div class="card soft stack-sm"><h2>${t('coach_next')}</h2><p>${esc(tips[0])}</p>${lastIn ? `<p class="small muted">${t('coach_basis')} · ${esc(fmtTs(lastIn.ts))} "${esc((lastIn.translation || lastIn.text).slice(0, 60))}"</p>` : ''}</div>
         <div class="card notice stack-sm"><h2>${t('coach_avoid')}</h2><p>${esc(tips[1])}</p></div>
         <div class="card stack-sm">
-          <span class="label">${t('coach_example')} · ${esc(langName(c.lang))}</span>
+          <span class="label">${t('coach_example')} · ${esc(langUi(c.lang))}</span>
           <p id="co-ex" lang="${esc(c.lang)}" style="font-size:16px"><span class="skeleton" style="display:block;width:80%"></span></p>
           <p class="small muted">${t('meaning')} · ${esc(tips[2])}</p>
-          <div class="two"><button class="btn secondary" type="button" data-go="#/helper?c=${c.id}&mode=out">${t('mode_out')}</button><button class="btn" type="button" id="co-copy">${icon('copy')} ${t('copy_theirs')}</button></div>
+          <div class="two"><button class="btn secondary" type="button" data-go="#/chat/${c.id}">${t('mode_out')}</button><button class="btn" type="button" id="co-copy">${icon('copy')} ${t('copy_theirs')}</button></div>
         </div>
       </div>`, 'contacts');
     let exText = '';
@@ -1214,7 +1548,7 @@
         </div>
         ${avoid ? `<div class="card notice stack-sm"><h3>${t('gift_avoid')} · ${esc(countryName(c.country))}</h3><p class="small av" data-en="${esc(avoid.en)}">${esc(uiLang === 'ko' ? avoid.ko : avoid.en)}</p></div>` : ''}
         <div class="card soft stack">
-          <label class="label" for="g-msg">${esc(t('gift_card', { app: appName(c.app) }))} · ${esc(langName(c.lang))}</label>
+          <label class="label" for="g-msg">${esc(t('gift_card', { app: appName(c.app) }))} · ${esc(langUi(c.lang))}</label>
           <textarea class="field" id="g-msg" rows="3" lang="${esc(c.lang)}"></textarea>
           <p class="small muted" id="g-mean"></p>
           <button class="btn full" type="button" id="g-copy">${icon('copy')} ${t('gift_copy')}</button>

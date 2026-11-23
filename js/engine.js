@@ -443,7 +443,7 @@
     // 답장 속도: 내 메시지 → 상대 메시지 간격 중간값
     const gaps = [];
     for (let i = 1; i < messages.length; i++) {
-      if (messages[i].dir === 'in' && messages[i - 1].dir === 'out') gaps.push((messages[i].ts - messages[i - 1].ts) / 60000);
+      if (messages[i].dir === 'in' && messages[i - 1].dir === 'out' && messages[i].ts - messages[i - 1].ts < 12 * 3600000) gaps.push((messages[i].ts - messages[i - 1].ts) / 60000);
     }
     if (gaps.length) { gaps.sort((a, b) => a - b); res.replyMinutes = Math.round(gaps[Math.floor(gaps.length / 2)]); }
     // 대화 주도: 하루 첫 메시지를 상대가 보낸 비율
