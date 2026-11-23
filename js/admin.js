@@ -140,7 +140,7 @@
     page('users', `
       <div class="stack-sm"><h1>회원 CRM</h1><p class="muted">닉네임·서비스 ID·상대 닉네임으로 검색하고, 회원별 연락처·대화 흐름·위험 표시를 확인합니다. 실명은 수집하지 않습니다.</p></div>
       <form class="card row wrap" id="crm-f" role="search">
-        <label class="grow stack-xs"><span class="label">닉네임 / 서비스 ID / 상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 우재"></label>
+        <label class="grow stack-xs"><span class="label">닉네임 / 서비스 ID / 상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 서준"></label>
         <label class="stack-xs"><span class="label">계정 유형</span><select class="field" name="type">${[['all', '전체'], ['member', '닉네임 회원'], ['guest', '게스트'], ['banned', '차단 계정']].map(([v, l]) => `<option value="${v}" ${type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <button class="btn" type="submit" style="align-self:end">검색</button>
       </form>
@@ -226,7 +226,7 @@
     page('monitor', `
       <div class="between wrap"><div class="stack-sm"><h1>전체 대화 모니터링</h1><p class="muted">회원·게스트가 앱에 입력·공유·업로드한 모든 대화를 확인합니다. 상대는 회원이 적은 앱·닉네임으로만 구분됩니다.</p></div><a class="btn secondary" href="#/admin/audit">열람 감사로그</a></div>
       <form class="card row wrap" id="mon-f" role="search">
-        <label class="grow stack-xs"><span class="label">회원 닉네임·서비스 ID·상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 宇宰"></label>
+        <label class="grow stack-xs"><span class="label">회원 닉네임·서비스 ID·상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 서준"></label>
         <label class="stack-xs"><span class="label">대화 앱</span><select class="field" name="app"><option value="all">전체 앱</option>${DATA.APPS.map((a) => `<option value="${a.id}" ${app === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}</select></label>
         <label class="stack-xs"><span class="label">위험 분류</span><select class="field" name="risk"><option value="0">전체 대화</option><option value="1" ${riskOnly ? 'selected' : ''}>위험 표시 있음</option></select></label>
         <button class="btn" type="submit" style="align-self:end">검색</button>

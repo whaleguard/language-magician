@@ -526,3 +526,23 @@ body.is-wide .ws-rail button[aria-current] { background: #265245; color: #fff; }
 .ws-item > .grow { display: block; overflow: hidden; }
 .ws-item .row.between { display: flex; flex-wrap: nowrap; }
 .ws-item .row.between strong { min-width: 0; }
+/* 브랜드 마크 (GPT 로고 v2: 접힌 리본 + 빛) */
+.mark { width: 32px; height: 32px; background: transparent; color: var(--primary); border-radius: 0; }
+.mark .icon { width: 30px; height: 30px; }
+body.is-wide .ws-rail .mark { color: #d6efdf; }
+.screen.admin .mark { color: var(--primary); }
+/* 사용법 */
+.g-hero { background: var(--mint); border-color: #c9ddd1; font-size: 15px; line-height: 1.6; }
+.g-steps { list-style: none; margin: 0; padding: 4px 16px; display: grid; }
+.g-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.g-step:last-child { border-bottom: 0; }
+.g-step h3 { font-size: 16px; margin: 0; letter-spacing: -.02em; }
+.g-num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 800; font-size: 14px; }
+.g-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.g-msg { padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
+.g-msg.out { background: var(--mint); border-color: #c9ddd1; font-weight: 600; }
+.g-arrow { color: var(--muted); font-weight: 700; }
+.g-ai { border-color: var(--primary); }
+.ai-steps { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.ai-steps ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+body.is-wide .ws-rail { display: flex; flex-direction: column; }

@@ -20,7 +20,12 @@
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const d = JSON.parse(raw); return Object.assign(blank(), d); }
+      if (raw) {
+        const d = Object.assign(blank(), JSON.parse(raw));
+        // 샘플 연락처 이름 변경(우재 → 서준) 반영
+        Object.values(d.users || {}).forEach((u) => (u.contacts || []).forEach((c) => { if (c.sample && (c.nickname === '우재' || c.nickname === '宇宰')) c.nickname = '서준'; }));
+        return d;
+      }
     } catch (e) { /* 손상된 데이터는 새로 시작 */ }
     return blank();
   }
@@ -182,7 +187,7 @@
         const d = new Date(); d.setDate(d.getDate() + p.daysFromNow);
         u.promises.push({ id: uid('p_'), contactId: c.id, title: p.title[uiLang] || p.title.en, date: Engine.ymd(d), time: p.time, place: p.place ? (p.place[uiLang] || p.place.en) : '', done: false, remind: 30, createdAt: Date.now(), sample: true });
       });
-      // 우재 메시지의 토요일 약속은 '확인 대기' 상태로 두기 위해 약속에 넣지 않음
+      // 서준 메시지의 토요일 약속은 '확인 대기' 상태로 두기 위해 약속에 넣지 않음
     });
     if (!u.me.birth) u.me = Object.assign({ birth: '1999-03-17', birthTime: '', lunar: false, blood: 'A', mbti: 'INFJ', gender: 'f' }, u.me);
     save();

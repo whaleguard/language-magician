@@ -99,7 +99,7 @@
     document.documentElement.lang = uiLang === 'zh' ? 'zh-Hans' : uiLang;
     document.title = t('brand') + ' · ' + t('tagline');
     if (u.status === 'banned') return renderBlocked(u);
-    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings };
+    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide };
     (pages[r.name] || renderChat)(r);
     window.scrollTo(0, 0); const _mn = document.querySelector('.ws-main'); if (_mn) _mn.scrollTop = 0;
   }
@@ -108,11 +108,12 @@
   WIDE.addEventListener('change', () => render());
   function shell(inner, active, opts) {
     const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
+    const navW = nav.concat([['guide', 'help', 'nav_guide']]);
     if (WIDE.matches && !(opts && opts.noNav)) {
       document.body.classList.add('is-wide');
       $app.innerHTML = `<div class="ws">
         <aside class="ws-rail" aria-label="main"><span class="mark" style="margin:4px auto 14px">${icon('brand')}</span>
-          ${nav.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}">${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
+          ${navW.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}" ${k === 'guide' ? 'style="margin-top:auto"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
         </aside>
         <main class="ws-main"><div class="screen">${inner}</div></main>
         <aside class="ws-side">${sideHtml()}</aside>
@@ -234,7 +235,7 @@
         if (!document.getElementById('ob-consent').checked) { toast(t('ob_need_consent')); return; }
         const u = Store.createUser({ type: mode, nickname: nick, lang: sel });
         if (document.getElementById('ob-sample').checked) { Store.loadSamples(u, sel); }
-        go('#/home');
+        go('#/guide');
       });
     };
     draw();
@@ -927,6 +928,8 @@
   function statusBadge(st) { if (!st) return ''; const cls = { new: 'lilac', need: 'warning', copied: 'gray', done: '' }[st]; return `<span class="badge ${cls} st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>`; }
   const CH_T = {"ko": {"dir_label": "처리 방향", "dir_auto": "자동 감지", "dir_in": "받은 말 · {from} → {to}", "dir_out": "내 답장 · {from} → {to}", "draft_of": "{who} · 이 대화의 초안", "btn_in": "받은 말 넣기", "btn_out": "{lang}로 번역·복사", "copy_lang": "{lang} 복사", "suggest_title": "답장 추천", "show_sug": "답장 추천 보기", "insight": "뉘앙스·상황·지난 대화", "reply_hint": "번역을 확인하고 복사해 {app}에서 보내세요.", "me_reply": "내 답장", "sug_fill": "입력창에 채웠어요. 확인 후 번역·복사를 누르세요.", "contact_info": "상대 정보", "lang_pair": "{a} ↔ {b}"}, "zh": {"dir_label": "处理方向", "dir_auto": "自动识别", "dir_in": "收到的话 · {from} → {to}", "dir_out": "我的回复 · {from} → {to}", "draft_of": "{who} · 本对话草稿", "btn_in": "添加收到的话", "btn_out": "翻译成{lang}并复制", "copy_lang": "复制{lang}", "suggest_title": "回复建议", "show_sug": "查看回复建议", "insight": "语气·情况·以前的对话", "reply_hint": "确认翻译后复制，到{app}发送。", "me_reply": "我的回复", "sug_fill": "已填入输入框。确认后点击翻译并复制。", "contact_info": "对方信息", "lang_pair": "{a} ↔ {b}"}, "ja": {"dir_label": "処理の方向", "dir_auto": "自動判別", "dir_in": "届いた言葉 · {from} → {to}", "dir_out": "自分の返信 · {from} → {to}", "draft_of": "{who} · この会話の下書き", "btn_in": "届いた言葉を追加", "btn_out": "{lang}に翻訳してコピー", "copy_lang": "{lang}をコピー", "suggest_title": "返信案", "show_sug": "返信案を見る", "insight": "ニュアンス・状況・前の会話", "reply_hint": "翻訳を確認してコピーし、{app}で送ってください。", "me_reply": "自分の返信", "sug_fill": "入力欄に入れました。確認して翻訳・コピーを押してください。", "contact_info": "相手の情報", "lang_pair": "{a} ↔ {b}"}, "vi": {"dir_label": "Hướng xử lý", "dir_auto": "Tự nhận diện", "dir_in": "Tin nhận được · {from} → {to}", "dir_out": "Trả lời của tôi · {from} → {to}", "draft_of": "{who} · bản nháp của cuộc trò chuyện này", "btn_in": "Thêm tin nhận được", "btn_out": "Dịch sang {lang} và sao chép", "copy_lang": "Sao chép {lang}", "suggest_title": "Gợi ý trả lời", "show_sug": "Xem gợi ý trả lời", "insight": "Sắc thái · tình huống · trò chuyện trước", "reply_hint": "Kiểm tra bản dịch, sao chép rồi gửi trong {app}.", "me_reply": "Trả lời của tôi", "sug_fill": "Đã điền vào ô nhập. Kiểm tra rồi bấm dịch và sao chép.", "contact_info": "Thông tin người này", "lang_pair": "{a} ↔ {b}"}, "en": {"dir_label": "Direction", "dir_auto": "Auto-detect", "dir_in": "Received · {from} → {to}", "dir_out": "My reply · {from} → {to}", "draft_of": "{who} · draft for this chat", "btn_in": "Add received message", "btn_out": "Translate to {lang} & copy", "copy_lang": "Copy {lang}", "suggest_title": "Reply ideas", "show_sug": "Show reply ideas", "insight": "Nuance · situation · past chats", "reply_hint": "Check the translation, copy it and send in {app}.", "me_reply": "My reply", "sug_fill": "Filled in the box. Check it, then translate & copy.", "contact_info": "Contact info", "lang_pair": "{a} ↔ {b}"}};
   Object.keys(CH_T).forEach((l) => Object.assign(T[l], CH_T[l]));
+  const GD_T = {"ko": {"nav_guide": "사용법", "g_title": "이렇게 쓰세요", "g_lead": "언어의 마술사는 카톡·위챗 같은 메신저에 접속하지 않고, 대화를 자동으로 가져오지 않습니다. 받은 메시지를 복사해 붙여넣으면 번역·분석·답장 추천을 해드립니다.", "g1t": "대화 상대 등록", "g1": "상대마다 한 번만 등록하세요. 닉네임, 쓰는 메신저(카톡·위챗·LINE…), 상대 언어만 넣으면 됩니다. 생일·혈액형은 나중에 넣어도 돼요.", "g2t": "받은 메시지 붙여넣기", "g2": "메신저에서 상대 메시지를 길게 눌러 복사 → 이 앱 대화방 입력창에 붙여넣기. 스크린샷을 올려도 글자를 읽어요. 번역·말투·지난 대화·약속이 바로 정리됩니다.", "g3t": "내 말로 답장 쓰기", "g3": "한국어로 쓰거나 추천 답장을 고르세요. 상대 언어로 번역돼 자동 복사됩니다. 메신저로 돌아가 붙여넣고 보내세요.", "g4t": "PC에서는 2모니터로", "g4": "한쪽 화면에 카톡·위챗, 다른 쪽에 이 앱을 띄우세요. 오른쪽 목록에서 상대를 바꿔도 쓰던 초안이 남아요.", "g_ai_t": "번역을 더 자연스럽게 (선택)", "g_ai": "기본 번역은 무료입니다. OpenAI나 Claude 키를 넣으면 말투·뉘앙스 분석과 답장 추천이 훨씬 좋아집니다.", "g_add": "첫 상대 등록하기", "g_try": "샘플 대화로 먼저 보기", "g_ai_btn": "AI 키 넣기", "g_open_chat": "대화방 열기", "g_note": "대화 내용은 이 기기에 저장되고, 가입 시 동의한 범위에서 운영자가 관리 목적으로 볼 수 있습니다.", "ai_steps_t": "키 받는 방법", "ai_s1": "아래 버튼으로 키 발급 페이지를 엽니다 (로그인 필요).", "ai_s2": "‘Create new secret key’(새 키 만들기)를 누르고 생성된 키를 복사합니다.", "ai_s3": "아래 ‘API 키’ 칸에 붙여넣고 저장 → 연결 테스트를 누르세요.", "ai_s4": "OpenAI는 결제 수단 등록(소액 충전)이 필요합니다. 쓴 만큼만 과금돼요.", "ai_s4c": "Claude는 콘솔에서 크레딧 충전이 필요합니다. 쓴 만큼만 과금돼요.", "ai_get_openai": "OpenAI 키 발급 페이지 열기", "ai_get_claude": "Claude 키 발급 페이지 열기"}, "zh": {"nav_guide": "使用方法", "g_title": "这样使用", "g_lead": "语言魔术师不会登录微信、KakaoTalk 等聊天软件，也不会自动读取聊天。把收到的消息复制粘贴进来，就能获得翻译、分析和回复建议。", "g1t": "添加聊天对象", "g1": "每个人只需添加一次：昵称、使用的聊天软件、对方语言即可。生日、血型可以以后再填。", "g2t": "粘贴收到的消息", "g2": "在聊天软件里长按复制对方的消息 → 粘贴到本应用的输入框。也可以上传截图。翻译、语气、以前的对话和约定会立即整理好。", "g3t": "用自己的语言回复", "g3": "用中文写或选择推荐回复，会翻译成对方语言并自动复制。回到聊天软件粘贴发送。", "g4t": "电脑上用双屏", "g4": "一个屏幕开微信，另一个屏幕开本应用。在右侧列表切换对象时，草稿会保留。", "g_ai_t": "让翻译更自然（可选）", "g_ai": "基础翻译免费。填入 OpenAI 或 Claude 密钥后，语气分析和回复建议会好很多。", "g_add": "添加第一个对象", "g_try": "先看示例对话", "g_ai_btn": "填写 AI 密钥", "g_open_chat": "打开对话", "g_note": "对话保存在本设备，运营方可在注册时同意的范围内出于管理目的查看。", "ai_steps_t": "获取密钥的方法", "ai_s1": "点击下面的按钮打开密钥页面（需要登录）。", "ai_s2": "点击 “Create new secret key”，复制生成的密钥。", "ai_s3": "粘贴到下面的“API 密钥”栏并保存 → 点“测试连接”。", "ai_s4": "OpenAI 需要绑定付款方式（少量充值），按用量计费。", "ai_s4c": "Claude 需要在控制台充值额度，按用量计费。", "ai_get_openai": "打开 OpenAI 密钥页面", "ai_get_claude": "打开 Claude 密钥页面"}, "ja": {"nav_guide": "使い方", "g_title": "使い方", "g_lead": "言葉の魔法使いはLINEやカカオトークにログインせず、会話を自動で読み取りません。届いたメッセージをコピーして貼り付けると、翻訳・分析・返信案を出します。", "g1t": "相手を登録", "g1": "相手ごとに一度だけ。ニックネーム、使っているアプリ、相手の言語だけで大丈夫です。誕生日や血液型は後からでも。", "g2t": "届いたメッセージを貼り付け", "g2": "メッセンジャーで相手のメッセージを長押ししてコピー → このアプリの入力欄に貼り付け。スクショでもOK。翻訳・口調・前の会話・約束をすぐ整理します。", "g3t": "自分の言葉で返信", "g3": "日本語で書くか返信案を選ぶと、相手の言語に翻訳して自動コピーします。メッセンジャーに戻って貼り付けて送信。", "g4t": "PCではデュアルモニターで", "g4": "片方にLINE、もう片方にこのアプリ。右の一覧で相手を切り替えても下書きは残ります。", "g_ai_t": "翻訳をもっと自然に（任意）", "g_ai": "基本の翻訳は無料。OpenAIかClaudeのキーを入れると、ニュアンス分析と返信案がずっと良くなります。", "g_add": "最初の相手を登録", "g_try": "サンプルで見てみる", "g_ai_btn": "AIキーを入れる", "g_open_chat": "会話を開く", "g_note": "会話はこの端末に保存され、登録時に同意した範囲で運営者が管理目的で閲覧できます。", "ai_steps_t": "キーの取り方", "ai_s1": "下のボタンでキー発行ページを開きます（ログインが必要）。", "ai_s2": "「Create new secret key」を押して、作られたキーをコピー。", "ai_s3": "下の「APIキー」欄に貼り付けて保存 → 接続テスト。", "ai_s4": "OpenAIは支払い方法の登録（少額チャージ）が必要です。使った分だけ課金されます。", "ai_s4c": "Claudeはコンソールでクレジットのチャージが必要です。使った分だけ課金されます。", "ai_get_openai": "OpenAIキー発行ページを開く", "ai_get_claude": "Claudeキー発行ページを開く"}, "vi": {"nav_guide": "Hướng dẫn", "g_title": "Cách dùng", "g_lead": "Ứng dụng không đăng nhập vào Zalo, KakaoTalk… và không tự đọc tin nhắn. Bạn sao chép tin nhắn nhận được rồi dán vào đây để được dịch, phân tích và gợi ý trả lời.", "g1t": "Thêm người trò chuyện", "g1": "Mỗi người chỉ cần thêm một lần: biệt danh, ứng dụng nhắn tin, ngôn ngữ của họ. Ngày sinh, nhóm máu có thể điền sau.", "g2t": "Dán tin nhắn nhận được", "g2": "Nhấn giữ tin nhắn trong ứng dụng nhắn tin để sao chép → dán vào ô nhập của ứng dụng này. Có thể tải ảnh chụp màn hình. Bản dịch, giọng điệu, trò chuyện trước và lịch hẹn được sắp xếp ngay.", "g3t": "Trả lời bằng tiếng của bạn", "g3": "Viết bằng tiếng Việt hoặc chọn gợi ý; ứng dụng dịch sang ngôn ngữ của họ và tự sao chép. Quay lại ứng dụng nhắn tin, dán và gửi.", "g4t": "Trên PC dùng 2 màn hình", "g4": "Một màn hình mở Zalo, màn hình kia mở ứng dụng này. Đổi người ở danh sách bên phải, bản nháp vẫn được giữ.", "g_ai_t": "Dịch tự nhiên hơn (tùy chọn)", "g_ai": "Bản dịch cơ bản miễn phí. Thêm khóa OpenAI hoặc Claude để phân tích sắc thái và gợi ý trả lời tốt hơn nhiều.", "g_add": "Thêm người đầu tiên", "g_try": "Xem trò chuyện mẫu", "g_ai_btn": "Nhập khóa AI", "g_open_chat": "Mở trò chuyện", "g_note": "Cuộc trò chuyện được lưu trên thiết bị này; quản trị viên có thể xem trong phạm vi bạn đã đồng ý khi đăng ký.", "ai_steps_t": "Cách lấy khóa", "ai_s1": "Mở trang tạo khóa bằng nút bên dưới (cần đăng nhập).", "ai_s2": "Bấm “Create new secret key” và sao chép khóa.", "ai_s3": "Dán vào ô “Khóa API” bên dưới, lưu → bấm kiểm tra kết nối.", "ai_s4": "OpenAI cần thêm phương thức thanh toán (nạp ít tiền), tính phí theo mức dùng.", "ai_s4c": "Claude cần nạp tín dụng trong bảng điều khiển, tính phí theo mức dùng.", "ai_get_openai": "Mở trang khóa OpenAI", "ai_get_claude": "Mở trang khóa Claude"}, "en": {"nav_guide": "How to", "g_title": "How it works", "g_lead": "Language Magician never logs into KakaoTalk, WeChat or any messenger, and never reads your chats automatically. Copy a message you received, paste it here, and get a translation, analysis and reply ideas.", "g1t": "Add the person", "g1": "Once per person: nickname, which messenger, and their language. Birthday or blood type can come later.", "g2t": "Paste what they sent", "g2": "Long-press their message in your messenger to copy → paste it into this app’s chat box. Screenshots work too. Translation, tone, past chats and plans are sorted instantly.", "g3t": "Reply in your own words", "g3": "Write in English or pick a reply idea. It is translated into their language and copied. Go back to the messenger, paste and send.", "g4t": "On PC, use two screens", "g4": "Messenger on one screen, this app on the other. Switch people in the right-hand list; your drafts stay.", "g_ai_t": "More natural translation (optional)", "g_ai": "Basic translation is free. Add an OpenAI or Claude key for much better nuance analysis and reply ideas.", "g_add": "Add your first person", "g_try": "Try with sample chats", "g_ai_btn": "Add AI key", "g_open_chat": "Open chats", "g_note": "Chats are stored on this device; operators may view them for management within what you agreed to at sign-up.", "ai_steps_t": "How to get a key", "ai_s1": "Open the key page with the button below (sign-in required).", "ai_s2": "Click “Create new secret key” and copy the key.", "ai_s3": "Paste it into “API key” below, save, then press Test connection.", "ai_s4": "OpenAI needs a payment method (a small top-up); you pay only for what you use.", "ai_s4c": "Claude needs credits added in the console; you pay only for what you use.", "ai_get_openai": "Open OpenAI key page", "ai_get_claude": "Open Claude key page"}};
+  Object.keys(GD_T).forEach((l) => Object.assign(T[l], GD_T[l]));
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {} };
 
   function renderChat(r) {
@@ -974,7 +977,7 @@
           <div class="row wrap" style="gap:2px 14px">
             <button class="link" type="button" id="ch-paste" style="min-height:32px;font-size:13px">${icon('copy', 'sm')} ${t('paste_btn')}</button>
             <label class="link" style="cursor:pointer;min-height:32px;font-size:13px">${icon('image', 'sm')} ${t('upload_shot')}<input type="file" id="ch-shot" accept="image/*" hidden></label>
-            <span class="tiny muted">${ai ? t('ai_on') : t('ai_off')}</span>
+            ${ai ? `<span class="tiny muted">${t('ai_on')}</span>` : `<button class="link" type="button" data-go="#/settings" style="min-height:32px;font-size:13px">✨ ${t('g_ai_btn')}</button>`}
           </div>
           <button class="btn primary-btn" type="button" id="ch-send">${t('send')}</button>
         </div>
@@ -1137,7 +1140,7 @@
     const u = Store.me();
     const none = u.messages.filter((m) => !m.contactId);
     const items = agendaItems(u).filter((x) => x.kind !== 'upcoming').slice(0, 3);
-    shell(`${topBar('', null, `<button class="btn sm" type="button" data-go="#/contact-edit/new">+ ${t('add_contact')}</button>`)}
+    shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button><button class="btn sm" type="button" data-go="#/contact-edit/new">+ ${t('add_contact')}</button></div>`)}
       <div class="content stack">
         ${items.length ? `<button type="button" class="today-strip" data-go="#/agenda"><span class="ws-h">${t('today')}</span>${items.map((x) => `<span class="small ellipsis">${itemText(x)}</span>`).join('')}</button>` : ''}
         <div class="row" style="gap:6px"><input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}"><button type="button" class="chip ${chatState.needOnly ? 'on' : ''}" id="ws-need-m" aria-pressed="${chatState.needOnly}">${t('filter_need')}</button></div>
@@ -1145,6 +1148,28 @@
         <button class="list-row card" type="button" data-go="#/chat/none" style="padding:10px 12px"><span class="avatar">?</span><span class="grow"><strong>${t('chat_none')}</strong>${none.length ? `<br><span class="small muted">${esc(t('thread_count', { n: none.length }))}</span>` : ''}</span></button>
       </div>`, 'chat');
     const nb = document.getElementById('ws-need-m'); if (nb) nb.addEventListener('click', () => { chatState.needOnly = !chatState.needOnly; renderChatPicker(); });
+  }
+
+  /* ================= 사용법 ================= */
+  function renderGuide() {
+    const u = Store.me();
+    const hasContacts = u.contacts.length > 0;
+    const ai = !!Engine.aiConfig().key;
+    const step = (n, tt, body, extra) => `<li class="g-step"><span class="g-num">${n}</span><div class="stack-xs" style="min-width:0"><h3>${tt}</h3><p class="small muted">${body}</p>${extra || ''}</div></li>`;
+    shell(`${topBar(t('g_title'), null)}
+      <div class="content stack">
+        <div class="card stack-sm g-hero"><p>${t('g_lead')}</p></div>
+        <ol class="g-steps card">
+          ${step(1, t('g1t'), t('g1'), `<button class="btn sm" type="button" data-go="#/contact-edit/new" style="justify-self:start">+ ${t('g_add')}</button>`)}
+          ${step(2, t('g2t'), t('g2'), `<div class="g-demo"><span class="g-msg in" lang="zh-Hans">明天下午三点见吧？</span><span class="g-arrow">→</span><span class="g-msg">${uiLang === 'ko' ? '내일 오후 3시에 볼까요?' : 'Tomorrow 3 PM?'}</span></div>`)}
+          ${step(3, t('g3t'), t('g3'), `<div class="g-demo"><span class="g-msg">${uiLang === 'ko' ? '좋아요! 3시에 봐요' : 'Sure! See you at 3'}</span><span class="g-arrow">→</span><span class="g-msg out" lang="zh-Hans">好啊！三点见</span><span class="badge">${icon('copy', 'sm')}</span></div>`)}
+          ${step(4, t('g4t'), t('g4'))}
+        </ol>
+        <div class="card stack-sm ${ai ? '' : 'g-ai'}"><h2>${t('g_ai_t')} ${ai ? '<span class="badge">✓ ' + t('ai_on') + '</span>' : ''}</h2><p class="small muted">${t('g_ai')}</p>${ai ? '' : `<button class="btn secondary" type="button" data-go="#/settings">${t('g_ai_btn')}</button>`}</div>
+        <div class="two"><button class="btn" type="button" data-go="${hasContacts ? '#/chat' : '#/contact-edit/new'}">${hasContacts ? t('g_open_chat') : t('g_add')}</button>${u.contacts.some((c) => c.sample) ? `<button class="btn secondary" type="button" data-go="#/contact-edit/new">+ ${t('g_add')}</button>` : `<button class="btn secondary" type="button" id="g-sample">${t('g_try')}</button>`}</div>
+        <p class="tiny muted">${t('g_note')}</p>
+      </div>`, 'guide');
+    const gs = document.getElementById('g-sample'); if (gs) gs.addEventListener('click', () => { Store.loadSamples(u, uiLang); toast(t('sample_loaded')); go('#/chat'); });
   }
 
   /* ================= 연락처 상세 ================= */
@@ -1598,6 +1623,17 @@
     const meI = u.me || {};
     shell(`${topBar(t('set_title'), null)}
       <div class="content stack-lg">
+        <form class="card stack" id="st-ai">
+          <h2>${t('set_ai')} ${ai.key ? '<span class="badge">✓ ' + t('ai_on') + '</span>' : ''}</h2>
+          <p class="small muted">${t('g_ai')} ${t('set_ai_hint')}</p>
+          <label class="stack-xs"><span class="label">${t('set_provider')}</span><select class="field" name="provider" id="st-provider"><option value="openai" ${ai.provider !== 'anthropic' ? 'selected' : ''}>OpenAI (ChatGPT)</option><option value="anthropic" ${ai.provider === 'anthropic' ? 'selected' : ''}>Claude (Anthropic)</option></select></label>
+          <div class="ai-steps"><strong class="small">${t('ai_steps_t')}</strong><ol class="small muted"><li>${t('ai_s1')}</li><li>${t('ai_s2')}</li><li>${t('ai_s3')}</li><li id="st-ai-s4">${ai.provider === 'anthropic' ? t('ai_s4c') : t('ai_s4')}</li></ol>
+            <a class="btn secondary full" id="st-ai-link" href="${ai.provider === 'anthropic' ? 'https://console.anthropic.com/settings/keys' : 'https://platform.openai.com/api-keys'}" target="_blank" rel="noopener">${ai.provider === 'anthropic' ? t('ai_get_claude') : t('ai_get_openai')} ↗</a></div>
+          <label class="stack-xs"><span class="label">${t('set_key')}</span><input class="field" name="key" type="password" autocomplete="off" value="${esc(ai.key || '')}" placeholder="${ai.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}"></label>
+          <details><summary class="small muted">${t('set_model')}</summary><input class="field" name="model" value="${esc(ai.model || '')}" placeholder="gpt-4o-mini / claude-haiku-5-5" style="margin-top:6px"></details>
+          <div class="two"><button class="btn secondary" type="button" id="st-ai-test">${t('set_test')}</button><button class="btn" type="submit">${t('save')}</button></div>
+        </form>
+
         <div class="card stack-sm">
           <h2>${t('set_account')}</h2>
           <p><strong>${esc(u.nickname)}</strong> <span class="small muted">· ${esc(u.id)}</span></p>
@@ -1622,14 +1658,6 @@
           ${[['promise', t('promise')], ['anniv', t('anniv_title')], ['unanswered', t('unanswered_from')]].map(([k, l]) => `<label class="inline-input"><input type="checkbox" data-n="${k}" ${u.settings.notif[k] !== false ? 'checked' : ''}> ${esc(l)}</label>`).join('')}
           <button class="btn subtle full" type="button" id="st-push">${icon('bell')} ${t('notif_enable')}</button>
         </div>
-        <form class="card stack" id="st-ai">
-          <h2>${t('set_ai')}</h2>
-          <p class="small muted">${t('set_ai_hint')}</p>
-          <label class="stack-xs"><span class="label">${t('set_provider')}</span><select class="field" name="provider"><option value="anthropic" ${ai.provider !== 'openai' ? 'selected' : ''}>Claude (Anthropic)</option><option value="openai" ${ai.provider === 'openai' ? 'selected' : ''}>OpenAI</option></select></label>
-          <label class="stack-xs"><span class="label">${t('set_key')}</span><input class="field" name="key" type="password" autocomplete="off" value="${esc(ai.key || '')}" placeholder="sk-..."></label>
-          <label class="stack-xs"><span class="label">${t('set_model')}</span><input class="field" name="model" value="${esc(ai.model || '')}" placeholder="claude-haiku-5-5 / gpt-4o-mini"></label>
-          <div class="two"><button class="btn secondary" type="button" id="st-ai-test">${t('set_test')}</button><button class="btn" type="submit">${t('save')}</button></div>
-        </form>
         <div class="card stack-sm">
           <h2>${t('set_consent')}</h2>
           <span class="badge">✓ ${esc(Store.CONSENT_VERSION)}</span>
@@ -1651,8 +1679,11 @@
     $app.querySelectorAll('[data-n]').forEach((cb) => cb.addEventListener('change', () => { u.settings.notif[cb.dataset.n] = cb.checked; Store.save(); }));
     document.getElementById('st-push').addEventListener('click', askNotify);
     const aiForm = document.getElementById('st-ai');
-    const readAi = () => { const f = new FormData(aiForm); return { provider: f.get('provider'), key: (f.get('key') || '').trim(), model: (f.get('model') || '').trim() }; };
-    aiForm.addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('lm_ai', JSON.stringify(readAi())); toast(t('set_saved')); });
+    const readAi = () => { const f = new FormData(aiForm); const key = (f.get('key') || '').trim(); let provider = f.get('provider'); if (/^sk-ant-/.test(key)) provider = 'anthropic'; else if (/^sk-/.test(key) && provider === 'anthropic') provider = 'openai'; return { provider, key, model: (f.get('model') || '').trim() }; };
+    const provSel = document.getElementById('st-provider');
+    provSel.addEventListener('change', () => { const an = provSel.value === 'anthropic'; const ln = document.getElementById('st-ai-link'); ln.href = an ? 'https://console.anthropic.com/settings/keys' : 'https://platform.openai.com/api-keys'; ln.textContent = (an ? t('ai_get_claude') : t('ai_get_openai')) + ' ↗'; document.getElementById('st-ai-s4').textContent = an ? t('ai_s4c') : t('ai_s4'); aiForm.key.placeholder = an ? 'sk-ant-...' : 'sk-...'; });
+    if (/[?&]ai=1/.test(location.hash)) setTimeout(() => aiForm.scrollIntoView({ block: 'start' }), 50);
+    aiForm.addEventListener('submit', (e) => { e.preventDefault(); const v = readAi(); localStorage.setItem('lm_ai', JSON.stringify(v)); provSel.value = v.provider; toast(t('set_saved')); });
     document.getElementById('st-ai-test').addEventListener('click', async (ev) => {
       localStorage.setItem('lm_ai', JSON.stringify(readAi()));
       spinBtn(ev.currentTarget, true, '…');
