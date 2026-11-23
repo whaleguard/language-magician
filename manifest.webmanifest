@@ -1,0 +1,11 @@
+{
+  "name": "언어의 마술사 · Language Magician",
+  "short_name": "언어의 마술사",
+  "description": "내 말로 쓰고, 상대의 언어로 전하는 대화 도우미",
+  "start_url": "./#/home",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#113d33",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
