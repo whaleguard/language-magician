@@ -152,9 +152,7 @@ footer .brand { display:block; margin-bottom:8px }
           <p class="hero-note">게스트로 바로 시작 · 실명 가입 없음 · PC 2모니터와 모바일 모두 지원</p>
         </div>
         <figure class="hero-media" aria-label="외국 친구와 메신저로 대화하는 모습">
-          <video id="hero-video" autoplay muted loop playsinline poster="assets/hero.jpg" preload="metadata">
-            <source src="assets/hero.mp4" type="video/mp4">
-          </video>
+          <img id="hero-img" src="assets/hero.jpg" alt="저녁 무렵 두 개의 모니터로 외국 친구와 대화하는 사용자" width="1402" height="1122" fetchpriority="high">
           <figcaption class="float"><small>WeChat / 林 Lin · 받은 말</small><span lang="zh-Hans">好呀，周六四点在圣水站二号出口见？</span><br>좋아요, 토요일 4시에 성수역 2번 출구에서 만날까요?</figcaption>
         </figure>
       </div>
@@ -233,7 +231,7 @@ footer .brand { display:block; margin-bottom:8px }
         <article class="card"><div class="ic" aria-hidden="true">☯</div><h3>사주·궁합과 문화 가이드</h3><p>사주·궁합은 문화 콘텐츠로 즐기고, 호칭·인사·약속 예문은 대화에 써요.</p></article>
         <article class="card"><div class="ic" aria-hidden="true">▣</div><h3>PC 2모니터 작업 화면</h3><p>한쪽엔 메신저, 한쪽엔 언어의 마술사. 대화 중인 상대 목록과 상대 정보를 한 화면에서 봐요.</p></article>
       </div>
-      <div class="feature-img"><video autoplay muted loop playsinline poster="assets/feature.jpg" preload="none" onerror="this.parentNode.hidden=true"><source src="assets/feature.mp4" type="video/mp4"></video></div>
+      <div class="feature-img" id="feature-media"><img src="assets/feature.jpg" alt="카페에서 휴대폰을 함께 보며 웃는 두 친구" loading="lazy"></div>
     </div>
   </section>
 
@@ -299,8 +297,19 @@ footer .brand { display:block; margin-bottom:8px }
     if (['ko', 'zh', 'ja', 'vi', 'en'].indexOf(nav) >= 0) sel.value = nav;
     function upd() { document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + sel.value; }); }
     sel.addEventListener('change', upd); upd();
-    var v = document.getElementById('hero-video');
-    v.addEventListener('error', function () {}, true);
+    // 영상이 준비돼 있으면 이미지 자리를 영상으로 바꿉니다.
+    function swapVideo(imgSel, src) {
+      var img = document.querySelector(imgSel); if (!img || !window.fetch) return;
+      fetch(src, { method: 'HEAD' }).then(function (r) {
+        if (!r.ok) return;
+        var v = document.createElement('video');
+        v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.poster = img.src; v.src = src;
+        v.setAttribute('aria-label', img.alt);
+        v.addEventListener('canplay', function () { img.replaceWith(v); v.play().catch(function () {}); }, { once: true });
+        v.load();
+      }).catch(function () {});
+    }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { swapVideo('#hero-img', 'assets/hero.mp4'); swapVideo('#feature-media img', 'assets/feature.mp4'); }
   })();
 </script>
 </body>
