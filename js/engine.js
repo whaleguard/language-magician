@@ -118,7 +118,8 @@
     return { source: has ? 'locked' : 'none' };
   }
   async function viaProxy(cfg, payload) {
-    const r = await fetch(cfg.proxy, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ provider: cfg.provider, model: cfg.model }, payload)) });
+    let pa = ''; try { pa = localStorage.getItem('lm_proxy_auth') || ''; } catch (e) { pa = ''; }
+    const r = await fetch(cfg.proxy, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, pa && /supabase\.co\//.test(cfg.proxy) ? { apikey: pa, Authorization: 'Bearer ' + pa } : {}), body: JSON.stringify(Object.assign({ provider: cfg.provider, model: cfg.model }, payload)) });
     if (!r.ok) throw new Error('proxy-' + r.status);
     const j = await r.json();
     reportUsage(cfg.provider === 'openai' ? 'openai' : 'anthropic', j.model || cfg.model || (cfg.provider === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-5-5'), j.usage && (j.usage.input || j.usage.prompt_tokens || j.usage.input_tokens), j.usage && (j.usage.output || j.usage.completion_tokens || j.usage.output_tokens));

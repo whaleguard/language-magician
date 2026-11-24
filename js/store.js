@@ -69,6 +69,19 @@
     const t = o.teamId && teamById(o.teamId); if (t) { t.members = (t.members || []).concat(id); t.updatedAt = Date.now(); }
     persist(); return u;
   }
+  // 일반 회원도 아이디·비밀번호를 만들면 DB에 저장돼 어느 기기에서든 「계정 로그인」으로 이어서 사용
+  function setCredentials(loginId, pin) {
+    const u = me(); if (!u || viewAs) return null;
+    if (/^[UG]-\d{4}$/.test(u.id)) { // 예전 순번 ID는 기기마다 겹치므로 고유 ID로 바꿈
+      const old = u.id; let nid; do { nid = (u.type === 'guest' ? 'G-' : 'U-') + Math.random().toString(36).slice(2, 7).toUpperCase(); } while (db.users[nid]);
+      u.id = nid; db.users[nid] = u; delete db.users[old]; db.currentUserId = nid;
+      (db.teams || []).forEach((t) => { if ((t.members || []).includes(old)) t.members = t.members.map((x) => (x === old ? nid : x)); });
+      (db.reports || []).forEach((r) => { if (r.userId === old) r.userId = nid; }); (db.notices || []).forEach((n) => { if (n.userId === old) n.userId = nid; });
+    }
+    u.loginId = String(loginId).trim().toLowerCase(); u.pin = String(pin).trim(); u.srv = true;
+    if (u.type === 'guest') { u.type = 'member'; if (/^Guest /.test(u.nickname)) u.nickname = u.loginId; }
+    save(); return u;
+  }
   function findAgentLocal(loginId, pin) { const id = normId(loginId); return Object.values(db.users).find((u) => u.loginId && u.loginId.toLowerCase() === id && (pin == null || String(u.pin).trim() === String(pin).trim())); }
   function agentLoginAs(u) { if (db.users[u.id]) Object.assign(db.users[u.id], u); else db.users[u.id] = u; db.currentUserId = u.id; persist(); }
   // 상담원 자리 고정: 처음 로그인한 PC(브라우저)에서만 열림. 팀장·관리자가 '자리 초기화'하면 새 자리에서 다시 등록
@@ -623,6 +636,7 @@
         const add = (k, obj) => { const sg = this.sig(obj); if (hs[k] !== sg) { rows.push({ key: k, data: obj, sg }); } };
         Object.keys(COLK).forEach((col) => (db[col] || []).forEach((x) => { if (!x || !x.id || x.demo) return; add(COLK[col] + ':' + x.id, x); }));
         Object.values(db.users).forEach((u) => { if (u && u.srv && !u.demo) add('user:' + u.id, u); });
+        if (this.isAdminCtx() && (sessionStorage.getItem('lm_admin_role') || 'admin') === 'admin') { try { const o = JSON.parse(localStorage.getItem('lm_ops') || 'null'); if (o) add('cfg:ops', o); } catch (e) { /* noop */ } }
         // 본사 AI 설정(키 제외)을 모든 PC에 배포: 관리자 화면에서만 올림
         if (this.isAdminCtx() && (sessionStorage.getItem('lm_admin_role') || 'admin') === 'admin') { try { const h = JSON.parse(localStorage.getItem('lm_hq_ai') || '{}'); if (h && (h.proxy || h.provider || h.freeAi !== undefined)) add('cfg:hqai', { provider: h.provider || 'openai', model: h.model || '', proxy: h.proxy || '', freeAi: !!h.freeAi, hasKey: !!h.key, by: db.admin.operator || '', updatedAt: h.updatedAt || 0 }); } catch (e) { /* noop */ } }
         (db._del || []).forEach((id) => { const k = 'del:' + id; if (!hs[k]) rows.push({ key: k, data: { id, ts: now }, sg: '1' }); });
@@ -639,7 +653,7 @@
     // 서버 → 이 기기. 관리자 화면이면 회원 전체, 아니면 내 계정만
     async pull() {
       if (!this.enabled() || viewAs) return 0;
-      const since = this._since || ''; const adminCtx = this.isAdminCtx(); const meId = db.currentUserId;
+      const adminCtx = this.isAdminCtx(); const meId = db.currentUserId; const ck = adminCtx ? '_sinceA' : ('_sinceM' + (meId || '')); const since = this[ck] || '';
       let q = '?select=key,data,updated_at&order=updated_at.asc&limit=1000';
       if (since) q += '&updated_at=gt.' + encodeURIComponent(since);
       let rows;
@@ -649,9 +663,11 @@
       // 다른 창이 먼저 저장한 내용 반영
       try { const raw = localStorage.getItem(KEY); if (raw) { const st = JSON.parse(raw); if ((st._rev || 0) !== (db._rev || 0)) mergeShared(st); } } catch (e) { /* noop */ }
       rows.forEach((row) => {
-        this._since = row.updated_at;
+        this[ck] = row.updated_at; this._since = row.updated_at;
         const [kind, ...rest] = row.key.split(':'); const id = rest.join(':'); const d = row.data;
         if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); Object.keys(COLK).forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; changed++; } hs[row.key] = '1'; return; }
+        if (kind === 'cfg' && id === 'ops') { try { const cur = JSON.parse(localStorage.getItem('lm_ops') || '{}'); if ((d.updatedAt || 0) >= (cur.updatedAt || 0)) { localStorage.setItem('lm_ops', JSON.stringify(d)); if (cur.live !== d.live) changed++; } hs[row.key] = this.sig(d); } catch (e) { /* noop */ } return; }
+        if (kind === 'cfg' && id === 'anon') { try { if (d && d.k) localStorage.setItem('lm_proxy_auth', d.k); } catch (e) { /* noop */ } hs[row.key] = '1'; return; }
         if (kind === 'cfg' && id === 'hqai') { try { const cur = JSON.parse(localStorage.getItem('lm_hq_ai') || '{}'); if ((d.updatedAt || 0) >= (cur.updatedAt || 0) || !cur.proxy) { const nx = Object.assign({}, cur, { provider: d.provider, model: d.model, proxy: d.proxy, freeAi: d.freeAi, updatedAt: d.updatedAt }); localStorage.setItem('lm_hq_ai', JSON.stringify(nx)); } hs[row.key] = this.sig(d); } catch (e) { /* noop */ } return; }
         const col = KCOL[kind];
         if (col) {
@@ -746,7 +762,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };

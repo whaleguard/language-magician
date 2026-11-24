@@ -27,8 +27,10 @@
   let serverShared = null;
   const viewGrants = {}; // 이번 세션에서 열람 사유를 기록한 대화
 
+  // 실운영 모드: 데모·가짜 회원을 모든 관리 화면에서 빼고 DB의 실제 데이터만
+  const isLive = () => { try { return JSON.parse(localStorage.getItem('lm_ops') || '{}').live === true; } catch (e) { return false; } };
   function users() {
-    const all = allUsers();
+    const all = isLive() ? allUsers().filter((u) => !u.demo && !u.demoCrowd) : allUsers();
     const r = role();
     if (r.type === 'leader') { const ids = new Set(r.team.members || []); return all.filter((u) => ids.has(u.id)); }
     if (r.type === 'org') { const ids = new Set(Store.teamsOfOrg(r.org.id).flatMap((t) => t.members || [])); return all.filter((u) => ids.has(u.id)); }
@@ -45,7 +47,7 @@
     local.filter((u) => !u.demo && !map[u.id]).forEach((u) => { map[u.id] = u; });
     return Object.values(map);
   }
-  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (isSuper()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
+  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports).filter((r) => !isLive() || !r.demo); if (isSuper()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
   function findUser(id) { return users().find((u) => u.id === id); }
   function msgsOf(u, cid) { return u.messages.filter((m) => m.contactId === cid).sort((a, b) => a.ts - b.ts); }
 
@@ -670,15 +672,16 @@
           <label class="stack-xs"><span class="label">모델</span><input class="field" name="model" value="${esc(hq.model || '')}" placeholder="gpt-4o-mini / claude-haiku-5-5"></label>
         </div>
         <label class="stack-xs"><span class="label">본사 AI 서버 주소 (운영용 · 넣으면 키 대신 이 서버로 호출)</span><input class="field" name="proxy" value="${esc(hq.proxy || '')}" placeholder="https://xxxx.supabase.co/functions/v1/ai-proxy"></label>
-        <p class="tiny muted">테스트 서버에 AI 서버(ai-proxy)가 배포돼 있습니다: <code>${esc(Store.Sync.DEF.url)}/functions/v1/ai-proxy</code> <button class="btn sm secondary" type="button" id="hq-def">이 주소 넣기</button> · Supabase에서 OpenAI/Claude 키를 비밀값(OPENAI_API_KEY / ANTHROPIC_API_KEY)으로 넣어야 동작합니다. 저장하면 이 설정(키 제외)이 모든 PC에 자동 배포됩니다.</p>
+        <p class="small" id="hq-vault"></p>
+        <p class="tiny muted">키를 넣고 저장하면 서버 DB의 비공개 금고에만 저장됩니다(누구도 다시 읽을 수 없고 AI 서버만 사용). 브라우저에는 남지 않습니다. 테스트 서버에 AI 서버(ai-proxy)가 배포돼 있습니다: <code>${esc(Store.Sync.DEF.url)}/functions/v1/ai-proxy</code> <button class="btn sm secondary" type="button" id="hq-def">이 주소 넣기</button> · Supabase에서 OpenAI/Claude 키를 비밀값(OPENAI_API_KEY / ANTHROPIC_API_KEY)으로 넣어야 동작합니다. 저장하면 이 설정(키 제외)이 모든 PC에 자동 배포됩니다.</p>
         <label class="small row" style="gap:6px"><input type="checkbox" name="freeAi" ${hq.freeAi !== false ? 'checked' : ''}> 무료 회원에게도 AI 허용 (테스트 기간) — 끄면 프로·프리미엄·기업용만 AI 사용</label>
-        <p class="tiny muted">⚠ 키를 여기만 넣으면 이 브라우저에서만 동작합니다. 모든 회원 기기에서 쓰려면 키를 서버(Supabase 비밀값)에 두고 저장소의 <code>supabase/functions/ai-proxy</code>를 배포한 뒤 서버 주소를 넣으세요. 키를 화면 코드에 넣으면 누구나 볼 수 있어 도용됩니다.</p>
+        ${Store.Sync.enabled() ? "" : "<p class=\"tiny muted\">⚠ 서버 미연결: 키가 이 브라우저에만 저장됩니다.</p>"}
         <div class="row" style="gap:8px"><button class="btn secondary" type="button" id="hq-test">연결 테스트</button><button class="btn" type="submit">저장</button><span class="small muted" id="hq-msg"></span></div>
       </form>
       <div class="admin-grid">
         <form class="card stack" id="sv"><div class="between wrap"><h2>공용 서버 (PC 간 동기화)</h2>${Store.Sync.enabled() ? `<span class="badge">✓ 연결됨${Store.Sync.lastOk ? ' · ' + new Date(Store.Sync.lastOk).toLocaleTimeString('ko-KR') : ''}</span>` : '<span class="badge warning">미연결</span>'}</div>
           <p class="small ${Store.Sync.err ? 'danger' : 'muted'}">${Store.Sync.err ? '최근 오류: ' + esc(Store.Sync.err) : '테스트 기본 서버(sangdam-magic)에 자동 연결됩니다. 팀·거래처·상담원 계정·지시·신고·열람기록·자리 등록이 6초 간격으로 모든 PC에 반영됩니다. 다른 서버를 쓰려면 아래에 입력하세요.'}</p>
-          <p class="small muted">Supabase 무료 프로젝트를 만들고 저장소의 <code>supabase/schema.sql</code>을 실행한 뒤 URL과 anon 키를 넣으세요. 연결하면 모든 회원·게스트의 대화가 서버에 모이고, 이 화면에서 전부 확인할 수 있습니다. 회원 앱에도 같은 값이 필요하므로 <code>js/config.js</code>에 넣어 배포하세요.</p>
+          
           <label class="stack-xs"><span class="label">Supabase URL</span><input class="field" name="url" value="${esc(sc.url && sc.url !== Store.Sync.DEF.url ? sc.url : '')}" placeholder="(기본 서버 사용 중) https://xxxx.supabase.co"></label>
           <label class="stack-xs"><span class="label">anon public key</span><input class="field" name="key" value="${esc(sc.key && sc.key !== Store.Sync.DEF.key ? sc.key : '')}" placeholder="(기본 서버 사용 중) sb_publishable_... / eyJ..."></label>
           <div class="two"><button class="btn" type="submit">저장</button><button class="btn secondary" type="button" id="sv-pull">서버에서 새로고침</button></div>
@@ -689,6 +692,8 @@
             <label class="stack-xs"><span class="label">운영자 ID</span><input class="field" name="op" value="${esc(Store.db.admin.operator)}"></label>
             <label class="stack-xs"><span class="label">새 비밀번호 (4자리 이상)</span><input class="field" name="pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
             <button class="btn secondary" type="submit">저장</button></form>
+          <div class="card stack-sm ${isLive() ? 'notice' : ''}"><div class="between wrap"><h2>실운영 모드</h2>${isLive() ? '<span class="badge">● 실운영 중</span>' : '<span class="badge gray">데모 표시 중</span>'}</div><p class="small muted">켜면 모든 관리 화면(현황·상담원·대화·근태·신고)에서 데모·가짜 회원이 빠지고 DB에 저장된 실제 회원·상담원 데이터만 보입니다. 최종 관리자가 바꾸면 모든 PC에 적용됩니다.</p>
+            <button class="btn ${isLive() ? 'secondary' : ''}" type="button" id="ops-live">${isLive() ? '데모 표시로 되돌리기' : '실운영 모드 켜기'}</button></div>
           <div class="card stack-sm"><h2>데모 데이터</h2><p class="small muted">서버를 연결하기 전 CRM·모니터링 화면 확인용 데모 회원 8명입니다.</p>
             <div class="two"><button class="btn secondary" type="button" id="demo-on">데모 회원 넣기</button><button class="btn secondary" type="button" id="demo-off">데모 회원 지우기</button></div></div>
           <button class="btn secondary" type="button" id="logout">관리자 로그아웃</button>
@@ -696,8 +701,20 @@
       </div>`);
     const hqf = document.getElementById('hq-ai');
     const readHq = () => { const f = new FormData(hqf); return { provider: f.get('provider'), key: String(f.get('key') || '').trim(), model: String(f.get('model') || '').trim(), proxy: String(f.get('proxy') || '').trim(), freeAi: !!f.get('freeAi') }; };
-    hqf.addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('lm_hq_ai', JSON.stringify(Object.assign(readHq(), { updatedAt: Date.now() }))); Store.Sync.schedule(); Store.audit({ action: 'settings', target: '-', reason: '본사 AI 연결 변경' }); LM.toast('저장했습니다'); settings(); });
+    // 저장: 키는 서버 DB 비공개 금고(lm_secret)에만 넣고, 브라우저에는 남기지 않음 → 모든 회원 PC가 서버 AI로 동작
+    hqf.addEventListener('submit', async (e) => {
+      e.preventDefault(); const h = readHq(); const msg = document.getElementById('hq-msg');
+      if (Store.Sync.enabled()) {
+        if (h.key) { msg.textContent = '서버 금고에 키 저장 중…'; try { const r = await fetch(Store.Sync.cfg().url.replace(/\/$/, '') + '/rest/v1/rpc/lm_set_secret', { method: 'POST', headers: Store.Sync.headers(), body: JSON.stringify({ p_name: h.provider === 'anthropic' ? 'anthropic' : 'openai', p_value: h.key }) }); if (!r.ok) throw new Error('서버 ' + r.status); } catch (x) { msg.textContent = '✗ 키 저장 실패: ' + (x.message || x); return; } }
+        if (!h.proxy) h.proxy = Store.Sync.DEF.url + '/functions/v1/ai-proxy';
+        h.key = '';
+      }
+      localStorage.setItem('lm_hq_ai', JSON.stringify(Object.assign(h, { updatedAt: Date.now() }))); Store.Sync.schedule(); Store.audit({ action: 'settings', target: '-', reason: '본사 AI 연결 변경' + (Store.Sync.enabled() ? ' (키는 서버 금고)' : '') }); LM.toast('저장했습니다 · 모든 PC에 적용됩니다'); settings();
+    });
+    // 서버 금고 상태 표시
+    (async () => { const el = document.getElementById('hq-vault'); if (!el || !Store.Sync.enabled()) return; try { const r = await fetch(Store.Sync.cfg().url.replace(/\/$/, '') + '/rest/v1/rpc/lm_secret_status', { method: 'POST', headers: Store.Sync.headers(), body: '{}' }); const j = await r.json(); const f = (k, n) => (j[k] ? `<span class="badge">✓ ${n} 키 ····${esc(j[k].tail)}</span>` : `<span class="badge gray">${n} 키 없음</span>`); el.innerHTML = '서버 금고: ' + f('openai', 'OpenAI') + ' ' + f('anthropic', 'Claude'); } catch (x) { el.textContent = '서버 금고 확인 실패'; } })();
     { const hd = document.getElementById('hq-def'); if (hd) hd.addEventListener('click', () => { hqf.querySelector('[name=proxy]').value = Store.Sync.DEF.url + '/functions/v1/ai-proxy'; }); }
+    { const ol = document.getElementById('ops-live'); if (ol) ol.addEventListener('click', () => { const nx = { live: !isLive(), updatedAt: Date.now() }; localStorage.setItem('lm_ops', JSON.stringify(nx)); Store.Sync.schedule(); Store.audit({ action: 'settings', target: '-', reason: nx.live ? '실운영 모드 켬' : '실운영 모드 끔' }); LM.toast(nx.live ? '실운영 모드: DB 실제 데이터만 표시' : '데모 표시로 되돌렸습니다'); settings(); }); }
     document.getElementById('hq-test').addEventListener('click', async () => { const prev = localStorage.getItem('lm_hq_ai'); localStorage.setItem('lm_hq_ai', JSON.stringify(readHq())); const m = document.getElementById('hq-msg'); m.textContent = '테스트 중…'; try { const out = await Engine.callLLM('Reply with one word.', 'Say OK', false); m.textContent = '✓ 연결됨: ' + String(out).slice(0, 40); } catch (x) { m.textContent = '✗ 실패: ' + (x.message || x); if (prev) localStorage.setItem('lm_hq_ai', prev); else localStorage.removeItem('lm_hq_ai'); } });
     document.getElementById('sv').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); localStorage.setItem('lm_sync', JSON.stringify({ url: String(f.get('url')).trim(), key: String(f.get('key')).trim() })); Store.audit({ action: 'settings', target: '-', reason: '서버 연결 설정 변경' }); LM.toast('저장했습니다'); });
     document.getElementById('sv-pull').addEventListener('click', pull);

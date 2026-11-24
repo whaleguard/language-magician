@@ -179,6 +179,14 @@
     const v = Store.viewingAs(); if (!v) return '';
     return `<div class="viewas-bar">👁 <b>${esc(v.nickname)}</b> <span>(${esc(v.id)})</span> 회원 화면 보기 중 · 읽기 전용, 변경 내용은 저장되지 않아요 <button type="button" id="viewas-exit">관리자로 돌아가기</button></div>`;
   }
+  document.addEventListener('submit', async (e) => {
+    if (!e.target.closest('#st-cred')) return; e.preventDefault();
+    const f = new FormData(e.target); const id = Store.normId(f.get('id')); const pin = String(f.get('pin') || '').trim();
+    if (!/^[a-z0-9._-]{3,30}$/.test(id) || pin.length < 4) { toast(agT('rule'), 4000); return; }
+    const bt = e.target.querySelector('button'); bt.disabled = true;
+    try { await Store.Sync.pull(); const ex = await Store.Sync.findAgent(id, '\u0000'); if (ex || Store.whoHasId(id)) { toast(agT('taken'), 4000); bt.disabled = false; return; } } catch (x) { toast(agT('off'), 4000); bt.disabled = false; return; }
+    Store.setCredentials(id, pin); await Store.Sync.flush(); toast(agT('made'), 6000); render();
+  });
   document.addEventListener('click', (e) => { if (e.target.closest('#st-ag-out')) { Store.logout(); location.hash = '#/agent'; render(); } });
   document.addEventListener('click', (e) => { if (e.target.closest('#viewas-exit')) { const v = Store.viewingAs(); Store.stopViewAs(); location.href = 'app.html#/admin/users?u=' + (v ? v.id : ''); location.reload(); } });
   const POP = new URLSearchParams(location.search).has('pop');
@@ -376,11 +384,11 @@
   /* ================= 온보딩 ================= */
   // 기업용 상담원 로그인 (관리자·팀장이 만든 아이디·비밀번호)
   const AG_T = {
-    ko: { seat: '등록된 자리(PC)에서만 로그인할 수 있습니다. 자리를 바꾸려면 팀장에게 「자리 초기화」를 요청하세요', kicked: '자리가 초기화되었거나 다른 자리에서 로그인되어 로그아웃되었습니다', nt: '새 지시가 도착했습니다', later: '나중에', t: '상담원 로그인', s: '회사(팀장)에게 받은 상담원 아이디와 비밀번호를 입력하세요.', id: '아이디', pw: '비밀번호', go: '로그인', back: '← 처음 화면', chk: '서버 확인 중…', bad: '비밀번호가 맞지 않습니다', none: '없는 아이디입니다. 팀장에게 확인하세요', off: '서버에 연결할 수 없습니다. 인터넷을 확인하세요', link: '상담원 로그인 (회사 계정)', ok: '로그인했습니다', sw: '상담원 계정으로 전환' },
-    zh: { seat: '只能在登记的座位（电脑）上登录。如需更换座位，请让组长「重置座位」', kicked: '座位已被重置或在其他座位登录，已自动退出', nt: '收到新的指示', later: '稍后', t: '客服登录', s: '请输入公司（组长）提供的客服账号和密码。', id: '账号', pw: '密码', go: '登录', back: '← 返回', chk: '正在连接服务器…', bad: '密码不正确', none: '账号不存在，请联系组长', off: '无法连接服务器，请检查网络', link: '客服登录（公司账号）', ok: '已登录', sw: '切换到客服账号' },
-    ja: { seat: '登録された席（PC）でのみログインできます。席を変える場合はリーダーに「席リセット」を依頼してください', kicked: '席がリセットされたか、別の席でログインしたためログアウトしました', nt: '新しい指示が届きました', later: 'あとで', t: 'オペレーターログイン', s: '会社（チームリーダー）から受け取ったIDとパスワードを入力してください。', id: 'ID', pw: 'パスワード', go: 'ログイン', back: '← 最初の画面', chk: 'サーバー確認中…', bad: 'パスワードが違います', none: 'IDがありません。リーダーに確認してください', off: 'サーバーに接続できません', link: 'オペレーターログイン（会社アカウント）', ok: 'ログインしました', sw: 'オペレーターアカウントに切替' },
-    vi: { seat: 'Chỉ đăng nhập được tại chỗ ngồi (máy) đã đăng ký. Muốn đổi chỗ, hãy nhờ trưởng nhóm «đặt lại chỗ ngồi»', kicked: 'Chỗ ngồi đã được đặt lại hoặc đã đăng nhập ở máy khác nên bạn đã bị đăng xuất', nt: 'Có chỉ thị mới', later: 'Để sau', t: 'Đăng nhập nhân viên tư vấn', s: 'Nhập ID và mật khẩu do công ty (trưởng nhóm) cấp.', id: 'ID', pw: 'Mật khẩu', go: 'Đăng nhập', back: '← Màn hình đầu', chk: 'Đang kiểm tra máy chủ…', bad: 'Sai mật khẩu', none: 'ID không tồn tại. Hãy hỏi trưởng nhóm', off: 'Không kết nối được máy chủ', link: 'Đăng nhập nhân viên (tài khoản công ty)', ok: 'Đã đăng nhập', sw: 'Chuyển sang tài khoản nhân viên' },
-    en: { seat: 'You can sign in only at your registered seat (PC). To move, ask your team leader to reset your seat', kicked: 'Signed out: your seat was reset or you signed in at another seat', nt: 'New instruction from your team', later: 'Later', t: 'Agent sign-in', s: 'Enter the agent ID and password from your company (team leader).', id: 'ID', pw: 'Password', go: 'Sign in', back: '← Back', chk: 'Checking server…', bad: 'Wrong password', none: 'No such ID. Ask your team leader', off: 'Cannot reach the server', link: 'Agent sign-in (company account)', ok: 'Signed in', sw: 'Switch to agent account' },
+    ko: { mk: '아이디 만들기 · 다른 기기에서도 내 대화를 그대로 이어서 쓸 수 있어요', seat: '등록된 자리(PC)에서만 로그인할 수 있습니다. 자리를 바꾸려면 팀장에게 「자리 초기화」를 요청하세요', kicked: '자리가 초기화되었거나 다른 자리에서 로그인되어 로그아웃되었습니다', nt: '새 지시가 도착했습니다', later: '나중에', t: '계정 로그인', s: '상담원은 회사(팀장)에게 받은 아이디로, 회원은 내가 만든 아이디로 로그인하세요.', id: '아이디', pw: '비밀번호', go: '로그인', back: '← 처음 화면', chk: '서버 확인 중…', bad: '비밀번호가 맞지 않습니다', none: '없는 아이디입니다. 팀장에게 확인하세요', off: '서버에 연결할 수 없습니다. 인터넷을 확인하세요', link: '계정 로그인 (상담원·회원 · 다른 기기에서 이어서)', ok: '로그인했습니다', sw: '상담원 계정으로 전환' },
+    zh: { mk: '创建账号 · 换设备也能继续查看我的对话', seat: '只能在登记的座位（电脑）上登录。如需更换座位，请让组长「重置座位」', kicked: '座位已被重置或在其他座位登录，已自动退出', nt: '收到新的指示', later: '稍后', t: '账号登录', s: '客服请用公司（组长）提供的账号，会员请用自己创建的账号登录。', id: '账号', pw: '密码', go: '登录', back: '← 返回', chk: '正在连接服务器…', bad: '密码不正确', none: '账号不存在，请联系组长', off: '无法连接服务器，请检查网络', link: '账号登录（客服·会员 · 换设备继续使用）', ok: '已登录', sw: '切换到客服账号' },
+    ja: { mk: 'ID作成・別の端末でも会話をそのまま続けられます', seat: '登録された席（PC）でのみログインできます。席を変える場合はリーダーに「席リセット」を依頼してください', kicked: '席がリセットされたか、別の席でログインしたためログアウトしました', nt: '新しい指示が届きました', later: 'あとで', t: 'アカウントログイン', s: 'オペレーターは会社（リーダー）から受け取ったID、会員は自分で作ったIDでログインしてください。', id: 'ID', pw: 'パスワード', go: 'ログイン', back: '← 最初の画面', chk: 'サーバー確認中…', bad: 'パスワードが違います', none: 'IDがありません。リーダーに確認してください', off: 'サーバーに接続できません', link: 'アカウントログイン（オペレーター・会員・別端末で続き）', ok: 'ログインしました', sw: 'オペレーターアカウントに切替' },
+    vi: { mk: 'Tạo ID · tiếp tục hội thoại trên máy khác', seat: 'Chỉ đăng nhập được tại chỗ ngồi (máy) đã đăng ký. Muốn đổi chỗ, hãy nhờ trưởng nhóm «đặt lại chỗ ngồi»', kicked: 'Chỗ ngồi đã được đặt lại hoặc đã đăng nhập ở máy khác nên bạn đã bị đăng xuất', nt: 'Có chỉ thị mới', later: 'Để sau', t: 'Đăng nhập tài khoản', s: 'Nhân viên dùng ID công ty cấp, thành viên dùng ID tự tạo.', id: 'ID', pw: 'Mật khẩu', go: 'Đăng nhập', back: '← Màn hình đầu', chk: 'Đang kiểm tra máy chủ…', bad: 'Sai mật khẩu', none: 'ID không tồn tại. Hãy hỏi trưởng nhóm', off: 'Không kết nối được máy chủ', link: 'Đăng nhập tài khoản (nhân viên · thành viên · tiếp tục trên máy khác)', ok: 'Đã đăng nhập', sw: 'Chuyển sang tài khoản nhân viên' },
+    en: { mk: 'Create an ID · continue your chats on any device', seat: 'You can sign in only at your registered seat (PC). To move, ask your team leader to reset your seat', kicked: 'Signed out: your seat was reset or you signed in at another seat', nt: 'New instruction from your team', later: 'Later', t: 'Account sign-in', s: 'Agents use the ID from their company; members use the ID they created.', id: 'ID', pw: 'Password', go: 'Sign in', back: '← Back', chk: 'Checking server…', bad: 'Wrong password', none: 'No such ID. Ask your team leader', off: 'Cannot reach the server', link: 'Account sign-in (agents · members · continue on another device)', ok: 'Signed in', sw: 'Switch to agent account' },
   };
   const agT = (k) => (AG_T[uiLang] || AG_T.en)[k];
   // 다른 PC의 팀장·관리자가 보낸 지시를 바로 창으로 띄움
@@ -431,8 +439,8 @@
       if (!u) { toast(res === 'badpin' || Store.findAgentLocal(f.get('id')) ? agT('bad') : res === undefined ? agT('off') : agT('none'), 4000); return; }
       // 자리 고정: 다른 PC에 등록된 계정이면 막음
       try { await Store.Sync.pull(); } catch (x) { /* noop */ }
-      if (Store.seatState(u.id) === 'other') { toast(agT('seat'), 6000); return; }
-      Store.bindSeat(u.id);
+      if (u.agent && Store.seatState(u.id) === 'other') { toast(agT('seat'), 6000); return; }
+      if (u.agent) Store.bindSeat(u.id);
       if (u.status === 'banned') { Store.agentLoginAs(u); go('#/home'); render(); return; }
       u.lastActive = Date.now(); Store.agentLoginAs(u); try { sessionStorage.removeItem('lm_admin_ok'); } catch (x) { /* noop */ }
       uiLang = u.lang && T[u.lang] ? u.lang : uiLang; toast(agT('ok')); location.hash = '#/home'; render();
@@ -2498,7 +2506,8 @@
           <p><strong>${esc(u.nickname)}</strong> <span class="small muted">· ${esc(u.id)}</span></p>
           ${u.type === 'guest' ? `<span class="badge warning">${t('set_guest_now')}</span>
             <div class="row"><input class="field" id="st-nick" maxlength="24" placeholder="${esc(t('ob_nick_ph'))}"><button class="btn" type="button" id="st-reg">${t('set_register')}</button></div><p class="tiny muted">${t('ob_nick_hint')}</p>` : ''}
-          ${u.agent ? `<p class="small">${esc(agT('id'))}: <b>${esc(u.loginId)}</b>${(() => { const tm = Store.teamOf(u.id); return tm ? ' · ' + esc(tm.name) : ''; })()}</p><button class="btn secondary" type="button" id="st-ag-out">${esc(t('set_logout'))}</button>` : `<a class="btn secondary" href="#/agent">${esc(agT('sw'))}</a>`}
+          ${!u.agent && !Store.viewingAs() ? (u.loginId ? `<p class="small">${esc(agT('myid'))}: <b>${esc(u.loginId)}</b> · ☁</p>` : `<form class="stack-xs" id="st-cred"><span class="label">${esc(agT('mk'))}</span><div class="row wrap" style="gap:6px"><input class="field" name="id" placeholder="${esc(agT('id'))}" autocapitalize="off" autocomplete="username" style="max-width:160px"><input class="field" name="pin" type="password" placeholder="${esc(agT('pw'))}" autocomplete="new-password" style="max-width:140px"><button class="btn" type="submit">${esc(agT('mkbtn'))}</button></div><p class="tiny muted">${esc(agT('rule'))}</p></form>`) : ''}
+          ${u.agent ? `<p class="small">${esc(agT('id'))}: <b>${esc(u.loginId)}</b>${(() => { const tm = Store.teamOf(u.id); return tm ? ' · ' + esc(tm.name) : ''; })()}</p><button class="btn secondary" type="button" id="st-ag-out">${esc(t('set_logout'))}</button>` : `<a class="btn secondary" href="#/agent">${esc(agT('sw2'))}</a>`}
         </div>
         <div class="card stack">
           <h2>${t('set_lang')}</h2>
