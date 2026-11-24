@@ -24,6 +24,8 @@
         const d = Object.assign(blank(), JSON.parse(raw));
         // 테스트 버전 관리자 비밀번호 1234로 통일
         if (d.admin && (d.admin.pin === '0000' || !d.admin.pin)) d.admin.pin = '1234';
+        // 샘플 연락처 중복 정리
+        Object.values(d.users || {}).forEach((u) => { const seen = {}; (u.contacts || []).slice().forEach((c) => { if (!c.sample) return; const k = c.nickname + '|' + c.app; if (seen[k]) { u.contacts = u.contacts.filter((x) => x.id !== c.id); u.messages = (u.messages || []).filter((m) => m.contactId !== c.id); u.promises = (u.promises || []).filter((p) => p.contactId !== c.id); } else seen[k] = 1; }); });
         // 샘플 연락처 이름 변경(우재 → 서준) 반영
         Object.values(d.users || {}).forEach((u) => (u.contacts || []).forEach((c) => { if (c.sample && (c.nickname === '우재' || c.nickname === '宇宰')) c.nickname = '서준'; }));
         return d;
@@ -216,8 +218,9 @@
     const u = user || me();
     const pool = DATA.SAMPLE_POOL.filter((s) => s.lang !== uiLang).slice(0, 4);
     pool.forEach((s) => {
+      if (u.contacts.some((x) => x.sample && (x.sampleKey === s.key || (x.nickname === s.nickname && x.app === s.app)))) return; // 샘플 중복 방지
       const c = {
-        id: uid('c_'), nickname: s.nickname, app: s.app, lang: s.lang, country: s.country, color: s.color,
+        id: uid('c_'), sampleKey: s.key, nickname: s.nickname, app: s.app, lang: s.lang, country: s.country, color: s.color,
         relation: s.relation, stage: s.stage, metAt: Engine.ymd(new Date(Date.now() - s.metDaysAgo * 86400000)),
         birthday: s.birthday, birthTime: '', birthLunar: false, birthLeap: false, birthTz: '',
         blood: s.blood, mbti: s.mbti, gender: s.gender, age: s.age, note: s.note[uiLang] || s.note.en, createdAt: Date.now(), sample: true,
