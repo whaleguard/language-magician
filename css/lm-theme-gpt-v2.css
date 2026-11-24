@@ -296,3 +296,5 @@ img { -webkit-user-drag: none; }
 .ws-item .ws-pop { display: none !important; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; font-size: 16px; opacity: 1; background: #fff; box-shadow: 0 1px 4px rgba(16,36,62,.15); z-index: 2; }
 .ws-item:hover .ws-pop, .ws-item:focus-within .ws-pop { display: inline-flex !important; }
 .ws-item .ws-pop:hover { background: var(--primary); color: #fff; }
+.wr-box { display: grid; gap: 8px; padding: 10px 12px; border: 1.5px solid #f0b35b; border-radius: 10px; background: #fff7e8; color: #6b4310; font-size: 13.5px; }
+.wr-box p { margin: 0; font-weight: 600; }

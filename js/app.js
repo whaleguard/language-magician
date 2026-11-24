@@ -1144,6 +1144,14 @@
     en: { lp_note: 'My language = your screen, translations and ideas · Their language = what your messages are translated into', mode_in: 'Add received', mode_out: 'Write to send', lbl_in: '📥 Paste what {who} sent ({lang})', lbl_out: '📤 Write to {who} in {my} → translated to {lang}', lbl_out_same: '📤 Write to {who} (same language — saved without translation)', lbl_auto: '{who} · Paste a received message or write one to send (auto by language)', ph_in: 'Paste their {lang} message · Ctrl+V for screenshots', ph_out: 'Write your message in {my}', lp_title: 'Change chat languages', lp_their: 'Their language', lp_my: 'My language', lp_saved: 'Chat languages: {a} ↔ {b}' },
   };
   Object.keys(MODE_T).forEach((l) => Object.assign(T[l], MODE_T[l]));
+  const WR_T = {
+    ko: { wr_name: '여기는 {room} 방입니다. {other}의 이름이 들어 있어요. 다른 사람에게 보낼 글 아닌가요?', wr_lang: '여기는 {room} 방({rl})인데 {lang} 메시지예요. {other} 님이 보낸 말 아닌가요?', wr_dup: '같은 메시지가 {other} 방에 이미 있어요. 여기는 {room} 방입니다.', wr_move: '{other} 방으로 옮기기', wr_ok: '{room} 방이 맞아요' },
+    zh: { wr_name: '这里是{room}的对话。内容里有{other}的名字，是不是要发给别人？', wr_lang: '这里是{room}的对话（{rl}），但这是{lang}消息。是不是{other}发来的？', wr_dup: '同样的消息已在{other}的对话里。这里是{room}的对话。', wr_move: '移到{other}的对话', wr_ok: '就是{room}' },
+    ja: { wr_name: 'ここは{room}さんのトークです。{other}さんの名前が入っています。別の人宛てではありませんか？', wr_lang: 'ここは{room}さんのトーク（{rl}）ですが、{lang}のメッセージです。{other}さんからではありませんか？', wr_dup: '同じメッセージが{other}さんのトークにあります。ここは{room}さんのトークです。', wr_move: '{other}さんのトークへ移す', wr_ok: '{room}さんで合っています' },
+    vi: { wr_name: 'Đây là phòng của {room}. Có tên {other} trong nội dung. Có phải gửi cho người khác không?', wr_lang: 'Đây là phòng của {room} ({rl}) nhưng tin nhắn là {lang}. Có phải {other} gửi không?', wr_dup: 'Tin nhắn này đã có trong phòng {other}. Đây là phòng {room}.', wr_move: 'Chuyển sang phòng {other}', wr_ok: 'Đúng là {room}' },
+    en: { wr_name: "This is {room}'s chat, but it mentions {other}. Was this meant for someone else?", wr_lang: "This is {room}'s chat ({rl}), but the message is in {lang}. Did {other} send it?", wr_dup: "The same message is already in {other}'s chat. This is {room}'s chat.", wr_move: "Move to {other}'s chat", wr_ok: "Yes, it's {room}" },
+  };
+  Object.keys(WR_T).forEach((l) => Object.assign(T[l], WR_T[l]));
   Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   [['ko', '열기', '접기'],['zh', '展开', '收起'],['ja', '開く', '閉じる'],['vi', 'Mở', 'Thu gọn'],['en', 'Open', 'Close']].forEach(([l, a, b]) => { T[l].open_l = a; T[l].close_l = b; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
@@ -1282,6 +1290,30 @@
     </div>`;
   }
 
+  /* 다른 사람 방에 잘못 붙였는지 감지: 다른 상대 이름 / 다른 상대 언어 / 다른 방에 이미 있는 문장 */
+  function wrongRoom(c, text, dir) {
+    if (!c || !text) return null;
+    const u = Store.me(); const others = u.contacts.filter((x) => x.id !== c.id);
+    const low = text.toLowerCase();
+    const nameToks = (x) => String(x.nickname || '').split(/[\s·,/()]+/).filter((w) => w.length >= 2);
+    const hasName = (x) => nameToks(x).some((w) => low.includes(w.toLowerCase()));
+    if (!hasName(c)) {
+      const hit = others.find(hasName);
+      if (hit) return { kind: 'name', other: hit };
+    }
+    if (dir === 'in') {
+      const L = Engine.detect(text);
+      if (L && L !== c.lang && L !== myL(c)) { const hit = others.find((x) => x.lang === L); if (hit) return { kind: 'lang', other: hit, lang: L }; }
+      const t2 = text.trim();
+      if (t2.length >= 6) { const hit = others.find((x) => Store.messagesOf(x.id, u).some((m) => m.dir === 'in' && m.text.trim() === t2)); if (hit) return { kind: 'dup', other: hit }; }
+    }
+    return null;
+  }
+  function wrongRoomHtml(c, w) {
+    const msg = w.kind === 'name' ? t('wr_name', { room: c.nickname, other: w.other.nickname }) : w.kind === 'lang' ? t('wr_lang', { room: c.nickname, rl: langUi(c.lang), lang: langUi(w.lang), other: w.other.nickname }) : t('wr_dup', { room: c.nickname, other: w.other.nickname });
+    return `<div class="wr-box" id="wr-box" role="alert"><p>⚠ ${esc(msg)}</p><div class="row wrap" style="gap:6px"><button class="btn sm" type="button" id="wr-move" data-to="${w.other.id}">${esc(t('wr_move', { other: w.other.nickname }))}</button><button class="btn sm secondary" type="button" id="wr-ok">${esc(t('wr_ok', { room: c.nickname }))}</button></div></div>`;
+  }
+
   function detectDir(text, override, c) {
     if (override) return override;
     if (!text.trim()) return null;
@@ -1312,6 +1344,7 @@
       det.textContent = (d === 'in' ? '⬅ ' + t('det_in') + ' · ' + langName(Engine.detect(input.value)) : '➡ ' + t('det_out') + ' → ' + langName(target));
       det.className = 'badge ' + (d === 'in' ? 'lilac' : '');
     };
+    if (chatState.moveDir && chatState.moveDir.id === id) { chatState.dirOverride = chatState.moveDir.d; dsel.value = chatState.moveDir.d; }
     input.addEventListener('input', () => { if (!dsel.value) chatState.dirOverride = null; refreshDet(); });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendBtn.click(); } });
     dsel.addEventListener('change', () => { chatState.dirOverride = dsel.value || null; refreshDet(); });
@@ -1337,7 +1370,18 @@
     document.getElementById('ch-send').addEventListener('click', async (ev) => {
       const text = input.value.trim(); if (!text) { input.focus(); return; }
       if (Engine.isJunk(text)) { toast(t('junk_input')); input.focus(); return; }
+      chatState.moveDir = null;
       const d = detectDir(text, chatState.dirOverride, c);
+      if (chatState.wrOk !== text) {
+        const w = wrongRoom(c, text, d);
+        if (w) {
+          const old = document.getElementById('wr-box'); if (old) old.remove();
+          document.getElementById('composer').insertAdjacentHTML('afterbegin', wrongRoomHtml(c, w));
+          document.getElementById('wr-ok').addEventListener('click', () => { chatState.wrOk = text; document.getElementById('wr-box').remove(); document.getElementById('ch-send').click(); });
+          document.getElementById('wr-move').addEventListener('click', (ev2) => { const to = ev2.currentTarget.dataset.to; chatState.draft[to] = text; chatState.draft[id] = ''; chatState.moveDir = { id: to, d }; location.hash = '#/chat/' + to; });
+          return;
+        }
+      }
       const btn = ev.currentTarget; spinBtn(btn, true, '');
       try {
         const exp = parseChatExport(text, c);
