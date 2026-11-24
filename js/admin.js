@@ -91,7 +91,7 @@
     </header>${sub.length > 1 ? `<nav class="admin-sub" aria-label="하위 메뉴">${sub.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>` : ''}`;
   }
   function page(active, inner) {
-    $app.innerHTML = `<div class="screen admin" lang="ko">${nav(active)}<div class="content stack-lg">${serverUsers ? '<span class="badge">서버 동기화 데이터 표시 중</span>' : (Store.Sync.enabled() ? '<span class="badge warning">서버 연결됨 · 새로고침으로 전체 회원을 불러오세요</span>' : '<span class="badge gray">이 기기 데이터 + 데모 회원 표시 중 · 운영 설정에서 서버를 연결하면 모든 회원 대화가 모입니다</span>')}${inner}</div></div>`;
+    $app.innerHTML = `<div class="screen admin" lang="ko">${nav(active)}<div class="content stack-lg">${serverUsers ? '<span class="badge">서버 동기화 데이터 표시 중</span>' : (Store.Sync.enabled() ? '<span class="badge">공용 서버 연결됨 · 다른 PC의 팀·상담원·지시가 자동 동기화됩니다 (6초)</span>' : '<span class="badge gray">이 기기 데이터 + 데모 회원 표시 중 · 운영 설정에서 서버를 연결하면 모든 회원 대화가 모입니다</span>')}${inner}</div></div>`;
   }
 
   /* ---------- 로그인 ---------- */
@@ -102,10 +102,12 @@
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
-        <p class="tiny muted">테스트 버전 · 최종 admin · 일반고객 personal1 · 기업고객 business1 · 거래처 company1 · 팀장 leader1 (비밀번호 모두 1234)</p>
+        <p class="tiny muted">상담원은 <a class="link" href="#/agent">상담원 로그인</a> · 테스트 버전 · 최종 admin · 일반고객 personal1 · 기업고객 business1 · 거래처 company1 · 팀장 leader1 (비밀번호 모두 1234)</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
-    document.getElementById('al').addEventListener('submit', (e) => {
+    document.getElementById('al').addEventListener('submit', async (e) => {
       e.preventDefault(); Store.reload(); const f = new FormData(e.target);
+      // 이 기기에 없는 아이디면 공용 서버에서 받아온 뒤 다시 확인 (다른 PC에서 만든 팀장·거래처)
+      if (!Store.whoHasId(f.get('id')) && Store.Sync.enabled()) { const bt = e.target.querySelector('button[type=submit]'); bt.disabled = true; bt.textContent = '서버 확인 중…'; try { await Store.Sync.pull(); } catch (x) { /* noop */ } bt.disabled = false; bt.textContent = '로그인'; }
       Store.ensureDemoMembers();
       const sf = Store.staffLogin(f.get('id'), f.get('pin'));
       if (sf) {
@@ -136,7 +138,7 @@
         location.hash = '#/admin/dashboard';
       } else {
         const who = Store.whoHasId(f.get('id'));
-        LM.toast(who ? '비밀번호가 맞지 않습니다' : '이 브라우저에 없는 아이디입니다 · 팀장 계정은 만든 같은 PC·같은 브라우저에서 로그인하세요 (서버 연결 전 테스트 버전)', 5000);
+        LM.toast(who === 'agent' ? '상담원 계정입니다 · 앱 첫 화면의 「상담원 로그인」에서 로그인하세요' : who ? '비밀번호가 맞지 않습니다' : (Store.Sync.enabled() ? '없는 아이디입니다 (공용 서버에도 없음)' : '이 브라우저에 없는 아이디입니다'), 5000);
       }
     });
   }
@@ -796,7 +798,11 @@
             <h3>팀원(상담원) <span class="ops-muted">${(sel.members || []).length}명 선택 · 팀원은 기업용 요금제로 바뀝니다</span></h3>
             <div class="row wrap" style="gap:6px"><input class="field grow" id="tm-q" type="search" placeholder="닉네임·ID로 찾기">${isOrg() ? `<input class="field" id="tm-add-id" placeholder="상담원 서비스 ID (예: U-0012)" style="max-width:220px"><button class="btn secondary" type="button" id="tm-add">ID로 추가</button>` : ''}</div>${isOrg() ? '<p class="ops-muted">상담원은 앱 설정에 보이는 자기 서비스 ID를 알려주면 추가할 수 있습니다. 다른 회사 소속 회원은 보이지 않습니다.</p>' : ''}
             <div class="tm-members">${all.sort((a, b) => ((sel.members || []).includes(b.id) - (sel.members || []).includes(a.id)) || a.nickname.localeCompare(b.nickname)).map((u) => { const other = Store.teamOf(u.id); return `<label class="tm-member" data-k="${esc((u.nickname + ' ' + u.id).toLowerCase())}"><input type="checkbox" name="m" value="${u.id}" ${(sel.members || []).includes(u.id) ? 'checked' : ''}> <span><strong>${esc(u.nickname)}</strong> <span class="ops-muted">${esc(u.id)} · ${esc(LN(u.lang || 'ko'))}${other && other.id !== sel.id ? ' · ' + esc(other.name) : ''}</span></span></label>`; }).join('')}</div>
-            <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
+            <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>
+          <form class="stack-sm tm-agent" id="tm-agent"><h3>상담원 계정 만들기 <span class="ops-muted">아이디·비밀번호로 어느 PC에서든 로그인 · 이 팀에 자동 소속</span></h3>
+            <div class="row wrap" style="gap:6px"><input class="field" name="nickname" placeholder="상담원 이름" required style="max-width:160px"><select class="field" name="lang" style="max-width:150px">${['ko', 'zh', 'ja', 'vi', 'en', 'th', 'id', 'es', 'ru', 'mn', 'uz', 'ne', 'tl', 'hi', 'ar', 'fr', 'de', 'pt'].map((l) => `<option value="${l}">${esc(LN(l))}</option>`).join('')}</select><input class="field" name="loginId" placeholder="상담원 아이디 (영문)" required style="max-width:170px"><input class="field" name="pin" value="1234" placeholder="비밀번호" required style="max-width:110px"><button class="btn" type="submit">상담원 추가</button></div>
+            ${(() => { const ag = (sel.members || []).map((id) => Store.db.users[id]).filter((u) => u && u.loginId); return ag.length ? `<div class="tm-agents">${ag.map((u) => `<span class="tm-agent-chip"><b>${esc(u.nickname)}</b> ${esc(u.loginId)} / ${esc(u.pin)} · ${esc(LN(u.lang || 'ko'))} · ${u.lastActive ? '접속 ' + new Date(u.lastActive).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span class="ops-muted">미접속</span>'}</span>`).join('')}</div>` : ''; })()}
+            <p class="ops-muted">상담원은 앱 주소의 첫 화면 → 「상담원 로그인」에서 이 아이디·비밀번호로 들어옵니다 · ${Store.Sync.enabled() ? '공용 서버 연결됨 · 다른 PC에서도 로그인됩니다' : '서버 미연결 · 같은 브라우저에서만'}</p></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
       </div>`);
     document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('팀장 아이디는 영문·숫자로 2자 이상'); return; } f.set('loginId', lid); if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ orgId: isOrg() ? role().org.id : (f.get('orgId') || ''), name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); LM.toast('팀장 로그인: ' + t.loginId + ' / ' + t.pin + ' · 로그아웃 후 이 화면에서 로그인', 6000); location.hash = '#/admin/teams?t=' + t.id; });
     const ed = document.getElementById('tm-edit');
@@ -804,6 +810,7 @@
       const addB = document.getElementById('tm-add'); if (addB) addB.addEventListener('click', () => { const id = document.getElementById('tm-add-id').value.trim().toUpperCase(); const u = Store.db.users[id]; const ot = u && Store.teamOf(id); if (!u) { LM.toast('그 ID의 회원이 없습니다'); return; } if (ot && ot.orgId !== role().org.id) { LM.toast('다른 회사에 소속된 회원입니다'); return; } Store.teamsOfOrg(role().org.id).forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((x) => x !== id); }); Store.updateTeam(sel.id, { members: Array.from(new Set((sel.members || []).concat(id))) }); Store.audit({ action: 'settings', target: sel.id, reason: '상담원 추가 · ' + id }); LM.toast(u.nickname + ' 님을 추가했습니다'); teamsPage(r); });
       document.getElementById('tm-q').addEventListener('input', (e) => { const v = e.target.value.toLowerCase(); ed.querySelectorAll('.tm-member').forEach((l) => { l.hidden = v && !l.dataset.k.includes(v); }); });
       ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); scopedTeams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, Object.assign(isOrg() ? {} : { orgId: f.get('orgId') || '' }, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: Store.normId(f.get('loginId')), pin: String(f.get('pin') || '').trim(), members })); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
+      document.getElementById('tm-agent').addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('상담원 아이디는 영문·숫자로 2자 이상'); return; } if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const u = Store.createAgent({ nickname: String(f.get('nickname')).trim(), lang: f.get('lang'), loginId: lid, pin: f.get('pin'), teamId: sel.id }); Store.audit({ action: 'settings', target: u.id, reason: '상담원 계정 생성 · ' + u.nickname + ' (' + lid + ') · ' + sel.name }); LM.toast('상담원 로그인: ' + lid + ' / ' + u.pin, 6000); teamsPage(r); });
       document.getElementById('tm-del').addEventListener('click', () => { Store.removeTeam(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '팀 삭제 · ' + sel.name }); location.hash = '#/admin/teams'; });
     }
   }

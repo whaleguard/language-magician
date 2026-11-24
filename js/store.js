@@ -29,6 +29,7 @@
         // 샘플·데모 연락처 이름 변경 반영 (실명 제거)
         const RN = /\uC6B0\uC7AC|\u5B87\u5BB0/g; ['audit', 'quality', 'reports'].forEach((k) => (d[k] || []).forEach((x) => Object.keys(x).forEach((f) => { if (typeof x[f] === 'string') x[f] = x[f].replace(RN, '\uC11C\uC900'); })));
         Object.values(d.users || {}).forEach((u) => { (u.contacts || []).forEach((c) => { if (['\uC6B0\uC7AC', '\u5B87\u5BB0', '\u30A6\u30B8\u30A7', 'Woojae'].includes(c.nickname)) c.nickname = '\uC11C\uC900'; }); if (u.nickname && /\uC6B0\uC7AC|\uC9C4\uC6B0\uC7AC/.test(u.nickname)) u.nickname = u.type === 'guest' ? u.nickname : 'Member'; });
+        (d.orgs || []).forEach((g) => { if (g.demo && g.id !== 'o_demo') { const old = g.id; g.id = 'o_demo'; (d.teams || []).forEach((t) => { if (t.orgId === old) t.orgId = 'o_demo'; }); } });
         return d;
       }
     } catch (e) { /* 손상된 데이터는 새로 시작 */ }
@@ -55,9 +56,22 @@
       if (raw) { const st = JSON.parse(raw); if ((st._rev || 0) !== (db._rev || 0)) mergeShared(st); db._rev = Math.max(st._rev || 0, db._rev || 0) + 1; } else db._rev = (db._rev || 0) + 1;
       localStorage.setItem(KEY, JSON.stringify(db));
     } catch (e) { console.warn('save failed', e); }
+    try { Sync.schedule(); } catch (e) { /* noop */ }
   }
+  // 기업용 상담원 계정 (아이디·비번으로 어느 PC에서든 로그인)
+  function createAgent(o) {
+    ensureTeamArrays();
+    let id; do { id = 'A-' + Math.random().toString(36).slice(2, 7).toUpperCase(); } while (db.users[id]);
+    const u = { id, type: 'member', nickname: o.nickname || id, lang: o.lang || 'ko', createdAt: Date.now(), lastActive: 0, consentAt: Date.now(), consentVer: CONSENT_VERSION, status: 'active', banReason: '', me: {}, contacts: [], messages: [], promises: [], anniversaries: [], settings: { notif: { promise: true, anniv: true, unanswered: true }, remind: 30 }, plan: 'business', agent: true, srv: true, loginId: String(o.loginId || '').trim().toLowerCase(), pin: String(o.pin || '1234').trim(), updatedAt: Date.now() };
+    db.users[id] = u;
+    const t = o.teamId && teamById(o.teamId); if (t) { t.members = (t.members || []).concat(id); t.updatedAt = Date.now(); }
+    persist(); return u;
+  }
+  function findAgentLocal(loginId, pin) { const id = normId(loginId); return Object.values(db.users).find((u) => u.loginId && u.loginId.toLowerCase() === id && (pin == null || String(u.pin).trim() === String(pin).trim())); }
+  function agentLoginAs(u) { if (db.users[u.id]) Object.assign(db.users[u.id], u); else db.users[u.id] = u; db.currentUserId = u.id; persist(); }
   function markDel(id) { db._del = (db._del || []).concat(id); }
   function save(opts) {
+    const cu = !viewAs && me(); if (cu) cu.updatedAt = Date.now();
     persist();
     listeners.forEach((fn) => { try { fn(); } catch (e) { /* noop */ } });
     if (viewAs) return;
@@ -77,7 +91,7 @@
   function startViewAs(id) { try { sessionStorage.setItem('lm_view_as', id); } catch (e) {} }
   function stopViewAs() { try { sessionStorage.removeItem('lm_view_as'); } catch (e) {} viewAs = null; }
   function viewingAs() { return viewAs; }
-  function nextId(kind) { db.seq[kind] = (db.seq[kind] || 0) + 1; return kind + '-' + String(db.seq[kind]).padStart(4, '0'); }
+  function nextId(kind) { db.seq[kind] = (db.seq[kind] || 0) + 1; let id; do { id = kind + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(); } while (db.users[id]); return id; }
 
   function createUser(opts) {
     const type = opts.type === 'member' ? 'member' : 'guest';
@@ -89,7 +103,7 @@
       status: 'active', banReason: '',
       me: {}, contacts: [], messages: [], promises: [], anniversaries: [],
       settings: { notif: { promise: true, anniv: true, unanswered: true }, remind: 30 },
-      device: (navigator.userAgent || '').slice(0, 120),
+      device: (navigator.userAgent || '').slice(0, 120), srv: true,
     };
     db.users[id] = u;
     db.currentUserId = id;
@@ -274,8 +288,8 @@
   // 기업(상담회사) — 기업 관리자 → 팀장 → 상담원
   function orgs() { ensureTeamArrays(); return db.orgs; }
   function orgById(id) { return orgs().find((o) => o.id === id); }
-  function createOrg(o) { ensureTeamArrays(); const g = { id: uid('o_'), name: o.name || '새 기업', adminName: o.adminName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), createdAt: Date.now(), demo: !!o.demo }; db.orgs.push(g); persist(); Sync.pushShared(); return g; }
-  function updateOrg(id, patch) { const g = orgById(id); if (!g) return null; Object.assign(g, patch); persist(); Sync.pushShared(); return g; }
+  function createOrg(o) { ensureTeamArrays(); const g = { id: o.id || uid('o_'), name: o.name || '새 기업', adminName: o.adminName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), createdAt: Date.now(), demo: !!o.demo }; db.orgs.push(g); persist(); Sync.pushShared(); return g; }
+  function updateOrg(id, patch) { const g = orgById(id); if (!g) return null; Object.assign(g, patch, { updatedAt: Date.now() }); persist(); Sync.pushShared(); return g; }
   function removeOrg(id) { ensureTeamArrays(); markDel(id); db.orgs = db.orgs.filter((o) => o.id !== id); db.teams.forEach((t) => { if (t.orgId === id) t.orgId = ''; }); persist(); Sync.pushShared(); }
   function orgLogin(loginId, pin) { const id = normId(loginId); return orgs().find((g) => g.loginId && g.loginId.toLowerCase() === id && String(g.pin).trim() === String(pin || '').trim()); }
   function teamsOfOrg(orgId) { return teams().filter((t) => t.orgId === orgId); }
@@ -296,7 +310,7 @@
   function ko2en(str) { return Array.from(String(str || '')).map((ch) => { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) { const j = [CHO[Math.floor(c / 588)], JUNG[Math.floor((c % 588) / 28)], JONG[c % 28]]; return j.map((x) => (x ? KO2EN[x] || '' : '')).join(''); } return KO2EN[ch] || ch; }).join(''); }
   function normId(v) { const s = String(v || '').trim(); return (/[\u3131-\u318E\uAC00-\uD7A3]/.test(s) ? ko2en(s) : s).toLowerCase(); }
   // 아이디는 있는데 비밀번호가 틀렸는지, 이 기기에 아이디 자체가 없는지 구분
-  function whoHasId(loginId) { const id = normId(loginId); if (!id) return null; if (id === String(db.admin.loginId || 'admin').toLowerCase()) return 'admin'; if (staff().some((x) => (x.loginId || '').toLowerCase() === id)) return 'staff'; if (orgs().some((x) => (x.loginId || '').toLowerCase() === id)) return 'org'; if (teams().some((x) => (x.loginId || '').toLowerCase() === id)) return 'leader'; return null; }
+  function whoHasId(loginId) { const id = normId(loginId); if (!id) return null; if (id === String(db.admin.loginId || 'admin').toLowerCase()) return 'admin'; if (staff().some((x) => (x.loginId || '').toLowerCase() === id)) return 'staff'; if (orgs().some((x) => (x.loginId || '').toLowerCase() === id)) return 'org'; if (teams().some((x) => (x.loginId || '').toLowerCase() === id)) return 'leader'; if (Object.values(db.users).some((u) => (u.loginId || '').toLowerCase() === id)) return 'agent'; return null; }
   // 운영자(관리자·팀장) → 회원 메시지. tr: { 언어: 번역문 }
   function sendNotice(o) {
     ensureTeamArrays();
@@ -436,7 +450,7 @@
   /* 데모: 기업용 팀 (팀장 leader1 / 1234) */
   function ensureDemoTeam() {
     ensureTeamArrays();
-    if (!db.orgs.some((g) => g.demo)) { const g = createOrg({ name: '데모 상담회사', adminName: '박실장', loginId: 'company1', pin: '1234', demo: true }); db.teams.filter((t) => t.demo && !t.orgId).forEach((t) => { t.orgId = g.id; }); persist(); }
+    if (!db.orgs.some((g) => g.demo)) { const g = createOrg({ id: 'o_demo', name: '데모 상담회사', adminName: '박실장', loginId: 'company1', pin: '1234', demo: true }); db.teams.filter((t) => t.demo && !t.orgId).forEach((t) => { t.orgId = g.id; }); persist(); }
     if (db.teams.some((t) => t.demo)) return;
     const crowd = Object.values(db.users).filter((u) => u.demoCrowd && u.type === 'member').slice(0, 7).map((u) => u.id);
     const mine = db.currentUserId && db.users[db.currentUserId] && !db.users[db.currentUserId].demo ? [db.currentUserId] : [];
@@ -533,9 +547,95 @@
 
   /* ---------- 서버 동기화 (Supabase PostgREST) ---------- */
   const Sync = {
-    cfg() { try { return JSON.parse(localStorage.getItem('lm_sync') || '{}'); } catch (e) { return {}; } },
-    enabled() { const c = this.cfg(); return !!(c.url && c.key); },
+    // 테스트 버전 기본 공용 서버 (Supabase 공개 키 · RLS 정책으로 lm_kv 테이블만 사용)
+    DEF: { url: 'https://eqsswegpkkyiargzggug.supabase.co', key: 'sb_publishable_5uTiEe3t4tbkbHyvWZfaig_0PIAmMJt' },
+    cfg() { let c = {}; try { c = JSON.parse(localStorage.getItem('lm_sync') || '{}'); } catch (e) { c = {}; } if (c.off) return {}; return c.url && c.key ? c : this.DEF; },
+    enabled() { const c = this.cfg(); return !!(c.url && c.key) && typeof fetch === 'function'; },
     headers() { const c = this.cfg(); return { apikey: c.key, Authorization: 'Bearer ' + c.key, 'Content-Type': 'application/json' }; },
+    base() { return this.cfg().url.replace(/\/$/, '') + '/rest/v1/lm_kv'; },
+    sig(o) { const str = JSON.stringify(o); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return h + ':' + str.length; },
+    hs() { if (!this._hs) { try { this._hs = JSON.parse(localStorage.getItem('lm_sync_h') || '{}'); } catch (e) { this._hs = {}; } } return this._hs; },
+    saveHs() { try { localStorage.setItem('lm_sync_h', JSON.stringify(this.hs())); } catch (e) { /* noop */ } },
+    schedule() { if (!this.enabled() || viewAs) return; clearTimeout(this._ft); this._ft = setTimeout(() => this.flush(), 700); },
+    isAdminCtx() { try { return /^#\/admin/.test(location.hash) && sessionStorage.getItem('lm_admin_ok') === '1'; } catch (e) { return false; } },
+    // 바뀐 것만 서버로: 거래처·팀·본사직원·지시메시지·서버계정 회원·삭제표시
+    async flush() {
+      if (!this.enabled() || viewAs || this._busy) return; this._busy = true;
+      try {
+        const hs = this.hs(); const rows = []; const now = Date.now();
+        const add = (k, obj) => { const sg = this.sig(obj); if (hs[k] !== sg) { rows.push({ key: k, data: obj, sg }); } };
+        ['orgs', 'teams', 'staff', 'notices'].forEach((col) => (db[col] || []).forEach((x) => { if (!x || !x.id || x.demo) return; add(col.slice(0, -1) + ':' + x.id, x); }));
+        Object.values(db.users).forEach((u) => { if (u && u.srv && !u.demo) add('user:' + u.id, u); });
+        (db._del || []).forEach((id) => { const k = 'del:' + id; if (!hs[k]) rows.push({ key: k, data: { id, ts: now }, sg: '1' }); });
+        for (let i = 0; i < rows.length; i += 20) {
+          const part = rows.slice(i, i + 20);
+          const r = await fetch(this.base(), { method: 'POST', headers: Object.assign(this.headers(), { Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify(part.map((x) => ({ key: x.key, data: x.data }))) });
+          if (!r.ok) throw new Error('push ' + r.status);
+          part.forEach((x) => { hs[x.key] = x.sg; });
+        }
+        if (rows.length) this.saveHs();
+        this.lastOk = Date.now(); this.err = '';
+      } catch (e) { this.err = String(e.message || e); } finally { this._busy = false; }
+    },
+    // 서버 → 이 기기. 관리자 화면이면 회원 전체, 아니면 내 계정만
+    async pull() {
+      if (!this.enabled() || viewAs) return 0;
+      const since = this._since || ''; const adminCtx = this.isAdminCtx(); const meId = db.currentUserId;
+      let q = '?select=key,data,updated_at&order=updated_at.asc&limit=1000';
+      if (since) q += '&updated_at=gt.' + encodeURIComponent(since);
+      let rows;
+      try { const r = await fetch(this.base() + q, { headers: this.headers() }); if (!r.ok) throw new Error('pull ' + r.status); rows = await r.json(); } catch (e) { this.err = String(e.message || e); return 0; }
+      const hs = this.hs(); let changed = 0;
+      // 다른 창이 먼저 저장한 내용 반영
+      try { const raw = localStorage.getItem(KEY); if (raw) { const st = JSON.parse(raw); if ((st._rev || 0) !== (db._rev || 0)) mergeShared(st); } } catch (e) { /* noop */ }
+      rows.forEach((row) => {
+        this._since = row.updated_at;
+        const [kind, ...rest] = row.key.split(':'); const id = rest.join(':'); const d = row.data;
+        if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); ['orgs', 'teams', 'staff', 'notices'].forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; changed++; } hs[row.key] = '1'; return; }
+        const col = { org: 'orgs', team: 'teams', staff: 'staff', notice: 'notices' }[kind];
+        if (col) {
+          if ((db._del || []).includes(id)) return;
+          db[col] = db[col] || []; const i = db[col].findIndex((x) => x.id === id); const loc = i >= 0 ? db[col][i] : null;
+          const locSig = loc ? this.sig(loc) : ''; const remSig = this.sig(d);
+          if (locSig === remSig) { hs[row.key] = remSig; return; }
+          const localDirty = loc && hs[row.key] && hs[row.key] !== locSig;
+          if (!loc || !localDirty || (d.updatedAt || d.readAt || d.ts || 0) >= (loc.updatedAt || loc.readAt || loc.ts || 0)) { if (i >= 0) db[col][i] = d; else db[col].push(d); hs[row.key] = remSig; changed++; }
+          return;
+        }
+        if (kind === 'user') {
+          if (!adminCtx && id !== meId) return; // 회원 기기에는 다른 회원 데이터를 받지 않음
+          const loc = db.users[id]; const remSig = this.sig(d);
+          if (loc && this.sig(loc) === remSig) { hs[row.key] = remSig; return; }
+          const localDirty = loc && hs[row.key] && hs[row.key] !== this.sig(loc);
+          if (!loc || !localDirty || (d.updatedAt || 0) >= (loc.updatedAt || 0)) { db.users[id] = d; hs[row.key] = remSig; changed++; }
+        }
+      });
+      this.saveHs();
+      if (changed) { try { db._rev = (db._rev || 0) + 1; localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* noop */ } try { window.dispatchEvent(new CustomEvent('lm-sync', { detail: changed })); } catch (e) { /* noop */ } }
+      this.lastOk = Date.now(); this.err = '';
+      if (rows.length >= 1000) return changed + await this.pull();
+      return changed;
+    },
+    // 상담원 로그인: 서버에서 아이디로 계정 찾기
+    async findAgent(loginId, pin) {
+      if (!this.enabled()) return null;
+      const id = normId(loginId);
+      const r = await fetch(this.base() + '?select=data&key=like.user:*&data->>loginId=eq.' + encodeURIComponent(id), { headers: this.headers() });
+      if (!r.ok) throw new Error('server ' + r.status);
+      const j = await r.json(); const u = j.map((x) => x.data).find((x) => String(x.pin).trim() === String(pin || '').trim());
+      return u || (j.length ? 'badpin' : null);
+    },
+    async findAccount(loginId) {
+      // 팀장·거래처 아이디가 서버에 있는지 (다른 PC에서 만든 계정을 바로 받기)
+      if (!this.enabled()) return 0; await this.pull(); return 1;
+    },
+    start() {
+      if (this._started || !this.enabled()) return; this._started = true;
+      const tick = () => { if (document.hidden) return; this.pull(); };
+      this.pull().then(() => this.flush());
+      setInterval(tick, 6000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) this.pull(); });
+    },
     async upsert(key, data) {
       if (!this.enabled()) return false;
       const c = this.cfg();
@@ -547,8 +647,8 @@
       return r.ok;
     },
     async pushUser(u) {
-      if (!u || u.demo || !this.enabled()) return;
-      try { await this.upsert('user:' + u.id, u); } catch (e) { /* 오프라인이면 다음 저장 때 재시도 */ }
+      if (!u || u.demo || !u.srv || !this.enabled()) return;
+      try { this.schedule(); return; await this.upsert('user:' + u.id, u); } catch (e) { /* 오프라인이면 다음 저장 때 재시도 */ }
     },
     async pushShared() {
       if (!this.enabled()) return;
@@ -582,7 +682,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };

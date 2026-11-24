@@ -154,6 +154,7 @@
     const r = route();
     if (r.name === 'admin') { document.body.classList.add('is-admin'); const ar = window.Admin.render(r); applyWatermark(); return ar; }
     document.body.classList.remove('is-admin');
+    if (r.name === 'agent') return renderAgentLogin();
     const u = Store.me();
     if (!u) return renderOnboarding();
     uiLang = u.lang || uiLang;
@@ -177,6 +178,7 @@
     const v = Store.viewingAs(); if (!v) return '';
     return `<div class="viewas-bar">👁 <b>${esc(v.nickname)}</b> <span>(${esc(v.id)})</span> 회원 화면 보기 중 · 읽기 전용, 변경 내용은 저장되지 않아요 <button type="button" id="viewas-exit">관리자로 돌아가기</button></div>`;
   }
+  document.addEventListener('click', (e) => { if (e.target.closest('#st-ag-out')) { Store.logout(); location.hash = '#/agent'; render(); } });
   document.addEventListener('click', (e) => { if (e.target.closest('#viewas-exit')) { const v = Store.viewingAs(); Store.stopViewAs(); location.href = 'app.html#/admin/users?u=' + (v ? v.id : ''); location.reload(); } });
   const POP = new URLSearchParams(location.search).has('pop');
   if (POP) document.documentElement.classList.add('pop');
@@ -229,6 +231,9 @@
     if (typing()) { syncPending = true; return; }
     const sc = document.querySelector('.ws-main, .chat-scroll'); render();
   });
+  // 공용 서버에서 새 내용(다른 PC의 지시·팀·계정)이 오면 다시 그림
+  window.addEventListener('lm-sync', () => { if (Store.viewingAs()) return; if (typing() || document.querySelector('.sheet, dialog[open]')) { syncPending = true; return; } render(); });
+  try { Store.Sync.start(); } catch (e) { console.warn(e); }
   document.addEventListener('focusout', () => { if (syncPending && !typing()) { syncPending = false; setTimeout(render, 50); } });
 
   function shell(inner, active, opts) {
@@ -368,6 +373,57 @@
   });
 
   /* ================= 온보딩 ================= */
+  // 기업용 상담원 로그인 (관리자·팀장이 만든 아이디·비밀번호)
+  const AG_T = {
+    ko: { nt: '새 지시가 도착했습니다', later: '나중에', t: '상담원 로그인', s: '회사(팀장)에게 받은 상담원 아이디와 비밀번호를 입력하세요.', id: '아이디', pw: '비밀번호', go: '로그인', back: '← 처음 화면', chk: '서버 확인 중…', bad: '비밀번호가 맞지 않습니다', none: '없는 아이디입니다. 팀장에게 확인하세요', off: '서버에 연결할 수 없습니다. 인터넷을 확인하세요', link: '상담원 로그인 (회사 계정)', ok: '로그인했습니다', sw: '상담원 계정으로 전환' },
+    zh: { nt: '收到新的指示', later: '稍后', t: '客服登录', s: '请输入公司（组长）提供的客服账号和密码。', id: '账号', pw: '密码', go: '登录', back: '← 返回', chk: '正在连接服务器…', bad: '密码不正确', none: '账号不存在，请联系组长', off: '无法连接服务器，请检查网络', link: '客服登录（公司账号）', ok: '已登录', sw: '切换到客服账号' },
+    ja: { nt: '新しい指示が届きました', later: 'あとで', t: 'オペレーターログイン', s: '会社（チームリーダー）から受け取ったIDとパスワードを入力してください。', id: 'ID', pw: 'パスワード', go: 'ログイン', back: '← 最初の画面', chk: 'サーバー確認中…', bad: 'パスワードが違います', none: 'IDがありません。リーダーに確認してください', off: 'サーバーに接続できません', link: 'オペレーターログイン（会社アカウント）', ok: 'ログインしました', sw: 'オペレーターアカウントに切替' },
+    vi: { nt: 'Có chỉ thị mới', later: 'Để sau', t: 'Đăng nhập nhân viên tư vấn', s: 'Nhập ID và mật khẩu do công ty (trưởng nhóm) cấp.', id: 'ID', pw: 'Mật khẩu', go: 'Đăng nhập', back: '← Màn hình đầu', chk: 'Đang kiểm tra máy chủ…', bad: 'Sai mật khẩu', none: 'ID không tồn tại. Hãy hỏi trưởng nhóm', off: 'Không kết nối được máy chủ', link: 'Đăng nhập nhân viên (tài khoản công ty)', ok: 'Đã đăng nhập', sw: 'Chuyển sang tài khoản nhân viên' },
+    en: { nt: 'New instruction from your team', later: 'Later', t: 'Agent sign-in', s: 'Enter the agent ID and password from your company (team leader).', id: 'ID', pw: 'Password', go: 'Sign in', back: '← Back', chk: 'Checking server…', bad: 'Wrong password', none: 'No such ID. Ask your team leader', off: 'Cannot reach the server', link: 'Agent sign-in (company account)', ok: 'Signed in', sw: 'Switch to agent account' },
+  };
+  const agT = (k) => (AG_T[uiLang] || AG_T.en)[k];
+  // 다른 PC의 팀장·관리자가 보낸 지시를 바로 창으로 띄움
+  function popNotices() {
+    const u = Store.me(); if (!u || Store.viewingAs() || POP || /^#\/(admin|inbox)/.test(location.hash)) return;
+    if (document.getElementById('sheet')) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem('lm_popped_' + u.id) || '[]'); } catch (e) { seen = []; }
+    const list = Store.noticesOf(u.id).filter((n) => n.from !== 'member' && !n.readAt && !seen.includes(n.id));
+    if (!list.length) return;
+    const n = list[list.length - 1]; const my = u.lang || uiLang;
+    const body = (n.tr && (n.tr[my] || n.tr[uiLang])) || n.text;
+    try { localStorage.setItem('lm_popped_' + u.id, JSON.stringify(seen.concat(list.map((x) => x.id)).slice(-300))); } catch (e) { /* noop */ }
+    try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(); const g = ac.createGain(); o.frequency.value = 880; g.gain.value = 0.06; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(() => { o.stop(); ac.close(); }, 220); } catch (e) { /* noop */ }
+    sheet(`<div class="stack notice-pop ${n.kind === 'warning' ? 'warn' : ''}"><h2>📩 ${esc(agT('nt'))}${list.length > 1 ? ' <span class="badge">' + list.length + '</span>' : ''}</h2>
+      <p class="small muted">${esc(n.fromName || '')}${n.due ? ' · ⏰ ' + esc(n.due) : ''}</p>
+      <div class="card" style="white-space:pre-wrap;font-size:16px;line-height:1.55">${esc(body)}</div>
+      ${body !== n.text ? `<p class="tiny muted">${esc(n.text)}</p>` : ''}
+      <div class="row" style="gap:8px;justify-content:flex-end"><button class="btn secondary" type="button" id="np-later">${esc(agT('later'))}</button><a class="btn" href="#/inbox" id="np-open">${esc(t('ib_open'))} →</a></div></div>`, (el) => {
+      el.querySelector('#np-later').addEventListener('click', closeSheet);
+      el.querySelector('#np-open').addEventListener('click', closeSheet);
+    });
+  }
+  window.addEventListener('lm-sync', () => setTimeout(() => { if (!typing()) popNotices(); }, 300));
+  setTimeout(() => { try { popNotices(); } catch (e) { /* noop */ } }, 1500);
+  function renderAgentLogin() {
+    document.body.classList.remove('is-admin');
+    $app.innerHTML = `<div class="screen"><header class="top row"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span></header>
+      <div class="content stack-lg" style="max-width:440px;margin:0 auto"><form class="card stack" id="ag-form"><h1>${esc(agT('t'))}</h1><p class="small muted">${esc(agT('s'))}</p>
+        <label class="stack-xs"><span class="label">${esc(agT('id'))}</span><input class="field" name="id" autocomplete="username" autocapitalize="off" required></label>
+        <label class="stack-xs"><span class="label">${esc(agT('pw'))}</span><input class="field" name="pin" type="password" autocomplete="current-password" required></label>
+        <button class="btn full" type="submit">${esc(agT('go'))}</button></form><a class="link" href="#/home">${esc(agT('back'))}</a></div></div>`;
+    document.getElementById('ag-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); const f = new FormData(e.target); const bt = e.target.querySelector('button'); bt.disabled = true; bt.textContent = agT('chk');
+      let u = null; let res = null;
+      try { res = await Store.Sync.findAgent(f.get('id'), f.get('pin')); } catch (x) { res = undefined; }
+      if (res && typeof res === 'object') u = res;
+      if (!u) { const loc = Store.findAgentLocal(f.get('id'), f.get('pin')); if (loc) u = loc; }
+      bt.disabled = false; bt.textContent = agT('go');
+      if (!u) { toast(res === 'badpin' || Store.findAgentLocal(f.get('id')) ? agT('bad') : res === undefined ? agT('off') : agT('none'), 4000); return; }
+      if (u.status === 'banned') { Store.agentLoginAs(u); go('#/home'); render(); return; }
+      u.lastActive = Date.now(); Store.agentLoginAs(u); try { sessionStorage.removeItem('lm_admin_ok'); } catch (x) { /* noop */ }
+      uiLang = u.lang && T[u.lang] ? u.lang : uiLang; toast(agT('ok')); location.hash = '#/home'; render();
+    });
+  }
   function renderOnboarding() {
     document.body.classList.remove('is-admin');
     let sel = uiLang;
@@ -397,6 +453,7 @@
             </div>
             <button class="btn full" type="submit">${t('ob_start')} ${icon('arrow')}</button>
           </form>
+          <a class="btn secondary full" href="#/agent">${esc(agT('link'))}</a>
         </div></div>`;
       $app.querySelectorAll('input[name="lang"]').forEach((r) => r.addEventListener('change', () => { sel = r.value; draw(); }));
       $app.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => { document.getElementById('nick-wrap').hidden = r.value !== 'member' || !r.checked; }));
@@ -2393,6 +2450,7 @@
           <p><strong>${esc(u.nickname)}</strong> <span class="small muted">· ${esc(u.id)}</span></p>
           ${u.type === 'guest' ? `<span class="badge warning">${t('set_guest_now')}</span>
             <div class="row"><input class="field" id="st-nick" maxlength="24" placeholder="${esc(t('ob_nick_ph'))}"><button class="btn" type="button" id="st-reg">${t('set_register')}</button></div><p class="tiny muted">${t('ob_nick_hint')}</p>` : ''}
+          ${u.agent ? `<p class="small">${esc(agT('id'))}: <b>${esc(u.loginId)}</b>${(() => { const tm = Store.teamOf(u.id); return tm ? ' · ' + esc(tm.name) : ''; })()}</p><button class="btn secondary" type="button" id="st-ag-out">${esc(t('set_logout'))}</button>` : `<a class="btn secondary" href="#/agent">${esc(agT('sw'))}</a>`}
         </div>
         <div class="card stack">
           <h2>${t('set_lang')}</h2>
