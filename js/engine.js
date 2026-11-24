@@ -663,8 +663,18 @@
     return { summary: String(j.summary || ''), facts: (j.facts || []).slice(0, 6).map((f) => ({ type: f.type || 'other', text: String(f.text || '') })) };
   }
 
+  // 3시간 자동 정리: 대화에서 할 일·약속 추출 (AI)
+  async function aiTasks(msgs, contact, uiLang, todayStr) {
+    const sys = 'You extract concrete to-dos and upcoming appointments from a chat between the user (ME) and a contact (THEM). Only include things actually agreed, promised or requested. Respond in strict JSON.';
+    const lines = msgs.map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ' ' + new Date(m.ts).toISOString().slice(0, 16).replace('T', ' ') + ': ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
+    const user = 'Today is ' + todayStr + '. Write titles in ' + LANGS[uiLang].llm + '. Contact: ' + contact.nickname + '.\nChat:\n' + lines + '\n\nReturn JSON {"items":[{"kind":"appointment|todo","title":"short","date":"YYYY-MM-DD or empty","time":"HH:MM or empty","place":"or empty"}]} with at most 5 items; empty list if nothing.';
+    const out = await callLLM(sys, user, true);
+    const j = typeof out === 'string' ? extractJson(out) : out;
+    return (j.items || []).slice(0, 5).map((x) => ({ kind: x.kind === 'todo' ? 'todo' : 'appointment', title: String(x.title || '').slice(0, 80), date: /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') ? x.date : '', time: /^\d{1,2}:\d{2}$/.test(x.time || '') ? x.time.padStart(5, '0') : '', place: String(x.place || '').slice(0, 60) }));
+  }
+
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
-    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

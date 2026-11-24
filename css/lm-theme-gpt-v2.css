@@ -298,3 +298,4 @@ img { -webkit-user-drag: none; }
 .ws-item .ws-pop:hover { background: var(--primary); color: #fff; }
 .wr-box { display: grid; gap: 8px; padding: 10px 12px; border: 1.5px solid #f0b35b; border-radius: 10px; background: #fff7e8; color: #6b4310; font-size: 13.5px; }
 .wr-box p { margin: 0; font-weight: 600; }
+.auto-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--sky-line, #cfe3f3); border-radius: 10px; background: var(--mint); }

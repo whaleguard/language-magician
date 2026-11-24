@@ -456,7 +456,7 @@
     const lab = c ? `<span class="label">${esc(whoText(c))}</span>` : '';
     if (it.kind === 'overdue' || it.kind === 'today' || it.kind === 'upcoming') {
       const p = it.p;
-      return `<li><button class="list-row" type="button" data-go="#/agenda">${av}<span class="grow">${lab}<br><strong>${it.kind === 'overdue' ? `<span class="badge alert">${t('overdue')}</span> ` : ''}${it.kind === 'today' ? t('d_today') : fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}</strong>${p.place ? `<br><span class="small muted">${esc(p.place)}</span>` : ''}</span>${icon('arrow', 'chev')}</button></li>`;
+      return `<li><button class="list-row" type="button" data-go="#/agenda">${av}<span class="grow">${lab}<br><strong>${it.kind === 'overdue' ? `<span class="badge alert">${t('overdue')}</span> ` : ''}${it.kind === 'today' ? t('d_today') : fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.auto ? ` <span class="badge lilac">🤖 ${t('auto_badge')}</span>` : ''}</strong>${p.place ? `<br><span class="small muted">${esc(p.place)}</span>` : ''}</span>${icon('arrow', 'chev')}</button></li>`;
     }
     if (it.kind === 'anniv') {
       const a = it.a;
@@ -1152,6 +1152,14 @@
     en: { wr_name: "This is {room}'s chat, but it mentions {other}. Was this meant for someone else?", wr_lang: "This is {room}'s chat ({rl}), but the message is in {lang}. Did {other} send it?", wr_dup: "The same message is already in {other}'s chat. This is {room}'s chat.", wr_move: "Move to {other}'s chat", wr_ok: "Yes, it's {room}" },
   };
   Object.keys(WR_T).forEach((l) => Object.assign(T[l], WR_T[l]));
+  const AUTO_T = {
+    ko: { auto_added: '대화에서 할 일·약속 {n}건을 자동으로 정리해 일정에 넣었어요', dup_promise: '이미 같은 일정이 있어요', auto_badge: 'AI 자동', auto_l: '3시간마다 대화를 훑어 할 일·약속 자동 정리', auto_now: '지금 정리하기', auto_last: '마지막 정리 {t}' },
+    zh: { auto_added: '已从对话中自动整理 {n} 项待办·约定并加入日程', dup_promise: '已有相同的日程', auto_badge: 'AI 自动', auto_l: '每3小时扫描对话，自动整理待办·约定', auto_now: '现在整理', auto_last: '上次整理 {t}' },
+    ja: { auto_added: '会話からやること・約束を{n}件自動で予定に追加しました', dup_promise: '同じ予定がすでにあります', auto_badge: 'AI自動', auto_l: '3時間ごとに会話を確認してやること・約束を自動整理', auto_now: '今すぐ整理', auto_last: '前回の整理 {t}' },
+    vi: { auto_added: 'Đã tự động thêm {n} việc/lịch hẹn từ cuộc trò chuyện vào lịch', dup_promise: 'Lịch này đã có', auto_badge: 'AI tự động', auto_l: 'Mỗi 3 giờ quét trò chuyện và tự sắp xếp việc cần làm·lịch hẹn', auto_now: 'Sắp xếp ngay', auto_last: 'Lần cuối {t}' },
+    en: { auto_added: 'Added {n} to-do(s)/plan(s) from your chats to the agenda', dup_promise: 'That plan is already there', auto_badge: 'AI auto', auto_l: 'Scan chats every 3 hours and add to-dos & plans automatically', auto_now: 'Organize now', auto_last: 'Last run {t}' },
+  };
+  Object.keys(AUTO_T).forEach((l) => Object.assign(T[l], AUTO_T[l]));
   Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   [['ko', '열기', '접기'],['zh', '展开', '收起'],['ja', '開く', '閉じる'],['vi', 'Mở', 'Thu gọn'],['en', 'Open', 'Close']].forEach(([l, a, b]) => { T[l].open_l = a; T[l].close_l = b; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
@@ -1431,7 +1439,9 @@
     }));
     $app.querySelectorAll('[data-add-promise]').forEach((b) => b.addEventListener('click', () => {
       const m = Store.me().messages.find((x) => x.id === b.dataset.addPromise); const a = m.analysis;
-      Store.addPromise({ contactId: c ? c.id : null, title: (c ? c.nickname + ' · ' : '') + t('promise'), date: a.when.date || today(), time: a.when.time || '', place: a.place || '', sourceMsgId: m.id });
+      const np = { contactId: c ? c.id : null, title: (c ? c.nickname + ' · ' : '') + t('promise'), date: a.when.date || today(), time: a.when.time || '', place: a.place || '', sourceMsgId: m.id };
+      if (isDupPromise(Store.me(), np)) { toast(t('dup_promise')); renderChat({ id }); return; }
+      Store.addPromise(np);
       toast(t('added_reminder')); askNotify(); renderChat({ id });
     }));
     $app.querySelectorAll('[data-report]').forEach((b) => b.addEventListener('click', () => openReport(c, b.dataset.report)));
@@ -1471,6 +1481,46 @@
   function dayKey(ts) { return Engine.ymd(new Date(ts)); }
   function digestsOf(cid, u) { u = u || Store.me(); u.digests = u.digests || {}; return u.digests[cid] || {}; }
   let aiDigestBusy = false; const aiDigestQueue = [];
+  /* ---------- 3시간마다 대화 자동 정리 → 할 일·다가오는 약속 추가 (중복 방지) ---------- */
+  const AUTO_EVERY = 3 * 3600000;
+  const normT = (x) => String(x || '').toLowerCase().replace(/[\s·.,!?~]/g, '');
+  function isDupPromise(u, p) {
+    return u.promises.some((q) => q.contactId === p.contactId && ((p.date && q.date === p.date && (q.time || '') === (p.time || '')) || (p.sourceMsgId && q.sourceMsgId === p.sourceMsgId) || (normT(q.title) && normT(q.title) === normT(p.title) && (q.date || '') === (p.date || ''))));
+  }
+  let autoBusy = false;
+  async function autoOrganize(force) {
+    const u = Store.me(); if (!u || autoBusy || Store.viewingAs()) return 0;
+    u.settings = u.settings || {}; if (u.settings.autoOrg === false) return 0;
+    const last = u.settings.autoOrgAt || 0;
+    if (!force && Date.now() - last < AUTO_EVERY) return 0;
+    autoBusy = true; let added = 0;
+    try {
+      const since = last || Date.now() - 3 * 86400000;
+      for (const c of u.contacts) {
+        const ms = Store.messagesOf(c.id, u).filter((m) => m.ts > since && m.source !== 'sample');
+        if (!ms.length) continue;
+        let items = [];
+        if (Engine.aiConfig().key) { try { items = await Engine.aiTasks(ms.slice(-40), c, uiLang, today()); } catch (e) { items = []; } }
+        if (!items.length) {
+          ms.forEach((m) => { const w = Engine.extractWhen(m.text, m.ts) || (m.translation ? Engine.extractWhen(m.translation, m.ts) : null); if (w && (w.date || w.time) && (w.time || w.date !== Engine.ymd(new Date(m.ts)))) items.push({ kind: 'appointment', title: c.nickname + ' · ' + t('promise'), date: w.date || Engine.ymd(new Date(m.ts)), time: w.time || '', place: Engine.extractPlace(m.text) || (m.translation ? Engine.extractPlace(m.translation) : '') || '', sourceMsgId: m.id }); });
+        }
+        items.forEach((it) => {
+          const p = { contactId: c.id, title: it.title.includes(c.nickname) ? it.title : c.nickname + ' · ' + it.title, date: it.date || (it.kind === 'todo' ? today() : ''), time: it.time || '', place: it.place || '', auto: true, kind: it.kind, sourceMsgId: it.sourceMsgId || '' };
+          if (!p.date || p.date < today()) return;
+          if (isDupPromise(u, p)) return;
+          Store.addPromise(p); added++;
+        });
+      }
+      u.settings.autoOrgAt = Date.now(); Store.save();
+    } finally { autoBusy = false; }
+    if (added) toast(t('auto_added', { n: added }));
+    return added;
+  }
+  document.addEventListener('change', (e) => { if (e.target.id === 'ag-auto') { const u = Store.me(); u.settings = u.settings || {}; u.settings.autoOrg = e.target.checked; Store.save(); } });
+  document.addEventListener('click', async (e) => { const b = e.target.closest('#ag-auto-now'); if (!b) return; b.disabled = true; const n = await autoOrganize(true); if (!n) toast(t('nothing_today')); render(); });
+  setInterval(() => { autoOrganize(false).then((n) => { if (n && ['agenda', 'chat', 'today', 'home'].includes(route().name)) render(); }); }, 10 * 60000);
+  setTimeout(() => autoOrganize(false), 4000);
+
   function runDigests(onlyCid) {
     const u = Store.me(); if (!u) return;
     u.digests = u.digests || {};
@@ -1870,6 +1920,7 @@
     const notifState = typeof Notification === 'undefined' ? 'na' : Notification.permission;
     shell(`${topBar(t('agenda_title'), null)}
       <div class="content stack-lg">
+        <div class="auto-row"><label class="small row" style="gap:6px"><input type="checkbox" id="ag-auto" ${(u.settings || {}).autoOrg !== false ? 'checked' : ''}> 🤖 ${t('auto_l')}</label><span class="tiny muted">${(u.settings || {}).autoOrgAt ? esc(t('auto_last', { t: shortTs((u.settings || {}).autoOrgAt) })) : ''}</span><button class="btn sm secondary" type="button" id="ag-auto-now">${t('auto_now')}</button></div>
         ${calendarHtml(u)}
         <div class="stack-sm"><h2>${t('today_h')} · <span class="muted" style="font-weight:600">${fmtDateW(td)}</span></h2></div>
         ${items.filter((i) => i.kind !== 'upcoming').length ? `<ul class="list card" style="padding-block:4px">${items.filter((i) => i.kind !== 'upcoming').map(itemHtml).join('')}</ul>` : `<div class="empty small">${t('nothing_today')}</div>`}
@@ -1879,7 +1930,7 @@
             const c = u.contacts.find((x) => x.id === p.contactId);
             const late = !p.done && p.date < td;
             return `<div class="card stack-sm ${c ? 'edge-' + c.color : ''}" style="${p.done ? 'opacity:.6' : ''}">
-              <div class="row">${c ? avatar(c) : `<span class="avatar">${icon('calendar')}</span>`}<div class="grow">${c ? `<span class="label">${esc(whoText(c))}</span>` : ''}<h3>${late ? `<span class="badge alert">${t('overdue')}</span> ` : ''}${p.done ? '✓ ' : ''}${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}</h3>${p.place ? `<p class="small muted">${esc(p.place)}</p>` : ''}</div></div>
+              <div class="row">${c ? avatar(c) : `<span class="avatar">${icon('calendar')}</span>`}<div class="grow">${c ? `<span class="label">${esc(whoText(c))}</span>` : ''}<h3>${late ? `<span class="badge alert">${t('overdue')}</span> ` : ''}${p.done ? '✓ ' : ''}${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.auto ? ` <span class="badge lilac">🤖 ${t('auto_badge')}</span>` : ''}</h3>${p.place ? `<p class="small muted">${esc(p.place)}</p>` : ''}</div></div>
               <div class="row wrap"><button class="btn sm ${p.done ? 'secondary' : 'subtle'}" type="button" data-done="${p.id}">${p.done ? t('done') : t('mark_done')}</button><button class="btn sm secondary" type="button" data-ics="${p.id}">${t('to_calendar')}</button><button class="btn sm secondary" type="button" data-del="${p.id}" aria-label="${t('delete')}">✕</button></div>
             </div>`;
           }).join('')}</div>` : `<div class="empty small">${t('none')}</div>`}
