@@ -1,4 +1,4 @@
-/* 언어의 마술사 — 운영(관리자) 콘솔 · 한국어 UI */
+/* 상담매직 — 운영(관리자) 콘솔 · 한국어 UI */
 (function () {
   'use strict';
 
@@ -70,7 +70,7 @@
       ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
       : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
-      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : '본사 운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
+      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : '본사 운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>`;
   }
@@ -81,7 +81,7 @@
   /* ---------- 로그인 ---------- */
   function login() {
     $app.innerHTML = `<div class="screen admin" lang="ko"><div class="content stack-lg" style="max-width:420px;margin:8vh auto">
-      <span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 운영</span>
+      <span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 운영</span>
       <form class="card stack" id="al"><h1>관리자 로그인</h1><p class="small muted">아이디와 비밀번호를 입력하세요. 모든 대화 열람은 감사로그에 기록됩니다.</p>
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>

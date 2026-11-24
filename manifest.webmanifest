@@ -1,6 +1,6 @@
 {
-  "name": "언어의 마술사 · Language Magician",
-  "short_name": "언어의 마술사",
+  "name": "상담매직 · Language Magician",
+  "short_name": "상담매직",
   "description": "내 말로 쓰고, 상대의 언어로 전하는 대화 도우미",
   "start_url": "./app.html#/home",
   "scope": "./",

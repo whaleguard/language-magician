@@ -1,4 +1,4 @@
-/* 언어의 마술사 — 다국어 문구 (ko / zh / ja / vi / en)
+/* 상담매직 — 다국어 문구 (ko / zh / ja / vi / en)
  * 화면 표시 언어는 사용자의 모국어로 전환됩니다.
  */
 (function (global) {
@@ -6,7 +6,7 @@
 
   const T = {
     ko: {
-      brand: '언어의 마술사', tagline: '내 말로 쓰고, 상대의 언어로 전해요',
+      brand: '상담매직', tagline: '내 말로 쓰고, 상대의 언어로 전해요',
       ob_title: '사용할 언어를 고르세요', ob_sub: '앱 화면, 번역, 조언이 이 언어로 표시됩니다.',
       ob_mode: '이용 방식', ob_guest: '게스트로 바로 써보기', ob_nick: '닉네임으로 가입', ob_nick_label: '닉네임', ob_nick_ph: '예: Lin',
       ob_nick_hint: '실명은 받지 않습니다. 닉네임만으로 가입합니다.',

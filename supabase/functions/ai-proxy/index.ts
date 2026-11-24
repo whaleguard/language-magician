@@ -1,4 +1,4 @@
-// 언어의 마술사 — 본사 AI 프록시 (Supabase Edge Function)
+// 상담매직 — 본사 AI 프록시 (Supabase Edge Function)
 // 키는 서버 비밀값에만 둡니다: supabase secrets set OPENAI_API_KEY=... ANTHROPIC_API_KEY=...
 // 배포: supabase functions deploy ai-proxy --no-verify-jwt
 // 요청: { provider: 'openai'|'anthropic', model?, system, user, json?, image?: { data(base64), mime } }
