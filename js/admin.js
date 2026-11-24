@@ -239,6 +239,8 @@
     const c = u ? u.contacts.find((x) => x.id === cid) : null;
     const ms = u ? (cid ? msgsOf(u, cid) : noContactMsgs.sort((a, b) => a.ts - b.ts)) : [];
     const grantKey = u ? u.id + '|' + (cid || 'none') : '';
+    // 테스트 버전: 열람 사유 없이 바로 열람 (감사로그에는 자동 기록)
+    if (u && !viewGrants[grantKey]) { viewGrants[grantKey] = '운영 점검(자동)'; Store.audit({ action: 'view', target: u.id, member: u.nickname, contact: c ? APPN(c.app) + ' / ' + c.nickname : '미지정', convId: (ms && ms[0]) ? ms[0].convId : '-', reason: '운영 점검(자동)' }); }
     const granted = !!viewGrants[grantKey];
     page('monitor', `
       <div class="between wrap"><div class="stack-sm"><h1>전체 대화 모니터링</h1><p class="muted">회원·게스트가 앱에 입력·공유·업로드한 모든 대화를 확인합니다. 상대는 회원이 적은 앱·닉네임으로만 구분됩니다.</p></div><a class="btn secondary" href="#/admin/audit">열람 감사로그</a></div>

@@ -249,7 +249,7 @@
     if (Object.values(db.users).some((u) => u.demo)) {
       // 예전 데모 회원에 AI 사용 기록이 없으면 채움
       Object.values(db.users).filter((u) => u.demo && !u.aiUsage).forEach((u, i) => { u.aiUsage = []; const model = i % 2 ? 'claude-haiku-5-5' : 'gpt-4o-mini'; if (u.type === 'member') for (let dday = 0; dday < 30; dday++) for (let k = 0; k < (i * 7 + dday * 3) % 9; k++) u.aiUsage.push({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 700 + ((k * 131 + i * 17) % 900), out: 180 + ((k * 71) % 400), ts: Date.now() - dday * 86400000 - k * 1800000 }); });
-      persist(); return;
+      persist(); ensureDemoCrowd(); return;
     }
     const defs = [
       ['Lin', 'zh', 'member', ['seojun', 'haruka', 'minh'], 15],
@@ -308,6 +308,51 @@
       const c = kira.contacts.find((x) => x.nickname === 'Jason_invest');
       if (c) db.reports.unshift({ id: nextId('R'), userId: kira.id, contactId: c.id, reason: 'money', note: 'Asked to wire 500 USD and move to Telegram.', status: 'open', createdAt: Date.now() - 3600000 * 5, history: [{ ts: Date.now() - 3600000 * 5, text: 'received' }], demo: true });
     }
+    persist();
+    ensureDemoCrowd();
+  }
+
+  /* 데모: 대시보드용 회원 무리 (45일간 가입·활동 분포) */
+  function ensureDemoCrowd() {
+    if (Object.values(db.users).some((u) => u.demoCrowd)) return;
+    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    const names = ['Mei', 'Yuki', 'Lan', 'Tom', 'Chen', 'Aoi', 'Hoa', 'Sam', 'Wei', 'Ren', 'Mai', 'Ben', 'Xiu', 'Sora', 'Thu', 'Ann', 'Jun', 'Kai', 'Linh', 'Max', 'Ying', 'Rin', 'Nga', 'Leo', 'Hui', 'Mio', 'Tam', 'Zoe', 'Bo', 'Emi', 'Vy', 'Ivy', 'Qing', 'Nao', 'Duc', 'Amy', '민지', '현우', '지수', '도윤'];
+    const langs = ['zh', 'ja', 'vi', 'en', 'ko'];
+    const pool = DATA.SAMPLE_POOL;
+    const DAY = 86400000; const now = Date.now();
+    names.forEach((nick, i) => {
+      const guest = rnd() < 0.25;
+      const id = nextId(guest ? 'G' : 'U');
+      const age = Math.floor(Math.pow(rnd(), 0.8) * 45);
+      const lang = langs[Math.floor(rnd() * langs.length)];
+      const r = rnd(); const plan = guest ? 'free' : r < 0.62 ? 'free' : r < 0.88 ? 'pro' : 'premium';
+      const activeDaysAgo = rnd() < 0.55 ? Math.floor(rnd() * 2) : Math.floor(rnd() * Math.min(age + 1, 20));
+      const u = { id, type: guest ? 'guest' : 'member', nickname: guest ? 'Guest ' + id.slice(2) : nick, lang, demo: true, demoCrowd: true, plan,
+        createdAt: now - age * DAY - Math.floor(rnd() * DAY), lastActive: now - activeDaysAgo * DAY - Math.floor(rnd() * 8) * 3600000,
+        consentAt: now - age * DAY, consentVer: CONSENT_VERSION, status: 'active', banReason: '', me: {}, contacts: [], messages: [], promises: [], anniversaries: [], settings: { notif: {}, remind: 30 }, device: 'demo', aiUsage: [] };
+      const cands = pool.filter((p) => p.lang !== lang);
+      const nC = 1 + Math.floor(rnd() * (plan === 'premium' ? 6 : plan === 'pro' ? 4 : 2));
+      for (let k = 0; k < nC; k++) {
+        const sp = cands[(i + k) % cands.length];
+        const c = { id: uid('c_'), nickname: sp.nickname, app: sp.app, lang: sp.lang, country: sp.country, color: sp.color, relation: sp.relation, stage: sp.stage, star: Math.floor(rnd() * 4), createdAt: u.createdAt };
+        u.contacts.push(c);
+        const span = Math.max(1, age - activeDaysAgo);
+        const nM = 2 + Math.floor(rnd() * (plan === 'free' ? 10 : 24));
+        for (let j = 0; j < nM; j++) {
+          const src = sp.msgs[j % sp.msgs.length]; const dir = src[2];
+          const d = activeDaysAgo + Math.floor(rnd() * span);
+          const hour = [9, 12, 13, 18, 20, 21, 22, 23, 0, 8][Math.floor(rnd() * 10)];
+          const ts = Math.min(now - 60000, now - d * DAY - (new Date().getHours() - hour) * 3600000 - Math.floor(rnd() * 3600000));
+          const srcLang = dir === 'in' ? sp.lang : lang; const trLang = dir === 'in' ? lang : sp.lang;
+          const text = src[3][srcLang] || src[3].en;
+          const srcKind = ['paste', 'paste', 'paste', 'ocr', 'import', 'write', 'reply'][Math.floor(rnd() * 7)];
+          u.messages.push({ id: uid('m_'), contactId: c.id, dir, text, lang: srcLang, translation: src[3][trLang] || null, trLang, ts, source: dir === 'out' ? (rnd() < 0.4 ? 'reply' : 'write') : srcKind, convId: nextId('C'), intents: [], risk: [], suggestions: [], chosen: '' });
+        }
+      }
+      if (!guest && plan !== 'free') { const model = rnd() < 0.5 ? 'gpt-4o-mini' : 'claude-haiku-5-5'; u.aiUsage = u.messages.filter((m) => m.dir === 'in').map((m) => ({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 600 + Math.floor(rnd() * 900), out: 150 + Math.floor(rnd() * 400), ts: m.ts })); }
+      u.aiUsage = u.aiUsage.concat(u.messages.filter((m) => m.dir === 'in' && rnd() < 0.6).map((m) => ({ provider: 'mymemory', model: 'free-mt', in: m.text.length, out: 0, ts: m.ts })));
+      db.users[id] = u;
+    });
     persist();
   }
   function clearDemo() {
