@@ -89,9 +89,41 @@
   function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
   window.addEventListener('hashchange', render);
 
+  /* ---------- 보안: 워터마크 · 우클릭/개발자도구 단축키 차단 ---------- */
+  let wmKey = '';
+  function wmText() {
+    const d = new Date(); const ts = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    if (/^#\/admin/.test(location.hash)) { if (sessionStorage.getItem('lm_admin_ok') !== '1') return ''; return `${Store.db.admin.operator || 'admin'} · ${ts}`; }
+    const u = Store.me(); if (!u) return '';
+    if (Store.viewingAs()) return `${Store.db.admin.operator || 'admin'} 열람 · ${u.nickname} · ${u.id} · ${ts}`;
+    return `${u.nickname} · ${u.id} · ${ts}`;
+  }
+  function applyWatermark() {
+    const txt = wmText();
+    let el = document.getElementById('lm-wm');
+    if (!txt) { if (el) el.remove(); return; }
+    if (txt === wmKey && el) return;
+    wmKey = txt;
+    const cv = document.createElement('canvas'); cv.width = 420; cv.height = 240;
+    const g = cv.getContext('2d'); g.translate(210, 120); g.rotate(-Math.PI / 9);
+    g.font = '600 15px system-ui, sans-serif'; g.textAlign = 'center'; g.fillStyle = 'rgba(16,36,62,0.075)';
+    g.fillText(txt, 0, 0);
+    if (!el) { el = document.createElement('div'); el.id = 'lm-wm'; el.setAttribute('aria-hidden', 'true'); document.body.appendChild(el); }
+    el.style.backgroundImage = `url(${cv.toDataURL('image/png')})`;
+  }
+  setInterval(applyWatermark, 30000);
+  document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, [contenteditable]')) e.preventDefault(); });
+  document.addEventListener('dragstart', (e) => { if (e.target.tagName === 'IMG') e.preventDefault(); });
+  document.addEventListener('keydown', (e) => {
+    const k = (e.key || '').toLowerCase();
+    if (k === 'f12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(k)) || ((e.ctrlKey || e.metaKey) && ['u', 's', 'p'].includes(k))) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  // 인쇄 시 화면 내용 대신 안내만
+  try { const st = document.createElement('style'); st.textContent = '@media print { body > * { display: none !important; } body::after { content: "인쇄할 수 없는 화면입니다"; display: block; padding: 40px; font: 16px sans-serif; } }'; document.head.appendChild(st); } catch (e) {}
+
   function render() {
     const r = route();
-    if (r.name === 'admin') { document.body.classList.add('is-admin'); return window.Admin.render(r); }
+    if (r.name === 'admin') { document.body.classList.add('is-admin'); const ar = window.Admin.render(r); applyWatermark(); return ar; }
     document.body.classList.remove('is-admin');
     const u = Store.me();
     if (!u) return renderOnboarding();
@@ -101,6 +133,7 @@
     if (u.status === 'banned') return renderBlocked(u);
     const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide, tools: renderTools, inbox: renderInbox };
     (pages[r.name] || renderChat)(r);
+    applyWatermark();
     if (['chat', 'home', 'helper', 'contact', 'coach'].includes(r.name) || !pages[r.name]) {
       const cid = r.id || (['chat', 'home', 'helper'].includes(r.name) || !pages[r.name] ? helperState.contactId : '');
       const c = cid && u.contacts.find((x) => x.id === cid);
@@ -1101,7 +1134,7 @@
   Object.keys(TOOL_T).forEach((l) => Object.assign(T[l], TOOL_T[l]));
   const JUNK_T = { ko: { junk_input: '자음·모음만 있어서 뜻을 알 수 없어요. 문장으로 써 주세요. (ㅋㅋ·ㅇㅋ·ㄱㅅ 같은 줄임말은 번역돼요)' }, zh: { junk_input: '只有韩文字母，无法理解意思。请输入完整的句子。' }, ja: { junk_input: '子音・母音だけでは意味がわかりません。文章で入力してください。' }, vi: { junk_input: 'Chỉ có phụ âm/nguyên âm nên không hiểu nghĩa. Hãy nhập thành câu.' }, en: { junk_input: 'Only loose Korean letters — the meaning is unclear. Please type a sentence.' } };
   Object.keys(JUNK_T).forEach((l) => Object.assign(T[l], JUNK_T[l]));
-  const POP_T = { ko: { pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
+  const POP_T = { ko: { pop_short: '새 창', pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_short: '新窗口', pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_short: '別ウィンドウ', pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_short: 'Cửa sổ mới', pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_short: 'New window', pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
   Object.keys(POP_T).forEach((l) => Object.assign(T[l], POP_T[l]));
   const MODE_T = {
     ko: { lp_note: '내 언어 = 내 화면·번역·추천 언어 · 상대 언어 = 보낼 말을 번역할 언어', mode_in: '받은 말 넣기', mode_out: '보낼 말 쓰기', lbl_in: '📥 {who} → 나 · 받은 말을 붙여넣으세요 ({lang})', lbl_out: '📤 나 → {who} · 보낼 말을 {my}로 쓰세요 ({lang}로 번역)', lbl_out_same: '📤 나 → {who} · 보낼 말을 쓰세요 (같은 언어라 번역 없이 기록·정리)', lbl_auto: '{who} · 받은 말을 붙여넣거나, 보낼 말을 쓰세요 (언어로 자동 구분)', ph_in: '상대가 보낸 {lang} 메시지를 붙여넣기 · 스크린샷은 Ctrl+V', ph_out: '보낼 말을 {my}로 쓰세요', lp_title: '대화 언어 바꾸기', lp_their: '상대 언어', lp_my: '내 언어', lp_saved: '대화 언어: {a} ↔ {b}' },
@@ -1138,7 +1171,7 @@
     const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; const dg = c ? digestsOf(c.id)[Engine.ymd(d)] : null; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>` + (dg && ((dg.facts && dg.facts.length) || dg.summary) ? `<details class="day-mem"><summary>📌 ${t('mem_day')} ${dg.facts ? dg.facts.length : ''} <span class="muted">· ${dg.by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></summary><p class="small">${esc(digestLine(dg))}</p><div class="facts">${(dg.facts || []).map(factChip).join('')}</div></details>` : ''); } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
         ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block"><button type="button" class="lang-pair-btn" id="ch-lang" title="${esc(t('lp_title'))}">${esc(t('lang_pair', { a: langUi(myL(c)), b: langUi(c.lang) }))} ▾</button> · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
-        <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c && POP ? `<button class="icon-btn" type="button" id="pop-main" title="${esc(t('pop_main'))}" aria-label="${esc(t('pop_main'))}">⤢</button>` : ''}${c && !POP && WIDE.matches ? `<button class="icon-btn" type="button" data-pop="${c.id}" title="${esc(t('pop_open'))}" aria-label="${esc(t('pop_open'))}">↗</button>` : ''}${c && !POP ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
+        <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c && POP ? `<button class="icon-btn" type="button" id="pop-main" title="${esc(t('pop_main'))}" aria-label="${esc(t('pop_main'))}">⤢</button>` : ''}${c && !POP && WIDE.matches ? `<button class="pop-btn" type="button" data-pop="${c.id}" title="${esc(t('pop_open'))}" aria-label="${esc(t('pop_open'))}">↗ ${esc(t('pop_short'))}</button>` : ''}${c && !POP ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
       <div class="content chat-scroll" style="padding-bottom:12px">
         ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
           ${rc.upcomingPromises.slice(0, 2).map((p) => `<span class="pin">📅 ${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.place ? ' · ' + esc(p.place) : ''}</span>`).join('')}

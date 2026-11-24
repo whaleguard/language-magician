@@ -282,3 +282,17 @@ body.pop .chat-bar .back-btn { display: none; }
 .lp-note { flex: 1 1 220px; }
 @media (max-width: 480px) { .lp-note { display: none; } .lp-f select { min-width: 0; } }
 @media (max-width: 1099px) { .lp-row:not(.open) { display: none; } }
+
+/* 워터마크 (스크린샷·사진 유출 추적용, 시야 방해 최소) */
+#lm-wm { position: fixed; inset: 0; z-index: 9990; pointer-events: none; background-repeat: repeat; background-size: 420px 240px; }
+@media print { #lm-wm { display: none; } }
+/* 새 창 버튼 크게 */
+.pop-btn { display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px; border: 1.5px solid var(--primary); border-radius: 10px; background: var(--mint); color: var(--primary); font-weight: 700; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.pop-btn:hover { background: var(--primary); color: #fff; }
+.ws-pop { display: inline-flex !important; width: 30px; height: 30px; font-size: 15px; opacity: .55; }
+.ws-item:hover .ws-pop, .ws-pop:hover { opacity: 1; }
+img { -webkit-user-drag: none; }
+.ws-item { position: relative; }
+.ws-item .ws-pop { display: none !important; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; font-size: 16px; opacity: 1; background: #fff; box-shadow: 0 1px 4px rgba(16,36,62,.15); z-index: 2; }
+.ws-item:hover .ws-pop, .ws-item:focus-within .ws-pop { display: inline-flex !important; }
+.ws-item .ws-pop:hover { background: var(--primary); color: #fff; }
