@@ -88,7 +88,27 @@
     return copy;
   }
 
-  function logout() { db.currentUserId = null; save({ noSync: true }); }
+  /* ---------- 근태: 접속·활동 기록 (1분 단위) ---------- */
+  function dkey(ts) { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function attBeat(active) {
+    const u = me(); if (!u || viewAs) return;
+    const now = Date.now(); const k = dkey(now);
+    u.att = u.att || {}; const a = u.att[k] = u.att[k] || { first: now, last: now, online: 0, active: 0, sessions: [] };
+    if (a.lastBeat && now - a.lastBeat < 50000) return;
+    const ss = a.sessions; const cur = ss[ss.length - 1];
+    if (cur && !cur[2] && now - cur[1] < 5 * 60000) cur[1] = now; else ss.push([now, now, 0]);
+    a.online += 1; if (active) a.active += 1; a.last = now; a.lastBeat = now;
+    const keys = Object.keys(u.att).sort(); while (keys.length > 60) delete u.att[keys.shift()];
+    persist();
+  }
+  function attEnd(reason) {
+    const u = me(); if (!u || viewAs) return;
+    const a = u.att && u.att[dkey(Date.now())]; if (!a) return;
+    const cur = a.sessions[a.sessions.length - 1]; if (cur && !cur[2]) { cur[1] = Date.now(); cur[2] = reason === 'logout' ? 2 : 1; }
+    if (reason === 'logout') a.logoutAt = Date.now();
+    persist();
+  }
+  function logout() { attEnd('logout'); db.currentUserId = null; save({ noSync: true }); }
 
   /* ---------- 연락처 ---------- */
   function addContact(c) {
@@ -320,7 +340,7 @@
     if (Object.values(db.users).some((u) => u.demo)) {
       // 예전 데모 회원에 AI 사용 기록이 없으면 채움
       Object.values(db.users).filter((u) => u.demo && !u.aiUsage).forEach((u, i) => { u.aiUsage = []; const model = i % 2 ? 'claude-haiku-5-5' : 'gpt-4o-mini'; if (u.type === 'member') for (let dday = 0; dday < 30; dday++) for (let k = 0; k < (i * 7 + dday * 3) % 9; k++) u.aiUsage.push({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 700 + ((k * 131 + i * 17) % 900), out: 180 + ((k * 71) % 400), ts: Date.now() - dday * 86400000 - k * 1800000 }); });
-      persist(); ensureDemoCrowd(); ensureDemoTeam(); return;
+      persist(); ensureDemoCrowd(); ensureDemoTeam(); ensureDemoAttendance(); persist(); return;
     }
     const defs = [
       ['Lin', 'zh', 'member', ['seojun', 'haruka', 'minh'], 15],
@@ -382,6 +402,7 @@
     persist();
     ensureDemoCrowd();
     ensureDemoTeam();
+    ensureDemoAttendance(); persist();
   }
 
   /* 데모: 기업용 팀 (팀장 leader1 / 1234) */
@@ -402,6 +423,26 @@
       sendNotice({ userId: first.id, kind: 'reply', from: 'member', fromName: first.nickname, teamId: t.id, text: 'OK, I will explain the refund policy first.', lang: 'en', tr: { ko: '네, 환불 규정부터 먼저 안내하겠습니다.' }, demo: true });
     }
     persist();
+  }
+
+  function ensureDemoAttendance() {
+    let seed = 11; const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    const ids = new Set(teams().flatMap((t) => t.members || []));
+    Object.values(db.users).filter((u) => u.demo && ids.has(u.id) && !u.att).forEach((u) => {
+      u.att = {};
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(); day.setDate(day.getDate() - d); day.setHours(0, 0, 0, 0);
+        if (rnd() < 0.12) continue;
+        const start = day.getTime() + (8.5 + rnd() * 1.5) * 3600000;
+        let end = start + (6.5 + rnd() * 3) * 3600000;
+        if (d === 0) end = Math.min(end, Date.now() - (rnd() < 0.4 ? Math.floor(rnd() * 90) * 60000 : 0));
+        if (end <= start) continue;
+        const lunch = start + 3.5 * 3600000;
+        const sessions = lunch < end ? [[start, lunch, 1], [lunch + 50 * 60000, end, d === 0 && end > Date.now() - 120000 ? 0 : 2]] : [[start, end, d === 0 ? 0 : 2]];
+        const online = Math.round(sessions.reduce((x, s) => x + (s[1] - s[0]) / 60000, 0));
+        u.att[dkey(day.getTime())] = { first: start, last: end, online, active: Math.round(online * (0.55 + rnd() * 0.35)), sessions, lastBeat: end, logoutAt: sessions[sessions.length - 1][2] === 2 ? end : null };
+      }
+    });
   }
 
   /* 데모: 대시보드용 회원 무리 (45일간 가입·활동 분포) */
@@ -513,6 +554,7 @@
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
     staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -72,12 +72,12 @@
     const items = rl.type === 'hqp'
       ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'hqb'
-      ? [['dashboard', '기업고객 현황'], ['orgs', '거래처'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      ? [['dashboard', '기업고객 현황'], ['orgs', '거래처'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'org'
-      ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
+      ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'leader'
-      ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
-      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+      ? [['dashboard', '팀 현황'], ['users', '팀원'], ['attendance', '근태'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['attendance', '근태'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
       <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : rl.type === 'hqp' ? '본사 · 일반고객 관리' : rl.type === 'hqb' ? '본사 · 기업고객 관리' : '본사 · 최종 관리자'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : (rl.type === 'hqp' || rl.type === 'hqb') ? ` <span class="badge">${esc(rl.name)}</span>` : ''}</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
@@ -756,6 +756,61 @@
     }
   }
 
+  /* ---------- 근태: 접속·로그아웃·근무·대화 시간, 무응답 ---------- */
+  function attendancePage(r) {
+    const us = users();
+    const DAY = 86400000; const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const range = r.q.d || 'today';
+    const th = Number(r.q.th || 30);
+    const days = range === 'yesterday' ? [d0.getTime() - DAY] : range === 'week' ? Array.from({ length: 7 }, (_, i) => d0.getTime() - i * DAY) : [d0.getTime()];
+    const keyOf = (ts) => Store.dkey(ts);
+    const hm = (ts) => { if (!ts) return '—'; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const dur = (min) => (min >= 60 ? Math.floor(min / 60) + '시간 ' + (min % 60) + '분' : Math.round(min) + '분');
+    const now = Date.now();
+    const rows = us.map((u) => {
+      const recs = days.map((ds) => (u.att || {})[keyOf(ds)]).filter(Boolean);
+      const msgs = u.messages.filter((m) => days.some((ds) => m.ts >= ds && m.ts < ds + DAY));
+      const buckets = new Set(msgs.map((m) => Math.floor(m.ts / 300000)));
+      const talkMin = buckets.size * 5;
+      const online = recs.reduce((a, x) => a + (x.online || 0), 0), active = recs.reduce((a, x) => a + (x.active || 0), 0);
+      const today = (u.att || {})[keyOf(d0.getTime())];
+      const lastBeat = today && today.lastBeat;
+      const curS = today && today.sessions[today.sessions.length - 1];
+      const onNow = !!(lastBeat && now - lastBeat < 3 * 60000 && curS && !curS[2]);
+      const lastAct = Math.max(lastBeat || 0, ...u.messages.map((m) => m.ts), 0);
+      // 답장 대기: 상대가 보낸 마지막 메시지 이후 내 메시지가 없는 대화
+      const waiting = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id).sort((a, b) => a.ts - b.ts); const l = ms[ms.length - 1]; return l && l.dir === 'in' ? l.ts : null; }).filter(Boolean);
+      const overdue = waiting.filter((ts) => now - ts > th * 60000).length;
+      const idle = onNow && lastAct && now - lastAct > th * 60000;
+      const state = onNow ? (idle ? 'idle' : 'on') : (today && today.logoutAt ? 'out' : today ? 'away' : 'off');
+      return { u, recs, first: recs.length ? Math.min(...recs.map((x) => x.first)) : null, last: recs.length ? Math.max(...recs.map((x) => x.last)) : null, logout: today && today.logoutAt, online, active, talkMin, msgCount: msgs.length, waiting: waiting.length, overdue, state, idle, onNow, sessions: range === 'week' ? [] : (recs[0] ? recs[0].sessions : []), team: Store.teamOf(u.id) };
+    }).sort((a, b) => ({ idle: 0, on: 1, away: 2, out: 3, off: 4 }[a.state] - { idle: 0, on: 1, away: 2, out: 3, off: 4 }[b.state]) || b.overdue - a.overdue);
+    const ST = { on: ['접속 중', 'good'], idle: ['접속·무응답', 'attention'], away: ['자리 비움', 'neutral'], out: ['로그아웃', 'neutral'], off: ['미접속', 'neutral'] };
+    const cntS = (k) => rows.filter((x) => x.state === k).length;
+    const alerts = rows.filter((x) => x.idle || x.overdue);
+    const q2 = (k, v) => { const o = Object.assign({}, r.q, { [k]: v }); return '#/admin/attendance?' + Object.entries(o).filter(([, x]) => x).map(([a, b]) => a + '=' + encodeURIComponent(b)).join('&'); };
+    const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${String(cur) === String(v)}">${l}</a>`).join('')}</div>`;
+    const bar = (ss, ds) => { if (!ss || !ss.length) return '<span class="ops-muted">—</span>'; return `<div class="att-bar" title="0시 ~ 24시">${ss.map((s) => { const L = Math.max(0, (s[0] - ds) / DAY * 100), W = Math.max(0.6, (s[1] - s[0]) / DAY * 100); return `<span style="left:${L}%;width:${W}%" title="${hm(s[0])}~${hm(s[1])}${s[2] === 2 ? ' 로그아웃' : s[2] === 1 ? ' 종료' : ' 접속 중'}"></span>`; }).join('')}<i style="left:${9 / 24 * 100}%"></i><i style="left:${18 / 24 * 100}%"></i></div>`; };
+    page('attendance', `<section class="lm-ops">
+      <header class="ops-header"><div><h1>근태</h1><p class="ops-muted">접속(로그인)·로그아웃·접속 시간·실제 활동·대화 시간·답장 대기를 상담원별로 봅니다. 활동은 화면을 보며 최근 3분 안에 입력·클릭이 있었던 시간입니다.</p></div>
+        <div class="ops-controls">${seg('d', range, [['today', '오늘'], ['yesterday', '어제'], ['week', '최근 7일']])}${seg('th', th, [[10, '10분'], [30, '30분'], [60, '60분']])}<span class="ops-muted">무응답 기준</span></div></header>
+      <div class="ops-kpis">
+        <div class="ops-kpi"><h2>접속 중</h2><strong class="ops-value">${cntS('on') + cntS('idle')}명</strong><p class="ops-muted">전체 ${rows.length}명</p></div>
+        <div class="ops-kpi"><h2>접속했지만 무응답</h2><strong class="ops-value">${cntS('idle')}명</strong><span class="ops-delta" data-tone="${cntS('idle') ? 'attention' : 'good'}">${th}분 이상 활동 없음</span></div>
+        <div class="ops-kpi"><h2>답장 ${th}분 넘게 대기</h2><strong class="ops-value">${rows.reduce((a, x) => a + x.overdue, 0)}건</strong><span class="ops-delta" data-tone="${rows.some((x) => x.overdue) ? 'attention' : 'good'}">${rows.filter((x) => x.overdue).length}명</span></div>
+        <div class="ops-kpi"><h2>평균 접속 시간</h2><strong class="ops-value">${dur(Math.round(rows.filter((x) => x.online).reduce((a, x) => a + x.online, 0) / Math.max(1, rows.filter((x) => x.online).length)))}</strong><p class="ops-muted">${range === 'week' ? '7일 합계 기준' : '접속한 사람 기준'}</p></div>
+        <div class="ops-kpi"><h2>미접속</h2><strong class="ops-value">${cntS('off')}명</strong><p class="ops-muted">로그아웃 ${cntS('out')} · 자리 비움 ${cntS('away')}</p></div>
+      </div>
+      ${alerts.length ? `<section class="ops-panel"><header class="ops-panel-head"><h2>⚠ 확인이 필요한 상담원</h2><span class="ops-tag" data-tone="attention">${alerts.length}명</span></header><ul class="ops-queue">${alerts.map((x) => `<li><a class="ops-task" href="#/admin/notices?u=${x.u.id}"><span><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.team ? x.team.name : '')}</span><br><span class="ops-muted">${x.idle ? `접속 중인데 ${th}분 넘게 활동 없음 · ` : ''}${x.overdue ? `답장 ${th}분 넘게 대기 ${x.overdue}건` : ''}</span></span><span class="ops-tag" data-tone="attention">메시지 보내기 →</span></a></li>`).join('')}</ul></section>` : ''}
+      <section class="ops-panel"><header class="ops-panel-head"><h2>상담원별 근태 <span class="ops-muted">${range === 'today' ? '오늘' : range === 'yesterday' ? '어제' : '최근 7일'}</span></h2></header>
+        <div class="ops-table-wrap"><table class="ops-table att-table"><thead><tr><th scope="col">상담원</th><th scope="col">상태</th><th scope="col">첫 접속</th><th scope="col">마지막 활동</th><th scope="col">로그아웃</th><th scope="col" class="ops-num">접속 시간</th><th scope="col" class="ops-num">실제 활동</th><th scope="col" class="ops-num">대화 시간</th><th scope="col" class="ops-num">처리 메시지</th><th scope="col" class="ops-num">답장 대기</th>${range === 'week' ? '' : '<th scope="col" style="min-width:220px">접속 타임라인 (0~24시)</th>'}</tr></thead><tbody>
+        ${rows.map((x) => `<tr class="clickable" data-open="${x.u.id}|"><td><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.u.id)}${x.team ? ' · ' + esc(x.team.name) : ''}</span></td><td><span class="ops-tag" data-tone="${ST[x.state][1]}">${ST[x.state][0]}</span></td><td>${hm(x.first)}</td><td>${hm(x.last)}</td><td>${x.logout ? hm(x.logout) : '—'}</td><td class="ops-num">${x.online ? dur(x.online) : '—'}</td><td class="ops-num">${x.active ? dur(x.active) + ` <span class="ops-muted">(${Math.round(x.active / Math.max(1, x.online) * 100)}%)</span>` : '—'}</td><td class="ops-num">${x.talkMin ? dur(x.talkMin) : '—'}</td><td class="ops-num">${x.msgCount}</td><td class="ops-num">${x.waiting ? `<span class="ops-tag" data-tone="${x.overdue ? 'attention' : 'neutral'}">${x.waiting}${x.overdue ? ` (${x.overdue} 지연)` : ''}</span>` : 0}</td>${range === 'week' ? '' : `<td>${bar(x.sessions, days[0])}</td>`}</tr>`).join('') || '<tr><td colspan="11" class="ops-muted">대상이 없습니다.</td></tr>'}
+        </tbody></table></div>
+        <p class="ops-muted">대화 시간은 메시지를 주고받은 5분 구간을 합한 값입니다. 화면을 닫거나 다른 창으로 오래 옮기면 '자리 비움', 로그아웃 버튼을 누르면 '로그아웃'으로 기록됩니다.</p></section>
+    </section>`);
+    bindOpen();
+  }
+
   /* ---------- 본사 관리자 계정 (최종 관리자 전용) ---------- */
   function staffPage() {
     if (!isSuper()) return dashboard({ q: {} });
@@ -804,8 +859,8 @@
       if (!authed) return login();
       const p = r.id || 'dashboard';
       const r0 = role(); if (r0.type === 'none') { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); return login(); }
-      const leaderBlocked = isSuper() ? [] : isHqp() ? ['settings', 'teams', 'orgs', 'staff'] : isHqb() ? ['quality', 'settings', 'staff'] : isOrg() ? ['quality', 'settings', 'orgs', 'staff'] : ['quality', 'settings', 'teams', 'orgs', 'staff'];
-      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage, orgs: orgsPage, staff: staffPage }[ leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
+      const leaderBlocked = isSuper() ? [] : isHqp() ? ['settings', 'teams', 'orgs', 'staff', 'attendance'] : isHqb() ? ['quality', 'settings', 'staff'] : isOrg() ? ['quality', 'settings', 'orgs', 'staff'] : ['quality', 'settings', 'teams', 'orgs', 'staff'];
+      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage, orgs: orgsPage, staff: staffPage, attendance: attendancePage }[ leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
       window.scrollTo(0, 0);
     },
   };

@@ -85,3 +85,7 @@
 .lm-ops .ops-more:not([open]) > summary::before { content: '▸'; }
 .lm-ops .ops-more > summary h2 { font-size: 18px; }
 .lm-ops .ops-more-body { display: grid; gap: 16px; }
+.lm-ops .att-bar { position: relative; height: 12px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.lm-ops .att-bar span { position: absolute; top: 0; bottom: 0; background: var(--primary); border-radius: 4px; }
+.lm-ops .att-bar i { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(16,36,62,.25); }
+.lm-ops .att-table td { white-space: nowrap; }

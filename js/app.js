@@ -112,6 +112,13 @@
     el.style.backgroundImage = `url(${cv.toDataURL('image/png')})`;
   }
   setInterval(applyWatermark, 30000);
+  // 근태: 화면을 보고 있는 동안 1분마다 접속 기록, 최근 3분 안에 입력·클릭이 있으면 '활동'
+  let lastAct = Date.now();
+  ['keydown', 'click', 'input', 'scroll', 'touchstart'].forEach((ev) => document.addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true, capture: true }));
+  function beat() { if (document.visibilityState !== 'visible' || /^#\/admin/.test(location.hash)) return; try { Store.attBeat(Date.now() - lastAct < 3 * 60000); } catch (e) {} }
+  setInterval(beat, 60000); setTimeout(beat, 1500);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { try { Store.attEnd('hidden'); } catch (e) {} } else beat(); });
+  window.addEventListener('pagehide', () => { try { Store.attEnd('close'); } catch (e) {} });
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, [contenteditable]')) e.preventDefault(); });
   document.addEventListener('dragstart', (e) => { if (e.target.tagName === 'IMG') e.preventDefault(); });
   document.addEventListener('keydown', (e) => {
