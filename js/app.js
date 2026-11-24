@@ -99,7 +99,7 @@
     document.documentElement.lang = uiLang === 'zh' ? 'zh-Hans' : uiLang;
     document.title = t('brand') + ' · ' + t('tagline');
     if (u.status === 'banned') return renderBlocked(u);
-    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide, tools: renderTools };
+    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide, tools: renderTools, inbox: renderInbox };
     (pages[r.name] || renderChat)(r);
     if (['chat', 'home', 'helper', 'contact', 'coach'].includes(r.name) || !pages[r.name]) {
       const cid = r.id || (['chat', 'home', 'helper'].includes(r.name) || !pages[r.name] ? helperState.contactId : '');
@@ -146,6 +146,8 @@
     const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
     const navW = nav.slice(0, 3).concat([['anniv', 'cake', 'nav_anniv'], ['coach', 'heart', 'nav_coach'], ['saju', 'yin', 'nav_saju'], ['gift', 'gift', 'nav_gift'], ['culture', 'globe', 'nav_culture'], nav[3], ['guide', 'help', 'nav_guide']]);
     const navM = nav.slice(0, 3).concat([['tools', 'grid', 'nav_tools'], nav[3]]);
+    const ibU = Store.me(); if (ibU && hasInbox(ibU)) { const ix = navW.findIndex((x) => x[0] === 'guide'); navW.splice(ix, 0, ['inbox', 'bell', 'nav_inbox']); }
+    const ibN = ibU ? Store.unreadNotices(ibU.id) : 0;
     if (POP) {
       document.body.classList.remove('is-wide'); document.body.classList.add('pop');
       $app.innerHTML = `<div class="screen pop-screen">${inner}</div>`;
@@ -156,16 +158,16 @@
       $app.innerHTML = `<div class="ws">
         <aside class="ws-rail" aria-label="main"><span class="rail-logo"><img src="assets/lm-mark.png" alt="LM"></span>
           <label class="rail-lang" title="${esc(t('lang_l'))}">🌐<select id="lang-quick" aria-label="${esc(t('lang_l'))}">${UI_LANGS.map((l) => `<option value="${l}" ${l === uiLang ? 'selected' : ''}>${esc({ ko: '한국어', zh: '中文', ja: '日本語', vi: 'Tiếng Việt', en: 'English' }[l])}</option>`).join('')}</select></label>
-          ${navW.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}" ${k === 'guide' ? 'style="margin-top:auto"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
+          ${navW.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}" ${k === 'inbox' ? 'class="rail-inbox" style="margin-top:auto"' : k === 'guide' && !navW.some((x) => x[0] === 'inbox') ? 'style="margin-top:auto"' : ''}>${k === 'inbox' ? '<span class="rail-ib" aria-hidden="true">✉</span>' : icon(ic)}<span>${t(lb)}</span>${k === 'inbox' && ibN ? `<em class="nav-dot">${ibN}</em>` : ''}</button>`).join('')}
         </aside>
-        <main class="ws-main"><div class="screen">${inner}</div></main>
+        <main class="ws-main"><div class="screen">${active !== 'inbox' ? inboxBanner() : ''}${inner}</div></main>
         <aside class="ws-side">${sideHtml()}</aside>
       </div>`;
       if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
       return;
     }
     document.body.classList.remove('is-wide');
-    $app.innerHTML = `<div class="screen">${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${navM.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
+    $app.innerHTML = `<div class="screen">${active !== 'inbox' ? inboxBanner() : ''}${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${navM.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
     if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
   }
 
@@ -1452,6 +1454,56 @@
 
 
   /* ================= 도구 모음 ================= */
+  /* ---------- 받은 지시·공지 (관리자·팀장 → 나), 내 언어로 번역 ---------- */
+  const INBOX_T = {
+    ko: { nav_inbox: '공지함', ib_title: '받은 지시·공지', ib_lead: '관리자·팀장이 보낸 메시지가 내 언어로 번역돼 도착해요. 답장은 내 언어로 쓰면 한국어로 번역돼 전달돼요.', ib_empty: '아직 받은 메시지가 없어요.', ib_orig: '원문 보기', ib_reply_l: '답장 (내 언어로 쓰세요)', ib_send: '답장 보내기', ib_sent: '답장을 보냈어요', ib_me: '나', ib_tr_to: '{lang}로 전달됨', k_instruction: '지시', k_notice: '공지', k_warning: '경고', k_reply: '답장', ib_banner: '📩 새 지시·공지 {n}건', ib_open: '보기', ib_read: '읽음', ib_translating: '번역 중…' },
+    zh: { nav_inbox: '通知', ib_title: '收到的指示·通知', ib_lead: '管理员·组长发来的消息会翻译成你的语言。用你的语言回复，会翻译成韩语发送。', ib_empty: '还没有收到消息。', ib_orig: '查看原文', ib_reply_l: '回复（用你的语言写）', ib_send: '发送回复', ib_sent: '已发送回复', ib_me: '我', ib_tr_to: '已用{lang}发送', k_instruction: '指示', k_notice: '通知', k_warning: '警告', k_reply: '回复', ib_banner: '📩 新指示·通知 {n} 条', ib_open: '查看', ib_read: '已读', ib_translating: '翻译中…' },
+    ja: { nav_inbox: 'お知らせ', ib_title: '受け取った指示・お知らせ', ib_lead: '管理者・チームリーダーからのメッセージが自分の言語に翻訳されて届きます。返信は自分の言語で書くと韓国語に翻訳されて届きます。', ib_empty: 'まだメッセージはありません。', ib_orig: '原文を見る', ib_reply_l: '返信（自分の言語で）', ib_send: '返信を送る', ib_sent: '返信を送りました', ib_me: '自分', ib_tr_to: '{lang}で届けました', k_instruction: '指示', k_notice: 'お知らせ', k_warning: '警告', k_reply: '返信', ib_banner: '📩 新しい指示・お知らせ {n}件', ib_open: '見る', ib_read: '既読', ib_translating: '翻訳中…' },
+    vi: { nav_inbox: 'Thông báo', ib_title: 'Chỉ thị · thông báo nhận được', ib_lead: 'Tin của quản trị viên·trưởng nhóm được dịch sang ngôn ngữ của bạn. Trả lời bằng ngôn ngữ của bạn sẽ được dịch sang tiếng Hàn.', ib_empty: 'Chưa có tin nhắn nào.', ib_orig: 'Xem bản gốc', ib_reply_l: 'Trả lời (viết bằng ngôn ngữ của bạn)', ib_send: 'Gửi trả lời', ib_sent: 'Đã gửi trả lời', ib_me: 'Tôi', ib_tr_to: 'Đã gửi bằng {lang}', k_instruction: 'Chỉ thị', k_notice: 'Thông báo', k_warning: 'Cảnh báo', k_reply: 'Trả lời', ib_banner: '📩 {n} chỉ thị·thông báo mới', ib_open: 'Xem', ib_read: 'Đã đọc', ib_translating: 'Đang dịch…' },
+    en: { nav_inbox: 'Inbox', ib_title: 'Instructions & notices', ib_lead: 'Messages from admins and team leaders arrive translated into your language. Reply in your language and it is delivered in Korean.', ib_empty: 'No messages yet.', ib_orig: 'Show original', ib_reply_l: 'Reply (write in your language)', ib_send: 'Send reply', ib_sent: 'Reply sent', ib_me: 'Me', ib_tr_to: 'Delivered in {lang}', k_instruction: 'Instruction', k_notice: 'Notice', k_warning: 'Warning', k_reply: 'Reply', ib_banner: '📩 {n} new instruction(s)/notice(s)', ib_open: 'Open', ib_read: 'Read', ib_translating: 'Translating…' },
+  };
+  Object.keys(INBOX_T).forEach((l) => Object.assign(T[l], INBOX_T[l]));
+  function hasInbox(u) { u = u || Store.me(); return !!u && (Store.can('team_inbox', u) || Store.noticesOf(u.id).length > 0); }
+  function inboxBanner() {
+    const u = Store.me(); if (!u || POP) return '';
+    const n = Store.unreadNotices(u.id); if (!n) return '';
+    const warn = Store.noticesOf(u.id).some((x) => x.from !== 'member' && !x.readAt && x.kind === 'warning');
+    return `<a class="inbox-banner ${warn ? 'warn' : ''}" href="#/inbox">${esc(t('ib_banner', { n }))} <b>${t('ib_open')} →</b></a>`;
+  }
+  function renderInbox() {
+    const u = Store.me();
+    const viewing = !!Store.viewingAs();
+    const ns = Store.noticesOf(u.id);
+    const hmTs = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const items = ns.map((n) => {
+      if (n.from === 'member') {
+        return `<article class="inbox-msg mine"><div class="org-meta org-muted">${t('ib_me')} · ${hmTs(n.ts)}${n.readAt ? ' · ✓✓ ' + t('ib_read') : ''}</div><div class="inbox-bubble"><p class="org-text">${esc(n.text)}</p>${n.lang !== 'ko' ? `<p class="org-muted">${esc(t('ib_tr_to', { lang: langUi('ko') }))}: ${esc((n.tr && n.tr.ko) || t('ib_translating'))}</p>` : ''}</div></article>`;
+      }
+      const tx = n.lang === uiLang ? n.text : (n.tr && n.tr[uiLang]);
+      return `<article class="inbox-msg ${n.kind === 'warning' ? 'warn' : ''}" data-nid="${n.id}"><div class="org-meta org-muted"><span class="org-tag" data-state="${n.kind === 'warning' ? 'warning' : n.readAt ? 'read' : 'unread'}">${esc(t('k_' + (n.kind || 'instruction')))}</span> ${esc(n.fromName)} · ${hmTs(n.ts)}</div>
+        <div class="inbox-bubble"><p class="org-text" lang="${esc(uiLang)}">${tx ? esc(tx) : `<span class="org-muted">${t('ib_translating')}</span>`}</p>${n.lang !== uiLang ? `<details class="org-original"><summary>${t('ib_orig')} (${esc(langUi(n.lang))})</summary><p class="org-text" lang="${esc(n.lang)}">${esc(n.text)}</p></details>` : ''}</div></article>`;
+    }).join('');
+    shell(`${topBar(t('ib_title'), '#/chat')}
+      <div class="content"><section class="lm-inbox" data-view="detail">
+        <p class="org-muted">${esc(t('ib_lead'))}</p>
+        <div class="org-panel inbox-detail-panel"><div class="inbox-thread" id="ib-thread">${items || `<p class="org-empty">${t('ib_empty')}</p>`}</div>
+          ${ns.length ? `<form class="org-form inbox-reply" id="ib-form"><label class="org-label" for="ib-text">${t('ib_reply_l')}</label><textarea class="field" id="ib-text" rows="2" required></textarea><div class="org-actions" style="justify-content:flex-end"><button class="btn" type="submit">${t('ib_send')}</button></div></form>` : ''}
+        </div></section></div>`, 'inbox');
+    if (!viewing && Store.markNoticesRead(u.id)) { /* 읽음 기록 */ }
+    const th = document.getElementById('ib-thread'); if (th) th.scrollTop = th.scrollHeight;
+    // 내 언어 번역이 없으면 채우기
+    ns.forEach((n) => { if (n.from !== 'member' && n.lang !== uiLang && !(n.tr && n.tr[uiLang])) Engine.translate(n.text, uiLang, n.lang).then((o) => { Store.setNoticeTr(n.id, uiLang, o.text); if (route().name === 'inbox') renderInbox(); }).catch(() => {}); });
+    const f = document.getElementById('ib-form');
+    if (f) f.addEventListener('submit', async (e) => {
+      e.preventDefault(); const text = document.getElementById('ib-text').value.trim(); if (!text) return;
+      if (viewing) { toast(t('ib_sent')); return; }
+      const btn = f.querySelector('button'); btn.disabled = true;
+      const from = Engine.detect(text) || uiLang; let tr = {};
+      if (from !== 'ko') { try { tr.ko = (await Engine.translate(text, 'ko', from)).text; } catch (x) {} }
+      Store.replyNotice(u.id, text, from, tr); toast(t('ib_sent')); renderInbox();
+    });
+  }
+
   function renderTools() {
     const u = Store.me();
     const cid = helperState.contactId || (u.contacts[0] || {}).id || '';

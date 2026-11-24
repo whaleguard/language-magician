@@ -15,11 +15,20 @@
   const daysAgo = (ts) => Math.max(0, Math.floor((Date.now() - ts) / 86400000));
 
   let authed = sessionStorage.getItem('lm_admin_ok') === '1';
+  // 권한: admin(전체) | leader:<teamId>(자기 팀만)
+  function role() { const r = sessionStorage.getItem('lm_admin_role') || 'admin'; if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { type: 'leader', team: t, name: t.leaderName || t.loginId } : { type: 'none' }; } return { type: 'admin', name: '관리자' }; }
+  const isLeader = () => role().type === 'leader';
   let serverUsers = null; // 서버에서 가져온 회원
   let serverShared = null;
   const viewGrants = {}; // 이번 세션에서 열람 사유를 기록한 대화
 
   function users() {
+    const all = allUsers();
+    const r = role();
+    if (r.type === 'leader') { const ids = new Set(r.team.members || []); return all.filter((u) => ids.has(u.id)); }
+    return all;
+  }
+  function allUsers() {
     const local = Object.values(Store.db.users);
     if (!serverUsers) return local;
     const map = {};
@@ -28,7 +37,7 @@
     local.filter((u) => !u.demo && !map[u.id]).forEach((u) => { map[u.id] = u; });
     return Object.values(map);
   }
-  function reports() { return (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); }
+  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (!isLeader()) return all; const ids = new Set(role().team.members || []); return all.filter((x) => ids.has(x.userId)); }
   function findUser(id) { return users().find((u) => u.id === id); }
   function msgsOf(u, cid) { return u.messages.filter((m) => m.contactId === cid).sort((a, b) => a.ts - b.ts); }
 
@@ -49,10 +58,15 @@
   }
 
   function nav(active) {
-    const items = [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+    const rl = role();
+    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.from === 'member' && !n.readAt && users().some((u) => u.id === n.userId)).length : 0;
+    const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
+    const items = rl.type === 'leader'
+      ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
-      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 운영</a>
-      <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a></nav>
+      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : '운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : ''}</a>
+      <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>`;
   }
   function page(active, inner) {
@@ -67,12 +81,19 @@
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
-        <p class="tiny muted">테스트 버전 · 아이디 admin / 비밀번호 1234</p>
+        <p class="tiny muted">테스트 버전 · 관리자 admin / 1234 · 팀장 leader1 / 1234</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
     document.getElementById('al').addEventListener('submit', (e) => {
       e.preventDefault(); const f = new FormData(e.target);
+      const lt = Store.ensureDemoMembers() || Store.leaderLogin(f.get('id'), f.get('pin'));
+      if (lt && !(String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase())) {
+        Store.db.admin.operator = '팀장 ' + (lt.leaderName || lt.loginId) + ' (' + lt.loginId + ')'; Store.persist();
+        authed = true; sessionStorage.setItem('lm_admin_ok', '1'); sessionStorage.setItem('lm_admin_role', 'leader:' + lt.id);
+        Store.audit({ action: 'login', target: lt.id, reason: '팀장 로그인 · ' + lt.name });
+        location.hash = '#/admin/dashboard'; return;
+      }
       if (String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase() && String(f.get('pin')) === String(Store.db.admin.pin)) {
-        Store.db.admin.operator = 'admin'; Store.persist();
+        Store.db.admin.operator = 'admin'; Store.persist(); sessionStorage.setItem('lm_admin_role', 'admin');
         authed = true; sessionStorage.setItem('lm_admin_ok', '1');
         Store.ensureDemoMembers();
         Store.audit({ action: 'login', target: '-', reason: '관리자 로그인' });
@@ -132,6 +153,8 @@
       [auditT.length, '오늘 대화 열람 로그 확인', '', '#/admin/audit', 'info'],
       [silent.length, '7일 이상 대화가 끊긴 회원', '', '#/admin/users', 'neutral'],
       [qOpen.length, '개선 메모 처리', '', '#/admin/quality', 'neutral'],
+      [(Store.db.notices || []).filter((n) => n.from === 'member' && !n.readAt && us.some((u) => u.id === n.userId)).length, '확인 안 한 상담원 답장', '', '#/admin/notices', 'info'],
+      [(Store.db.notices || []).filter((n) => n.from !== 'member' && !n.readAt && us.some((u) => u.id === n.userId)).length, '상대가 아직 안 읽은 지시·경고', '', '#/admin/notices', 'neutral'],
     ];
     // 7일 추이 (현재 vs 직전 7일)
     const metric = r.q.m === 'msgs' ? 'msgs' : 'active';
@@ -197,7 +220,7 @@
     const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${cur === v}">${l}</a>`).join('')}</div>`;
     const ts = new Date();
     page('dashboard', `<section class="lm-ops" aria-label="운영 현황">
-      <header class="ops-header"><div><h1>운영 현황</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
+      <header class="ops-header"><div><h1>${isLeader() ? '팀 현황 · ' + esc(role().team.name) : '운영 현황'}</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
         <div class="ops-controls"><a class="btn secondary sm" href="#/admin/ai">AI 사용량</a><a class="btn sm" href="#/admin/monitor">전체 대화 열기</a></div></header>
       <div class="ops-kpis">
         <a class="ops-kpi" href="#/admin/users"><h2>메시지 활동 회원</h2><strong class="ops-value">${num(actT.size)}명</strong>${delta(actT.size, actY.size, true, '명')}<p class="ops-muted">닉네임 ${actTm} · 게스트 ${actT.size - actTm}</p></a>
@@ -274,7 +297,7 @@
     const totApps = Object.values(s.apps).reduce((a, b) => a + b, 0) || 1;
     return `<article class="card stack-lg" id="crm-detail">
       <div class="between wrap"><div class="row"><span class="avatar">${esc([...u.nickname][0] || '?')}</span><div><h2>${esc(u.nickname)} <span class="small muted">${esc(u.id)}</span></h2><p class="small muted">${u.type === 'member' ? '닉네임 회원' : '게스트'} · 표시 언어 ${LN(u.lang)} · 가입 ${fmtD(u.createdAt)}</p></div></div>
-        <div class="row wrap" style="gap:8px">${viewAsBtn(u)}<a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div></div>
+        <div class="row wrap" style="gap:8px">${viewAsBtn(u)}<a class="btn secondary" href="#/admin/notices?u=${u.id}">✉ 메시지 보내기</a><a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div></div>
       <div class="metrics">
         <div class="card stack-sm"><span class="label">대화 상대</span><strong class="metric">${u.contacts.length}명</strong></div>
         <div class="card stack-sm"><span class="label">들어온 대화</span><strong class="metric">${s.msgCount}건</strong></div>
@@ -358,7 +381,7 @@
           ${noContactMsgs.length ? `<button class="sel-item" type="button" data-pick-c="" aria-selected="${!cid}"><span class="avatar sm">?</span><span class="grow"><strong>연락처 미지정</strong><br><span class="tiny muted">${noContactMsgs.length}건</span></span></button>` : ''}
           ${!contacts.length && !noContactMsgs.length ? '<p class="small muted">대화가 없습니다.</p>' : ''}</div></div>
         <div class="card stack-lg" style="min-width:0">
-          ${u ? `<div class="stack-xs"><div class="between wrap"><h2>대화 기록</h2>${viewAsBtn(u)}</div><p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
+          ${u ? `<div class="stack-xs"><div class="between wrap"><h2>대화 기록</h2><div class="row" style="gap:6px">${viewAsBtn(u)}<a class="btn secondary sm" href="#/admin/notices?u=${u.id}">✉ 메시지</a></div></div><p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
           ${granted ? convoHtml(u, c, ms) : `<div class="card stack-sm notice"><label class="label" for="mon-reason">열람 사유 (필수 · 감사로그에 기록됩니다)</label><select class="field" id="mon-reason"><option value="">사유 선택</option><option>번역·조언 품질 검토</option><option>신고 또는 위험 대화 조사</option><option>사용자 문의 대응</option><option>서비스 개선을 위한 대화 패턴 분석</option></select><button class="btn full" type="button" id="mon-grant">사유 기록 후 대화 열람</button></div>`}` : '<p class="muted">회원을 선택하세요.</p>'}
         </div>
       </div>`);
@@ -459,8 +482,8 @@
   /* ---------- 감사로그 ---------- */
   function auditPage(r) {
     const q = (r.q.q || '').toLowerCase();
-    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => !q || JSON.stringify(a).toLowerCase().includes(q));
-    const act = { view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
+    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => (!isLeader() || a.operator === Store.db.admin.operator) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
+    const act = { notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
     page('audit', `<div class="between wrap"><div class="stack-sm"><h1>열람 감사로그</h1><p class="muted">관리자·대상·시각·사유를 기록합니다. 기록은 수정·삭제할 수 없습니다.</p></div>
       <form id="au-f" class="row"><input class="field" name="q" type="search" placeholder="관리자 ID, 회원 ID, 대화 ID" value="${esc(r.q.q || '')}"><button class="btn" type="submit">검색</button></form></div>
       <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>시각</th><th>관리자</th><th>행위</th><th>대상 회원</th><th>앱 / 상대 닉네임</th><th>대화 ID</th><th>사유</th></tr></thead><tbody>
@@ -574,13 +597,102 @@
     document.querySelectorAll('[data-crm]').forEach((tr) => tr.addEventListener('click', () => { location.hash = '#/admin/users?u=' + encodeURIComponent(tr.dataset.crm); }));
   }
 
+  /* ---------- 메시지: 관리자·팀장 → 회원(상담원) 지시·경고, 회원 언어로 자동 번역 ---------- */
+  const KIND = { instruction: ['지시', 'info'], notice: ['공지', 'neutral'], warning: ['경고', 'attention'], reply: ['답장', 'good'] };
+  function noticesPage(r) {
+    const us = users();
+    const rows = us.map((u) => { const ns = Store.noticesOf(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => n.from === 'member' && !n.readAt).length, unreadM: ns.filter((n) => n.from !== 'member' && !n.readAt).length }; })
+      .sort((a, b) => (b.unreadR - a.unreadR) || ((b.last ? b.last.ts : 0) - (a.last ? a.last.ts : 0)) || a.u.nickname.localeCompare(b.u.nickname));
+    const q = (r.q.q || '').toLowerCase();
+    const list = rows.filter((x) => !q || (x.u.nickname + ' ' + x.u.id).toLowerCase().includes(q));
+    const sel = r.q.u ? findUser(r.q.u) : null;
+    const rl = role();
+    let thread = '<p class="ops-empty">왼쪽에서 받을 사람을 고르세요. 한국어로 쓰면 받는 사람이 앱에서 고른 언어로 번역돼 도착합니다.</p>';
+    if (sel) {
+      Store.markRepliesRead(sel.id);
+      const ns = Store.noticesOf(sel.id);
+      const L = sel.lang || 'ko';
+      thread = `<div class="lm-msg-head between wrap"><div><h2>${esc(sel.nickname)} <span class="ops-muted">${esc(sel.id)}</span></h2><p class="ops-muted">받는 언어: <b>${esc(LN(L))}</b>${(() => { const t = Store.teamOf(sel.id); return t ? ' · ' + esc(t.name) : ''; })()} · ${esc((Store.PLANS[Store.planOf(sel)] || {}).name || '')}</p></div><div class="row" style="gap:6px">${viewAsBtn(sel)}<a class="btn secondary sm" href="#/admin/monitor?u=${sel.id}">대화 보기</a></div></div>
+        <div class="lm-msg-thread" id="nt-thread">${ns.map((n) => {
+          const mine = n.from !== 'member';
+          const k = KIND[n.kind] || KIND.instruction;
+          if (mine) {
+            const trT = n.tr && n.tr[L];
+            return `<div class="lm-msg out"><div class="lm-msg-meta"><span class="ops-tag" data-tone="${k[1]}">${k[0]}</span> ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble ${n.kind === 'warning' ? 'warn' : ''}"><p>${esc(n.text)}</p>${L !== n.lang ? `<p class="lm-msg-tr" lang="${esc(L)}">→ ${esc(LN(L))}: ${trT ? esc(trT) : '<span class="ops-muted">번역 중…</span>'}</p>` : ''}</div><div class="lm-msg-read">${n.readAt ? `✓✓ 읽음 ${fmt(n.readAt)}` : '✓ 전달됨 · 아직 안 읽음'}</div></div>`;
+          }
+          return `<div class="lm-msg in"><div class="lm-msg-meta"><span class="ops-tag" data-tone="good">답장</span> ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc((n.tr && n.tr.ko) || n.text)}</p>${n.lang !== 'ko' ? `<p class="lm-msg-tr" lang="${esc(n.lang)}">원문(${esc(LN(n.lang))}): ${esc(n.text)}</p>` : ''}</div></div>`;
+        }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
+        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
+          <textarea class="field" id="nt-text" rows="3" placeholder="예: 오늘 오후 문의는 환불 규정을 먼저 안내해 주세요." required></textarea>
+          <div class="between wrap"><label class="small row" style="gap:6px"><input type="checkbox" id="nt-all"> ${rl.type === 'leader' ? '팀원 전체' : '목록의 전체 회원'}에게 보내기 (각자 언어로)</label><button class="btn" type="submit">보내기</button></div></form>`;
+    }
+    page('notices', `<div class="stack-sm"><h1>메시지 <span class="ops-muted" style="font-size:14px">지시·공지·경고</span></h1><p class="muted">${rl.type === 'leader' ? '팀원' : '회원·상담원'}에게 한국어로 보내면 받는 사람이 고른 언어로 번역돼 앱에 도착합니다. 읽음 여부와 답장(한국어 번역)이 여기 표시됩니다.</p></div>
+      <div class="lm-msg-layout">
+        <aside class="card lm-msg-list"><form id="nt-q" role="search"><input class="field" name="q" type="search" placeholder="닉네임·ID 검색" value="${esc(r.q.q || '')}"></form>
+          <ul>${list.map((x) => `<li><a class="lm-msg-row ${sel && sel.id === x.u.id ? 'on' : ''}" href="#/admin/notices?u=${x.u.id}"><span class="grow"><strong>${esc(x.u.nickname)}</strong> <span class="ops-muted">${esc(LN(x.u.lang || 'ko'))}</span><br><span class="ops-muted ellipsis">${x.last ? esc(((x.last.from === 'member' ? '↩ ' : '') + ((x.last.from === 'member' && x.last.tr && x.last.tr.ko) || x.last.text)).slice(0, 40)) : '메시지 없음'}</span></span>${x.unreadR ? `<span class="nav-dot">${x.unreadR}</span>` : x.unreadM ? '<span class="ops-muted tiny">안 읽음</span>' : ''}</a></li>`).join('') || '<li class="ops-muted" style="padding:8px">대상이 없습니다.</li>'}</ul></aside>
+        <section class="card lm-msg-main">${thread}</section>
+      </div>`);
+    const qf = document.getElementById('nt-q'); if (qf) qf.addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/notices?q=' + encodeURIComponent(new FormData(qf).get('q') || ''); });
+    const th = document.getElementById('nt-thread'); if (th) th.scrollTop = th.scrollHeight;
+    // 번역이 없는 메시지 채우기
+    if (sel) Store.noticesOf(sel.id).forEach((n) => { const L = sel.lang || 'ko'; if (n.from !== 'member' && L !== n.lang && !(n.tr && n.tr[L])) Engine.translate(n.text, L, n.lang).then((o) => { Store.setNoticeTr(n.id, L, o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); if (n.from === 'member' && n.lang !== 'ko' && !(n.tr && n.tr.ko)) Engine.translate(n.text, 'ko', n.lang).then((o) => { Store.setNoticeTr(n.id, 'ko', o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); });
+    const f = document.getElementById('nt-form');
+    if (f) f.addEventListener('submit', async (e) => {
+      e.preventDefault(); const text = document.getElementById('nt-text').value.trim(); if (!text) return;
+      const kind = document.getElementById('nt-kind').value; const all = document.getElementById('nt-all').checked;
+      const targets = all ? list.map((x) => x.u) : [sel];
+      const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '번역해서 보내는 중…';
+      const trCache = {};
+      for (const u of targets) {
+        const L = u.lang || 'ko'; let tr = {};
+        if (L !== 'ko') { if (!trCache[L]) { try { trCache[L] = (await Engine.translate(text, L, 'ko')).text; } catch (x) { trCache[L] = ''; } } if (trCache[L]) tr[L] = trCache[L]; }
+        const t = Store.teamOf(u.id);
+        Store.sendNotice({ userId: u.id, kind, from: rl.type === 'leader' ? 'leader' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
+      }
+      Store.audit({ action: 'notice', target: targets.map((u) => u.id).join(','), member: targets.length > 1 ? targets.length + '명' : targets[0].nickname, reason: (KIND[kind] || KIND.instruction)[0] + ' 메시지 발송' });
+      LM.toast(targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');
+      noticesPage(r);
+    });
+  }
+
+  /* ---------- 팀·팀장 (관리자 전용) ---------- */
+  function teamsPage(r) {
+    if (isLeader()) return dashboard(r);
+    const ts = Store.teams();
+    const all = allUsers();
+    const sel = r.q.t ? Store.teamById(r.q.t) : ts[0];
+    page('teams', `<div class="between wrap"><div class="stack-sm"><h1>팀·팀장</h1><p class="muted">기업용: 팀장은 자기 팀 상담원의 대화·신고·AI 사용량만 보고, 팀원에게 지시 메시지를 보낼 수 있습니다. 팀장의 열람은 모두 감사로그에 남습니다.</p></div></div>
+      <div class="lm-msg-layout">
+        <aside class="card lm-msg-list"><ul>${ts.map((t) => `<li><a class="lm-msg-row ${sel && sel.id === t.id ? 'on' : ''}" href="#/admin/teams?t=${t.id}"><span class="grow"><strong>${esc(t.name)}</strong><br><span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${esc(t.loginId)} · ${(t.members || []).length}명</span></span></a></li>`).join('')}</ul>
+          <form class="stack-sm" id="tm-new" style="border-top:1px solid var(--line);padding-top:12px"><h3>새 팀 만들기</h3>
+            <input class="field" name="name" placeholder="팀 이름 (예: 베트남어 상담팀)" required><input class="field" name="leaderName" placeholder="팀장 이름" required>
+            <div class="row" style="gap:6px"><input class="field" name="loginId" placeholder="팀장 아이디" required><input class="field" name="pin" placeholder="비밀번호" value="1234" required></div>
+            <button class="btn full" type="submit">팀 만들기</button></form></aside>
+        <section class="card lm-msg-main">${sel ? `<form class="stack" id="tm-edit"><div class="row wrap" style="gap:8px"><label class="stack-xs grow"><span class="label">팀 이름</span><input class="field" name="name" value="${esc(sel.name)}"></label><label class="stack-xs"><span class="label">팀장 이름</span><input class="field" name="leaderName" value="${esc(sel.leaderName || '')}"></label><label class="stack-xs"><span class="label">팀장 아이디</span><input class="field" name="loginId" value="${esc(sel.loginId)}"></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="${esc(sel.pin)}"></label></div>
+            <h3>팀원(상담원) <span class="ops-muted">${(sel.members || []).length}명 선택 · 팀원은 기업용 요금제로 바뀝니다</span></h3>
+            <input class="field" id="tm-q" type="search" placeholder="닉네임·ID로 찾기">
+            <div class="tm-members">${all.sort((a, b) => ((sel.members || []).includes(b.id) - (sel.members || []).includes(a.id)) || a.nickname.localeCompare(b.nickname)).map((u) => { const other = Store.teamOf(u.id); return `<label class="tm-member" data-k="${esc((u.nickname + ' ' + u.id).toLowerCase())}"><input type="checkbox" name="m" value="${u.id}" ${(sel.members || []).includes(u.id) ? 'checked' : ''}> <span><strong>${esc(u.nickname)}</strong> <span class="ops-muted">${esc(u.id)} · ${esc(LN(u.lang || 'ko'))}${other && other.id !== sel.id ? ' · ' + esc(other.name) : ''}</span></span></label>`; }).join('')}</div>
+            <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
+      </div>`);
+    document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (Store.teams().some((t) => t.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || String(f.get('loginId')).toLowerCase() === 'admin') { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); location.hash = '#/admin/teams?t=' + t.id; });
+    const ed = document.getElementById('tm-edit');
+    if (ed) {
+      document.getElementById('tm-q').addEventListener('input', (e) => { const v = e.target.value.toLowerCase(); ed.querySelectorAll('.tm-member').forEach((l) => { l.hidden = v && !l.dataset.k.includes(v); }); });
+      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); Store.teams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin'), members }); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
+      document.getElementById('tm-del').addEventListener('click', () => { Store.removeTeam(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '팀 삭제 · ' + sel.name }); location.hash = '#/admin/teams'; });
+    }
+  }
+
   function viewAsBtn(u) { return `<button class="btn secondary sm" type="button" data-viewas="${esc(u.id)}">👁 이 회원 화면으로 보기</button>`; }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-viewas]'); if (!b) return; const id = b.dataset.viewas; const u = Store.db.users[id]; Store.audit({ action: 'view', target: id, member: u ? u.nickname : id, contact: '회원 화면 전체', convId: '-', reason: '회원 화면으로 보기' }); Store.startViewAs(id); location.href = 'app.html#/chat'; location.reload(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('#adm-logout')) { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); Store.db.admin.operator = 'admin'; location.hash = '#/admin'; login(); } });
   window.Admin = {
     render(r) {
       if (!authed) return login();
       const p = r.id || 'dashboard';
-      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage }[p] || dashboard)(r);
+      const r0 = role(); if (r0.type === 'none') { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); return login(); }
+      const leaderBlocked = ['quality', 'settings', 'teams'];
+      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage }[isLeader() && leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
       window.scrollTo(0, 0);
     },
   };

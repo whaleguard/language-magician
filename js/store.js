@@ -15,7 +15,7 @@
   function uid(p) { return (p || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   function blank() {
-    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
+    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], teams: [], notices: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
   }
   function load() {
     try {
@@ -203,6 +203,53 @@
     Sync.pushShared();
     return rep;
   }
+  /* ---------- 기업용: 팀·팀장 / 지시·경고 메시지 ---------- */
+  const PLANS = {
+    free: { name: '무료', price: 0, group: 'personal' },
+    pro: { name: '프로', price: 5900, group: 'personal' },
+    premium: { name: '프리미엄', price: 9900, group: 'personal' },
+    business: { name: '기업용', price: null, group: 'business' },
+  };
+  const FEATURES = {
+    translate: ['free', 'pro', 'premium', 'business'],
+    reply_ideas: ['free', 'pro', 'premium', 'business'],
+    ocr: ['pro', 'premium', 'business'],
+    ai_analysis: ['pro', 'premium', 'business'],
+    day_memory: ['pro', 'premium', 'business'],
+    coach_saju_gift: ['premium', 'business'],
+    unlimited_contacts: ['pro', 'premium', 'business'],
+    team_inbox: ['business'],
+    team_console: ['business'],
+  };
+  function planOf(u) { return (u && u.plan) || 'free'; }
+  function can(feature, u) { u = u || me(); const f = FEATURES[feature]; return !f || f.includes(planOf(u)); }
+  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; }
+  function teams() { ensureTeamArrays(); return db.teams; }
+  function teamById(id) { return teams().find((t) => t.id === id); }
+  function teamOf(userId) { return teams().find((t) => (t.members || []).includes(userId)); }
+  function createTeam(o) {
+    ensureTeamArrays();
+    const t = { id: uid('t_'), name: o.name || '새 팀', leaderName: o.leaderName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), members: o.members || [], createdAt: Date.now(), demo: !!o.demo };
+    db.teams.push(t); (t.members || []).forEach((id) => { if (db.users[id]) db.users[id].plan = 'business'; }); persist(); Sync.pushShared(); return t;
+  }
+  function updateTeam(id, patch) { const t = teamById(id); if (!t) return null; Object.assign(t, patch); (t.members || []).forEach((uid2) => { if (db.users[uid2] && db.users[uid2].plan !== 'business') db.users[uid2].plan = 'business'; }); persist(); Sync.pushShared(); return t; }
+  function removeTeam(id) { ensureTeamArrays(); db.teams = db.teams.filter((t) => t.id !== id); persist(); Sync.pushShared(); }
+  function leaderLogin(loginId, pin) { return teams().find((t) => t.loginId && t.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(t.pin) === String(pin)); }
+  // 운영자(관리자·팀장) → 회원 메시지. tr: { 언어: 번역문 }
+  function sendNotice(o) {
+    ensureTeamArrays();
+    const n = { id: uid('n_'), userId: o.userId, kind: o.kind || 'instruction', from: o.from || 'admin', fromName: o.fromName || '관리자', teamId: o.teamId || '', text: o.text, lang: o.lang || 'ko', tr: o.tr || {}, ts: Date.now(), readAt: null, demo: !!o.demo };
+    db.notices.push(n); persist(); Sync.pushShared(); return n;
+  }
+  function noticesOf(userId) { ensureTeamArrays(); return db.notices.filter((n) => n.userId === userId).sort((a, b) => a.ts - b.ts); }
+  function unreadNotices(userId) { return noticesOf(userId).filter((n) => n.from !== 'member' && !n.readAt).length; }
+  function markNoticesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from !== 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persistAny(); Sync.pushShared(); } return ch; }
+  function markRepliesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from === 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persist(); Sync.pushShared(); } }
+  function replyNotice(userId, text, lang, tr) { const n = sendNotice({ userId, kind: 'reply', from: 'member', fromName: (db.users[userId] || {}).nickname || '', text, lang, tr }); return n; }
+  function setNoticeTr(id, lang, text) { const n = (db.notices || []).find((x) => x.id === id); if (n) { n.tr = n.tr || {}; n.tr[lang] = text; persistAny(); } }
+  // 회원 화면 보기 중에도 읽음 표시 등은 저장하지 않음
+  function persistAny() { persist(); }
+
   function audit(entry) {
     db.audit.unshift(Object.assign({ id: uid('au_'), ts: Date.now(), operator: db.admin.operator }, entry));
     if (db.audit.length > 3000) db.audit.length = 3000;
@@ -257,7 +304,7 @@
     if (Object.values(db.users).some((u) => u.demo)) {
       // 예전 데모 회원에 AI 사용 기록이 없으면 채움
       Object.values(db.users).filter((u) => u.demo && !u.aiUsage).forEach((u, i) => { u.aiUsage = []; const model = i % 2 ? 'claude-haiku-5-5' : 'gpt-4o-mini'; if (u.type === 'member') for (let dday = 0; dday < 30; dday++) for (let k = 0; k < (i * 7 + dday * 3) % 9; k++) u.aiUsage.push({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 700 + ((k * 131 + i * 17) % 900), out: 180 + ((k * 71) % 400), ts: Date.now() - dday * 86400000 - k * 1800000 }); });
-      persist(); ensureDemoCrowd(); return;
+      persist(); ensureDemoCrowd(); ensureDemoTeam(); return;
     }
     const defs = [
       ['Lin', 'zh', 'member', ['seojun', 'haruka', 'minh'], 15],
@@ -318,6 +365,23 @@
     }
     persist();
     ensureDemoCrowd();
+    ensureDemoTeam();
+  }
+
+  /* 데모: 기업용 팀 (팀장 leader1 / 1234) */
+  function ensureDemoTeam() {
+    ensureTeamArrays();
+    if (db.teams.some((t) => t.demo)) return;
+    const crowd = Object.values(db.users).filter((u) => u.demoCrowd && u.type === 'member').slice(0, 7).map((u) => u.id);
+    const mine = db.currentUserId && db.users[db.currentUserId] && !db.users[db.currentUserId].demo ? [db.currentUserId] : [];
+    const t = createTeam({ name: '외국인 고객상담 1팀', leaderName: '김팀장', loginId: 'leader1', pin: '1234', members: mine.concat(crowd), demo: true });
+    const first = crowd[0] && db.users[crowd[0]];
+    if (first) {
+      sendNotice({ userId: first.id, kind: 'instruction', from: 'leader', fromName: t.leaderName, teamId: t.id, text: '오늘 오후 문의는 환불 규정을 먼저 안내해 주세요.', lang: 'ko', tr: {}, demo: true });
+      const n = noticesOf(first.id)[0]; n.readAt = Date.now() - 1800000; n.ts = Date.now() - 3600000;
+      sendNotice({ userId: first.id, kind: 'reply', from: 'member', fromName: first.nickname, teamId: t.id, text: 'OK, I will explain the refund policy first.', lang: 'en', tr: { ko: '네, 환불 규정부터 먼저 안내하겠습니다.' }, demo: true });
+    }
+    persist();
   }
 
   /* 데모: 대시보드용 회원 무리 (45일간 가입·활동 분포) */
@@ -366,6 +430,7 @@
   function clearDemo() {
     Object.keys(db.users).forEach((k) => { if (db.users[k].demo) delete db.users[k]; });
     db.reports = db.reports.filter((r) => !r.demo);
+    db.teams = (db.teams || []).filter((t) => !t.demo); db.notices = (db.notices || []).filter((n) => !n.demo && db.users[n.userId]);
     persist();
   }
 
@@ -427,6 +492,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
+    PLANS, FEATURES, planOf, can, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
