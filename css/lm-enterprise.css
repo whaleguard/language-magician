@@ -178,3 +178,15 @@
 }
 .tm-agents { display: flex; flex-wrap: wrap; gap: 6px; }
 .tm-agent-chip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border: 1px solid var(--line, #e5e7eb); border-radius: 999px; font-size: 12.5px; background: #f8fafc; }
+.shared-cust { margin-left: 6px; font-size: 11px; vertical-align: middle; }
+.dup-cust summary { cursor: pointer; list-style: none; }
+.dup-cust .dup-row { padding: 8px 0; border-top: 1px solid var(--line, #e5e7eb); }
+mark { background: #fff1a8; padding: 0 1px; border-radius: 2px; }
+.dup-row.done { opacity: .75; }
+.dup-card { display: flex; gap: 8px; align-items: center; padding: 6px 10px 6px 6px; border: 1px solid var(--line, #e5e7eb); border-radius: 12px; text-decoration: none; color: inherit; background: #fff; }
+.dup-card:hover { border-color: var(--primary, #0b6aa2); }
+.dup-ph { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; }
+.dup-ph.none { display: inline-flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #9ca3af; background: #f3f4f6; line-height: 1.2; }
+.avatar.has-photo { padding: 0; overflow: hidden; background: #eee; }
+.avatar.has-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.field.sm { min-height: 32px; padding: 4px 8px; font-size: 13px; }

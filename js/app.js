@@ -30,7 +30,7 @@
   function appName(id) { const a = DATA.APPS.find((x) => x.id === id); return a ? a.name : (id || 'Other'); }
   function countryName(id) { const c = DATA.COUNTRIES.find((x) => x.id === id); return c ? (c.flag + ' ' + (c[uiLang] || c.en)) : ''; }
   function initial(name) { const s = String(name || '?').trim(); return esc([...s][0] || '?').toUpperCase(); }
-  function avatar(c, size) { return `<span class="avatar ${size || ''} col-${esc(c.color || 'mint')}" lang="${esc(c.lang)}">${initial(c.nickname)}</span>`; }
+  function avatar(c, size) { return c && c.photo && /^data:image\//.test(c.photo) ? `<span class="avatar ${size || ''} has-photo"><img src="${esc(c.photo)}" alt=""></span>` : `<span class="avatar ${size || ''} col-${esc(c.color || 'mint')}" lang="${esc(c.lang)}">${initial(c.nickname)}</span>`; }
   function who(c) { return `<span class="who"><span class="dot col-${esc(c.color || 'mint')}">${initial(c.nickname)}</span>${esc(appName(c.app))} / <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></span>`; }
   function whoText(c) { return appName(c.app) + ' / ' + c.nickname; }
   function parseYmd(s) { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
@@ -133,7 +133,7 @@
     el.classList.add('on'); clearTimeout(capBlock._t); if (ms) capBlock._t = setTimeout(() => el.classList.remove('on'), ms);
   }
   function capUnblock() { const el = document.getElementById('cap-block'); if (el) el.classList.remove('on'); }
-  function capLog(how) { try { const u = Store.me(); Store.audit({ action: 'capture', target: u ? u.id : '-', member: u ? u.nickname : '', reason: '화면 캡처 시도(' + how + ') · ' + location.hash }); } catch (x) {} }
+  function capLog(how) { try { const adm = /^#\/admin/.test(location.hash); const u = adm ? null : Store.me(); const tm = u && Store.teamOf(u.id); Store.audit({ action: 'capture', target: u ? u.id : '-', member: u ? u.nickname : '', operator: adm ? (Store.db.admin.operator || '관리자') : (u ? u.nickname + (u.agent ? ' (상담원)' : ' (회원)') : '-'), orgId: adm ? (Store.db.admin.orgId || '') : (tm ? tm.orgId || '' : ''), teamId: tm ? tm.id : '', reason: '화면 캡처 시도(' + how + ') · ' + (location.hash || '#/') }); } catch (x) {} }
   document.addEventListener('keydown', (e) => {
     const k = e.key || '';
     if (k === 'PrintScreen') { capBlock(2500); capLog('PrintScreen'); try { navigator.clipboard.writeText(''); } catch (x) {} return; }
@@ -1375,7 +1375,7 @@
     let lastDay = '';
     const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; const dg = c ? digestsOf(c.id)[Engine.ymd(d)] : null; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>` + (dg && ((dg.facts && dg.facts.length) || dg.summary) ? `<details class="day-mem"><summary>📌 ${t('mem_day')} ${dg.facts ? dg.facts.length : ''} <span class="muted">· ${dg.by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></summary><p class="small">${esc(digestLine(dg))}</p><div class="facts">${(dg.facts || []).map(factChip).join('')}</div></details>` : ''); } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
-        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block"><button type="button" class="lang-pair-btn" id="ch-lang" title="${esc(t('lp_title'))}">${esc(t('lang_pair', { a: langUi(myL(c)), b: langUi(c.lang) }))} ▾</button> · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
+        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block"><button type="button" class="lang-pair-btn" id="ch-lang" title="${esc(t('lp_title'))}">${esc(t('lang_pair', { a: langUi(myL(c)), b: langUi(c.lang) }))} ▾</button> · ${esc(t('thread_count', { n: ms.length }))}${sharedBadge(c)}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
         <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c && POP ? `<button class="icon-btn" type="button" id="pop-main" title="${esc(t('pop_main'))}" aria-label="${esc(t('pop_main'))}">⤢</button>` : ''}${c && !POP && WIDE.matches ? `<button class="pop-btn" type="button" data-pop="${c.id}" title="${esc(t('pop_open'))}" aria-label="${esc(t('pop_open'))}">↗ ${esc(t('pop_short'))}</button>` : ''}${c && !POP ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
       <div class="content chat-scroll" style="padding-bottom:12px">
         ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
@@ -1451,6 +1451,21 @@
     return '…';
   }
   const vaLine = (text, from) => { const v = vaKo(text, from); return v ? `<span class="va-ko" lang="ko">🇰🇷 ${esc(v)}</span>` : ''; };
+  // 같은 고객을 다른 상담원도 상담 중이면 표시 (중복 응대 방지)
+  const SH_T = { ko: '{n}도 이 고객 상담 중', zh: '{n} 也在接待这位客户', ja: '{n}もこの顧客を対応中', vi: '{n} cũng đang tư vấn khách này', en: '{n} is also handling this customer' };
+  const SHO_T = { me: { ko: '팀장 확인: 내가 담당', zh: '组长确认：由我负责', ja: 'リーダー確認：自分が担当', vi: 'Trưởng nhóm xác nhận: tôi phụ trách', en: 'Leader confirmed: you own this' }, other: { ko: '팀장 확인: {n} 담당 · 응대 자제', zh: '组长确认：{n} 负责 · 请勿接待', ja: 'リーダー確認：{n}が担当・対応控え', vi: 'Trưởng nhóm xác nhận: {n} phụ trách · đừng trả lời', en: 'Leader confirmed: {n} owns this · hold off' }, title: { ko: '팀장이 같은 고객으로 확인하고 담당자를 지정했습니다', zh: '组长已确认同一客户并指定负责人', ja: 'リーダーが同じ顧客と確認し担当を指定', vi: 'Trưởng nhóm đã xác nhận cùng khách và chỉ định người phụ trách', en: 'Your leader confirmed it is the same customer and set an owner' } };
+  const DW_T = { ko: '⚠ 같은 앱·닉네임 고객을 {n}도 상담 중입니다. 팀장에게 확인 요청이 올라갑니다', zh: '⚠ {n} 也在接待同一应用、同一昵称的客户，已通知组长确认', ja: '⚠ 同じアプリ・ニックネームの顧客を{n}も対応中です。リーダーに確認依頼が届きます', vi: '⚠ {n} cũng đang tư vấn khách cùng ứng dụng và biệt danh. Đã báo trưởng nhóm kiểm tra', en: '⚠ {n} is already handling a customer with the same app and nickname. Your leader will be asked to check' };
+  function dupWarn(c) { try { const u = Store.me(); const l = Store.sharedCustomers(u.id, c); if (l.length && !l.some((x) => x.decided)) toast((DW_T[uiLang] || DW_T.en).replace('{n}', Array.from(new Set(l.map((x) => x.agentName))).join(', ')), 6000); } catch (e) { /* noop */ } }
+  function sharedBadge(c) {
+    const u = Store.me(); if (!u || !c) return '';
+    let list = []; try { list = Store.sharedCustomers(u.id, c); } catch (e) { list = []; }
+    if (!list.length) return '';
+    const own = list.find((x) => x.decided === 'same' && x.ownerId);
+    if (own) { const mineOwn = own.ownerId === u.id; return ` <span class="badge ${mineOwn ? '' : 'alert'} shared-cust" title="${esc(SHO_T.title[uiLang] || SHO_T.title.en)}">👥 ${esc((mineOwn ? (SHO_T.me[uiLang] || SHO_T.me.en) : (SHO_T.other[uiLang] || SHO_T.other.en)).replace('{n}', own.owner))}</span>`; }
+    const names = Array.from(new Set(list.map((x) => x.agentName))).join(', ');
+    const tip = list.map((x) => `${x.agentName} · ${appName(x.app)} / ${x.nick} · ${fmtTs(x.lastTs)} · ${x.why === 'nick' ? '같은 닉네임' : '같은 메시지 ' + x.same + '건'}`).join('\n');
+    return ` <span class="badge alert shared-cust" title="${esc(tip)}">👥 ${esc((SH_T[uiLang] || SH_T.en).replace('{n}', names))}</span>`;
+  }
   function bubbleHtml(c, m, isLatestIn) {
     const a = m.analysis;
     const risk = m.risk && m.risk.length;
@@ -1961,6 +1976,7 @@
       <form class="content stack" id="ce">
         <label class="stack-xs"><span class="label">${t('c_app')}</span><select class="field" name="app">${sel('app', DATA.APPS.map((a) => [a.id, a.name]))}</select></label>
         <label class="stack-xs"><span class="label">${t('c_nick')} *</span><input class="field" name="nickname" required maxlength="40" value="${esc(c.nickname || '')}"></label>
+        <div class="stack-xs"><span class="label">${esc(({"ko": "프로필 사진 (선택) · 메신저 프로필을 캡처해 넣으면 같은 고객인지 팀장이 확인할 수 있어요", "zh": "头像（可选）· 截取对方聊天软件头像，组长可核对是否同一客户", "ja": "プロフィール写真（任意）· メッセンジャーのプロフィールを貼ると同じ顧客か確認できます", "vi": "Ảnh đại diện (tùy chọn) · chụp ảnh hồ sơ messenger để trưởng nhóm kiểm tra cùng khách", "en": "Profile photo (optional) · add a capture of their messenger profile so your leader can check duplicates"})[uiLang] || ({"ko": "프로필 사진 (선택) · 메신저 프로필을 캡처해 넣으면 같은 고객인지 팀장이 확인할 수 있어요", "zh": "头像（可选）· 截取对方聊天软件头像，组长可核对是否同一客户", "ja": "プロフィール写真（任意）· メッセンジャーのプロフィールを貼ると同じ顧客か確認できます", "vi": "Ảnh đại diện (tùy chọn) · chụp ảnh hồ sơ messenger để trưởng nhóm kiểm tra cùng khách", "en": "Profile photo (optional) · add a capture of their messenger profile so your leader can check duplicates"}).en)}</span><div class="row" style="gap:10px;align-items:center"><span id="ce-ph">${avatar(c)}</span><label class="btn sm secondary" style="cursor:pointer">📷<input type="file" accept="image/*" id="ce-photo" hidden></label><button class="btn sm ghost" type="button" id="ce-ph-del" ${c.photo ? '' : 'hidden'}>✕</button></div></div>
         <div class="two">
           <label class="stack-xs"><span class="label">${t('c_lang')}</span><select class="field" name="lang">${sel('lang', Object.keys(Engine.LANGS).map((l) => [l, langName(l)]))}</select></label>
           <label class="stack-xs"><span class="label">${t('c_country')}</span><select class="field" name="country"><option value="">—</option>${sel('country', DATA.COUNTRIES.map((x) => [x.id, x.flag + ' ' + (x[uiLang] || x.en)]))}</select></label>
@@ -1997,17 +2013,24 @@
       form.stage.innerHTML = st.map((s, i) => `<option value="${i}">${esc(STAGE_NAMES[uiLang][s])}</option>`).join('');
     });
     form.country.addEventListener('change', () => { const co = DATA.COUNTRIES.find((x) => x.id === form.country.value); if (co && isNew) form.lang.value = co.lang; });
+    // 프로필 사진: 작게 줄여 저장 (96px)
+    let photoData = c.photo || '';
+    const showPh = () => { document.getElementById('ce-ph').innerHTML = avatar(Object.assign({}, c, { photo: photoData })); document.getElementById('ce-ph-del').hidden = !photoData; };
+    const takeImg = (file) => { if (!file || !/^image\//.test(file.type)) return; const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => { const S = 96; const cv = document.createElement('canvas'); cv.width = S; cv.height = S; const g = cv.getContext('2d'); const m = Math.min(im.width, im.height); g.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, S, S); photoData = cv.toDataURL('image/jpeg', 0.72); showPh(); }; im.src = fr.result; }; fr.readAsDataURL(file); };
+    document.getElementById('ce-photo').addEventListener('change', (e) => takeImg(e.target.files[0]));
+    document.getElementById('ce-ph-del').addEventListener('click', () => { photoData = ''; showPh(); });
+    form.addEventListener('paste', (e) => { const it = [...(e.clipboardData && e.clipboardData.items || [])].find((x) => /^image\//.test(x.type)); if (it) { e.preventDefault(); takeImg(it.getAsFile()); } });
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const f = new FormData(form);
-      const data = {};
+      const data = { photo: photoData };
       ['app', 'nickname', 'lang', 'country', 'color', 'relation', 'metAt', 'birthday', 'birthTime', 'age', 'blood', 'gender', 'mbti', 'job', 'city', 'note'].forEach((k) => { data[k] = (f.get(k) || '').toString().trim(); });
       // 대화로 채운 값을 직접 바꾸면 직접 입력 값으로 취급
       if (!isNew && c.learned) { const L = Object.assign({}, c.learned); Object.keys(L).forEach((k) => { if (String(data[k] || '') !== String(c[k] || '')) delete L[k]; }); data.learned = L; }
       data.stage = Number(f.get('stage') || 0);
       data.birthLunar = !!f.get('birthLunar');
       if (!data.nickname) return;
-      if (isNew) { const nc = Store.addContact(data); homeContact = nc.id; helperState.contactId = nc.id; go('#/chat/' + nc.id); }
+      if (isNew) { const nc = Store.addContact(data); homeContact = nc.id; helperState.contactId = nc.id; dupWarn(nc); go('#/chat/' + nc.id); }
       else { Store.updateContact(c.id, data); toast(t('saved')); go('#/contact/' + c.id); }
     });
   }

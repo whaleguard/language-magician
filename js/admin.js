@@ -70,14 +70,14 @@
     const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.from === 'member' && !n.readAt && users().some((u) => u.id === n.userId)).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
     const items = rl.type === 'hqp'
-      ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'hqb'
-      ? [['dashboard', '기업고객 현황'], ['orgs', '거래처'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      ? [['dashboard', '기업고객 현황'], ['orgs', '거래처'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'org'
-      ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
+      ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['attendance', '근태'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'leader'
-      ? [['dashboard', '팀 현황'], ['users', '팀원'], ['attendance', '근태'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
-      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['attendance', '근태'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+      ? [['dashboard', '팀 현황'], ['users', '팀원'], ['attendance', '근태'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['attendance', '근태'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '감사로그·캡처'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     // 메뉴를 그룹으로 묶고, 선택한 그룹의 하위 메뉴는 아래 탭으로
     const GROUP = { dashboard: 'home', attendance: 'people', users: 'people', monitor: 'people', notices: 'people', orgs: 'org', teams: 'org', staff: 'org', reports: 'safe', quality: 'safe', audit: 'safe', ai: 'sys', settings: 'sys' };
     const GL = { home: '현황', people: rl.type === 'hqp' ? '회원' : rl.type === 'admin' ? '회원·상담원' : '상담원', org: '조직', safe: '신고·기록', sys: 'AI·설정' };
@@ -230,6 +230,8 @@
     const queue = [
       [open.length, '미처리 신고', open.length ? '가장 오래된 건 ' + oldest(open, (x) => x.createdAt) : '', '#/admin/reports', 'attention'],
       [risk7.length, '미검토 위험 표시 대화', risk7.length ? '가장 오래된 건 ' + oldest(risk7, (x) => x.m.ts) : '', '#/admin/monitor?risk=1', 'attention'],
+      (() => { let g = []; try { g = Store.duplicateCustomers(us.filter((x) => !x.demo)).filter((x) => !x.decided); } catch (e) { g = []; } return [g.length, '같은 고객 중복 상담 확인', g.length ? g.slice(0, 2).map((x) => APPN(x[0].app) + ' / ' + x[0].nick).join(', ') : '', '#/admin/monitor?dup=1', 'attention']; })(),
+      (() => { const ids = new Set(us.map((u) => u.id)); const cp = Store.db.audit.filter((a) => a.action === 'capture' && a.ts >= now - 7 * DAY && (isSuper() || ids.has(a.target))); return [cp.length, '화면 캡처 시도 (7일)', cp.length ? '최근 ' + ago(cp[0].ts) + ' · ' + (cp[0].member || cp[0].operator || '') : '', '#/admin/audit?act=capture', 'attention']; })(),
       [bannedRecent.length, '차단 회원의 최근 기록', banned.length ? '차단 회원 ' + banned.length + '명' : '', '#/admin/users?type=banned', 'info'],
       [auditT.length, '오늘 대화 열람 로그 확인', '', '#/admin/audit', 'info'],
       [silent.length, '7일 이상 대화가 끊긴 회원', '', '#/admin/users', 'neutral'],
@@ -487,8 +489,27 @@
         <label class="grow stack-xs"><span class="label">회원 닉네임·서비스 ID·상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 서준"></label>
         <label class="stack-xs"><span class="label">대화 앱</span><select class="field" name="app"><option value="all">전체 앱</option>${DATA.APPS.map((a) => `<option value="${a.id}" ${app === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}</select></label>
         <label class="stack-xs"><span class="label">위험 분류</span><select class="field" name="risk"><option value="0">전체 대화</option><option value="1" ${riskOnly ? 'selected' : ''}>위험 표시 있음</option></select></label>
+        <label class="grow stack-xs"><span class="label">대화 내용 검색 (원문·번역·한국어)</span><input class="field" name="mq" type="search" value="${esc(r.q.mq || '')}" placeholder="예: 환불, refund, 退款"></label>
         <button class="btn" type="submit" style="align-self:end">검색</button>
       </form>
+      ${(() => { // 대화 내용 검색 결과 (범위 안 모든 회원·상담원)
+        const mq = (r.q.mq || '').trim().toLowerCase(); if (mq.length < 2) return '';
+        const ca = koCache(); const hits = [];
+        users().forEach((x) => (x.messages || []).forEach((m) => { const ko = ca[m.id] || ''; const hay = ((m.text || '') + '\n' + (m.translation || '') + '\n' + ko + '\n' + Object.values(m.trs || {}).join('\n')).toLowerCase(); if (hay.includes(mq)) hits.push({ x, m }); }));
+        hits.sort((a, b) => b.m.ts - a.m.ts);
+        const mark = (t) => { const i = String(t || '').toLowerCase().indexOf(mq); if (i < 0) return esc(String(t || '').slice(0, 90)); const st = Math.max(0, i - 30); const tx = String(t); return (st ? '…' : '') + esc(tx.slice(st, i)) + '<mark>' + esc(tx.slice(i, i + mq.length)) + '</mark>' + esc(tx.slice(i + mq.length, i + mq.length + 50)); };
+        return `<section class="card stack-sm"><h2>🔎 "${esc(r.q.mq)}" 대화 검색 <span class="small muted">${hits.length}건${hits.length > 100 ? ' · 최근 100건 표시' : ''}</span></h2>${hits.length ? `<div class="table-wrap"><table style="min-width:760px"><thead><tr><th style="width:120px">시각</th><th style="width:160px">상담원·회원</th><th style="width:170px">고객</th><th>내용</th></tr></thead><tbody>${hits.slice(0, 100).map(({ x, m }) => { const c = x.contacts.find((k) => k.id === m.contactId); const tm = Store.teamOf(x.id); const fld = [m.text, m.translation, ca[m.id]].find((t) => String(t || '').toLowerCase().includes(mq)) || m.text; return `<tr class="clickable" data-open="${x.id}|${m.contactId || ''}|${m.id}"><td class="tiny">${fmt(m.ts)}</td><td><b>${esc(x.nickname)}</b><br><span class="tiny muted">${esc(x.id)}${tm ? ' · ' + esc(tm.name) : ''}</span></td><td>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}<br><span class="tiny muted">${m.dir === 'in' ? '받은 말' : '보낸 말'}</span></td><td class="wrap-cell">${mark(fld)}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="small muted">찾은 대화가 없습니다.</p>'}</section>`;
+      })()}
+      ${(() => { // 같은 고객을 여러 상담원이 상담 중 (1차: 앱+닉네임 / 같은 메시지 → 팀장이 프로필 사진으로 확인·판정)
+        let groups = []; try { groups = Store.duplicateCustomers(users().filter((x) => !x.demo)); } catch (e) { groups = []; }
+        if (!groups.length) return '';
+        const pend = groups.filter((g) => !g.decided).length;
+        const ph = (e) => (e.photo ? `<img class="dup-ph" src="${esc(e.photo)}" alt="">` : `<span class="dup-ph none">사진<br>없음</span>`);
+        return `<details class="card stack-sm dup-cust" ${r.q.dup || pend ? 'open' : ''} id="dup-box"><summary><b>👥 여러 상담원이 같은 고객 상담 의심 ${groups.length}건</b>${pend ? ` <span class="badge alert">확인 필요 ${pend}</span>` : ''} <span class="small muted">1차: 같은 앱+닉네임 또는 같은 메시지 · 프로필 사진을 비교해 판정하세요</span></summary>
+          <div class="stack-xs" style="margin-top:8px">${groups.slice(0, 40).map((g, gi) => `<div class="dup-row ${g.decided ? 'done' : ''}"><div class="between wrap"><span><b>${esc(APPN(g[0].app))} / ${esc(g[0].nick)}</b> <span class="tiny muted">${g.some((x, i) => g.some((y, j) => i !== j && x.key !== y.key)) ? '같은 메시지로 감지' : '같은 앱·닉네임'}</span>${g.decided ? ` <span class="badge">✓ 같은 고객 · 담당 ${esc((Store.db.users[g.owner] || {}).nickname || g.owner || '-')}</span>` : ''}</span>
+            <span class="row wrap" style="gap:6px"><select class="field sm" data-dup-owner="${gi}" style="max-width:170px">${g.map((e) => `<option value="${e.agentId}" ${g.owner === e.agentId ? 'selected' : ''}>담당: ${esc(e.agentName)}</option>`).join('')}</select><button class="btn sm" type="button" data-dup-same="${gi}">같은 고객 · 담당 지정</button><button class="btn sm secondary" type="button" data-dup-diff="${gi}">다른 사람</button></span></div>
+            <div class="row wrap" style="gap:10px;margin-top:6px">${g.map((e) => { const tm = Store.teamOf(e.agentId); return `<a class="dup-card" href="#/admin/monitor?u=${e.agentId}&c=${e.contactId}">${ph(e)}<span><b>${esc(e.agentName)}</b>${tm ? ' · ' + esc(tm.name) : ''}<br><span class="tiny muted">${esc(APPN(e.app))} / ${esc(e.nick)} · ${e.n}건 · ${e.lastTs ? fmt(e.lastTs) : '-'}</span></span></a>`; }).join('')}</div></div>`).join('')}</div></details>`;
+      })()}
       <div class="monitor-grid" style="align-items:start">
         <div class="card stack pane"><h2>회원·게스트 <span class="small muted">${us.length}</span></h2>
           <div class="stack-xs">${us.map((x) => { const s = memberStats(x); return `<button class="sel-item" type="button" data-pick-u="${x.id}" aria-selected="${u && u.id === x.id}"><span class="avatar sm">${esc([...x.nickname][0] || '?')}</span><span class="grow"><strong>${esc(x.nickname)}</strong>${x.status === 'banned' ? ' <span class="badge alert">차단</span>' : ''}<br><span class="tiny muted">${esc(x.id)} · 상대 ${x.contacts.length}명 · ${s.msgCount}건</span></span>${s.risk ? `<span class="badge alert">${s.risk}</span>` : ''}</button>`; }).join('') || '<p class="small muted">검색 결과 없음</p>'}</div></div>
@@ -501,7 +522,7 @@
           ${granted ? convoHtml(u, c, ms) : `<div class="card stack-sm notice"><label class="label" for="mon-reason">열람 사유 (필수 · 감사로그에 기록됩니다)</label><select class="field" id="mon-reason"><option value="">사유 선택</option><option>번역·조언 품질 검토</option><option>신고 또는 위험 대화 조사</option><option>사용자 문의 대응</option><option>서비스 개선을 위한 대화 패턴 분석</option></select><button class="btn full" type="button" id="mon-grant">사유 기록 후 대화 열람</button></div>`}` : '<p class="muted">회원을 선택하세요.</p>'}
         </div>
       </div>`);
-    document.getElementById('mon-f').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); location.hash = `#/admin/monitor?q=${encodeURIComponent(f.get('q'))}&app=${f.get('app')}&risk=${f.get('risk')}`; });
+    document.getElementById('mon-f').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); location.hash = `#/admin/monitor?q=${encodeURIComponent(f.get('q'))}&app=${f.get('app')}&risk=${f.get('risk')}&mq=${encodeURIComponent(f.get('mq') || '')}`; });
     const base = `#/admin/monitor?q=${encodeURIComponent(r.q.q || '')}&app=${app}&risk=${riskOnly ? 1 : 0}`;
     $app.querySelectorAll('[data-pick-u]').forEach((b) => b.addEventListener('click', () => { location.hash = base + '&u=' + b.dataset.pickU; }));
     $app.querySelectorAll('[data-pick-c]').forEach((b) => b.addEventListener('click', () => { location.hash = base + '&u=' + u.id + '&c=' + b.dataset.pickC; }));
@@ -515,6 +536,11 @@
     });
     bindConvo(u, c, ms);
     bindBan();
+    bindOpen();
+    { let groups = []; try { groups = Store.duplicateCustomers(users().filter((x) => !x.demo)); } catch (e) { groups = []; }
+      const ids = (gi) => groups[gi].map((e) => e.id);
+      $app.querySelectorAll('[data-dup-same]').forEach((b) => b.addEventListener('click', () => { const gi = +b.dataset.dupSame; const ow = $app.querySelector(`[data-dup-owner="${gi}"]`).value; Store.decideDup(ids(gi), true, ow); Store.audit({ action: 'settings', target: ow, reason: '중복 상담 판정: 같은 고객 · 담당 ' + ((Store.db.users[ow] || {}).nickname || ow) + ' · ' + groups[gi][0].nick }); LM.toast('같은 고객으로 확인 · 담당자를 지정했습니다'); monitor(r); }));
+      $app.querySelectorAll('[data-dup-diff]').forEach((b) => b.addEventListener('click', () => { const gi = +b.dataset.dupDiff; Store.decideDup(ids(gi), false, ''); Store.audit({ action: 'settings', target: '-', reason: '중복 상담 판정: 다른 사람 · ' + groups[gi][0].nick }); LM.toast('다른 사람으로 표시했습니다 · 경고가 사라집니다'); monitor(r); })); }
     const jm = r.q.m || (r.q.risk === '1' && ms.slice().reverse().find((m) => m.risk && m.risk.length) || {}).id;
     if (jm) setTimeout(() => { const el = $app.querySelector(`tr[data-mid="${jm}"]`); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('hit-flash'); } }, 80);
   }
@@ -616,14 +642,19 @@
   /* ---------- 감사로그 ---------- */
   function auditPage(r) {
     const q = (r.q.q || '').toLowerCase();
-    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => ((!isLeader() && !isHqp() && !isHqb()) || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
+    const scope = new Set(users().map((u) => u.id)); const actF = r.q.act || '';
+    // 캡처 시도는 그 직원을 관리하는 회사 관리자·팀장·본사가 모두 봄. 그 외 기록은 기존 규칙(팀장·본사직원은 자기 기록, 회사는 자기 회사)
+    const all = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => (a.action === 'capture' ? (isSuper() || scope.has(a.target) || (isOrg() && a.orgId === role().org.id) || a.operator === Store.db.admin.operator) : (((!isLeader() && !isHqp() && !isHqb()) || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id))) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
+    const list = all.filter((a) => !actF || a.action === actF);
+    const capN = all.filter((a) => a.action === 'capture').length;
     const act = { capture: '화면 캡처 시도', notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
     page('audit', `<div class="between wrap"><div class="stack-sm"><h1>열람 감사로그</h1><p class="muted">관리자·대상·시각·사유를 기록합니다. 기록은 수정·삭제할 수 없습니다.</p></div>
       <form id="au-f" class="row"><input class="field" name="q" type="search" placeholder="관리자 ID, 회원 ID, 대화 ID" value="${esc(r.q.q || '')}"><button class="btn" type="submit">검색</button></form></div>
-      <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>시각</th><th>관리자</th><th>행위</th><th>대상 회원</th><th>앱 / 상대 닉네임</th><th>대화 ID</th><th>사유</th></tr></thead><tbody>
-      ${list.map((a) => `<tr><td>${fmt(a.ts)}</td><td>${esc(a.operator)}</td><td><span class="badge ${a.action === 'ban' ? 'alert' : a.action === 'view' ? '' : 'gray'}">${act[a.action] || esc(a.action)}</span></td><td>${esc((a.member ? a.member + ' / ' : '') + (a.target || ''))}</td><td>${esc(a.contact || '—')}</td><td>${esc(a.convId || '—')}</td><td class="wrap-cell">${esc(a.reason || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">기록이 없습니다.</td></tr>'}
+      <div class="chip-row" style="gap:6px;display:flex;flex-wrap:wrap">${[['', '전체 ' + all.length], ['view', '대화 열람'], ['capture', '🚫 캡처 시도 ' + capN], ['notice', '메시지 발송'], ['login', '로그인'], ['settings', '설정 변경'], ['ban', '이용 차단']].map(([v, l]) => `<a class="btn sm ${actF === v ? '' : 'secondary'} ${v === 'capture' && capN ? 'danger-btn' : ''}" href="#/admin/audit?act=${v}&q=${encodeURIComponent(r.q.q || '')}">${l}</a>`).join('')}</div>
+      <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>시각</th><th>누가</th><th>행위</th><th>대상 회원</th><th>앱 / 상대 닉네임</th><th>대화 ID</th><th>사유</th></tr></thead><tbody>
+      ${list.map((a) => `<tr><td>${fmt(a.ts)}</td><td>${esc(a.operator)}</td><td><span class="badge ${a.action === 'ban' || a.action === 'capture' ? 'alert' : a.action === 'view' ? '' : 'gray'}">${act[a.action] || esc(a.action)}</span></td><td>${esc((a.member ? a.member + ' / ' : '') + (a.target || ''))}</td><td>${esc(a.contact || '—')}</td><td>${esc(a.convId || '—')}</td><td class="wrap-cell">${esc(a.reason || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">기록이 없습니다.</td></tr>'}
       </tbody></table></div>`);
-    document.getElementById('au-f').addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/audit?q=' + encodeURIComponent(new FormData(e.target).get('q')); });
+    document.getElementById('au-f').addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/audit?act=' + actF + '&q=' + encodeURIComponent(new FormData(e.target).get('q')); });
   }
 
   /* ---------- 운영 설정 ---------- */
@@ -639,15 +670,17 @@
           <label class="stack-xs"><span class="label">모델</span><input class="field" name="model" value="${esc(hq.model || '')}" placeholder="gpt-4o-mini / claude-haiku-5-5"></label>
         </div>
         <label class="stack-xs"><span class="label">본사 AI 서버 주소 (운영용 · 넣으면 키 대신 이 서버로 호출)</span><input class="field" name="proxy" value="${esc(hq.proxy || '')}" placeholder="https://xxxx.supabase.co/functions/v1/ai-proxy"></label>
+        <p class="tiny muted">테스트 서버에 AI 서버(ai-proxy)가 배포돼 있습니다: <code>${esc(Store.Sync.DEF.url)}/functions/v1/ai-proxy</code> <button class="btn sm secondary" type="button" id="hq-def">이 주소 넣기</button> · Supabase에서 OpenAI/Claude 키를 비밀값(OPENAI_API_KEY / ANTHROPIC_API_KEY)으로 넣어야 동작합니다. 저장하면 이 설정(키 제외)이 모든 PC에 자동 배포됩니다.</p>
         <label class="small row" style="gap:6px"><input type="checkbox" name="freeAi" ${hq.freeAi !== false ? 'checked' : ''}> 무료 회원에게도 AI 허용 (테스트 기간) — 끄면 프로·프리미엄·기업용만 AI 사용</label>
         <p class="tiny muted">⚠ 키를 여기만 넣으면 이 브라우저에서만 동작합니다. 모든 회원 기기에서 쓰려면 키를 서버(Supabase 비밀값)에 두고 저장소의 <code>supabase/functions/ai-proxy</code>를 배포한 뒤 서버 주소를 넣으세요. 키를 화면 코드에 넣으면 누구나 볼 수 있어 도용됩니다.</p>
         <div class="row" style="gap:8px"><button class="btn secondary" type="button" id="hq-test">연결 테스트</button><button class="btn" type="submit">저장</button><span class="small muted" id="hq-msg"></span></div>
       </form>
       <div class="admin-grid">
-        <form class="card stack" id="sv"><h2>서버 연결 (전 회원 대화 모니터링)</h2>
+        <form class="card stack" id="sv"><div class="between wrap"><h2>공용 서버 (PC 간 동기화)</h2>${Store.Sync.enabled() ? `<span class="badge">✓ 연결됨${Store.Sync.lastOk ? ' · ' + new Date(Store.Sync.lastOk).toLocaleTimeString('ko-KR') : ''}</span>` : '<span class="badge warning">미연결</span>'}</div>
+          <p class="small ${Store.Sync.err ? 'danger' : 'muted'}">${Store.Sync.err ? '최근 오류: ' + esc(Store.Sync.err) : '테스트 기본 서버(sangdam-magic)에 자동 연결됩니다. 팀·거래처·상담원 계정·지시·신고·열람기록·자리 등록이 6초 간격으로 모든 PC에 반영됩니다. 다른 서버를 쓰려면 아래에 입력하세요.'}</p>
           <p class="small muted">Supabase 무료 프로젝트를 만들고 저장소의 <code>supabase/schema.sql</code>을 실행한 뒤 URL과 anon 키를 넣으세요. 연결하면 모든 회원·게스트의 대화가 서버에 모이고, 이 화면에서 전부 확인할 수 있습니다. 회원 앱에도 같은 값이 필요하므로 <code>js/config.js</code>에 넣어 배포하세요.</p>
-          <label class="stack-xs"><span class="label">Supabase URL</span><input class="field" name="url" value="${esc(sc.url || '')}" placeholder="https://xxxx.supabase.co"></label>
-          <label class="stack-xs"><span class="label">anon public key</span><input class="field" name="key" value="${esc(sc.key || '')}" placeholder="eyJ..."></label>
+          <label class="stack-xs"><span class="label">Supabase URL</span><input class="field" name="url" value="${esc(sc.url && sc.url !== Store.Sync.DEF.url ? sc.url : '')}" placeholder="(기본 서버 사용 중) https://xxxx.supabase.co"></label>
+          <label class="stack-xs"><span class="label">anon public key</span><input class="field" name="key" value="${esc(sc.key && sc.key !== Store.Sync.DEF.key ? sc.key : '')}" placeholder="(기본 서버 사용 중) sb_publishable_... / eyJ..."></label>
           <div class="two"><button class="btn" type="submit">저장</button><button class="btn secondary" type="button" id="sv-pull">서버에서 새로고침</button></div>
           <p class="small" id="sv-msg"></p>
         </form>
@@ -663,7 +696,8 @@
       </div>`);
     const hqf = document.getElementById('hq-ai');
     const readHq = () => { const f = new FormData(hqf); return { provider: f.get('provider'), key: String(f.get('key') || '').trim(), model: String(f.get('model') || '').trim(), proxy: String(f.get('proxy') || '').trim(), freeAi: !!f.get('freeAi') }; };
-    hqf.addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('lm_hq_ai', JSON.stringify(readHq())); Store.audit({ action: 'settings', target: '-', reason: '본사 AI 연결 변경' }); LM.toast('저장했습니다'); settings(); });
+    hqf.addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('lm_hq_ai', JSON.stringify(Object.assign(readHq(), { updatedAt: Date.now() }))); Store.Sync.schedule(); Store.audit({ action: 'settings', target: '-', reason: '본사 AI 연결 변경' }); LM.toast('저장했습니다'); settings(); });
+    { const hd = document.getElementById('hq-def'); if (hd) hd.addEventListener('click', () => { hqf.querySelector('[name=proxy]').value = Store.Sync.DEF.url + '/functions/v1/ai-proxy'; }); }
     document.getElementById('hq-test').addEventListener('click', async () => { const prev = localStorage.getItem('lm_hq_ai'); localStorage.setItem('lm_hq_ai', JSON.stringify(readHq())); const m = document.getElementById('hq-msg'); m.textContent = '테스트 중…'; try { const out = await Engine.callLLM('Reply with one word.', 'Say OK', false); m.textContent = '✓ 연결됨: ' + String(out).slice(0, 40); } catch (x) { m.textContent = '✗ 실패: ' + (x.message || x); if (prev) localStorage.setItem('lm_hq_ai', prev); else localStorage.removeItem('lm_hq_ai'); } });
     document.getElementById('sv').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); localStorage.setItem('lm_sync', JSON.stringify({ url: String(f.get('url')).trim(), key: String(f.get('key')).trim() })); Store.audit({ action: 'settings', target: '-', reason: '서버 연결 설정 변경' }); LM.toast('저장했습니다'); });
     document.getElementById('sv-pull').addEventListener('click', pull);
