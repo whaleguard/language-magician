@@ -667,3 +667,21 @@ button.star:hover { transform: scale(1.15); }
 .row-name strong { min-width: 0; }
 .pin-ic { font-size: 11px; margin-right: 3px; }
 .ws-item.pinned { background: #fbfcff; }
+.composer.drop { outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 12px; }
+/* 도구 */
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.tool-card { display: grid; gap: 6px; justify-items: start; text-align: start; padding: 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: inherit; }
+.tool-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgb(16 36 62 / .08); }
+.tool-card strong { font-size: 16px; }
+.tool-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--mint); color: var(--primary); }
+.t-coach .tool-ic, .qt.t-coach { color: #b2456b; } .t-coach .tool-ic { background: #ffe9f1; }
+.t-saju .tool-ic, .qt.t-saju { color: #5b3e9a; } .t-saju .tool-ic { background: #f0ebff; }
+.t-gift .tool-ic, .qt.t-gift { color: #a35b12; } .t-gift .tool-ic { background: #fff1db; }
+.t-culture .tool-ic, .qt.t-culture { color: #036da3; }
+.t-anniv .tool-ic, .qt.t-anniv { color: #b83b3b; } .t-anniv .tool-ic { background: #ffecec; }
+.quick-tools { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 2px 0; }
+.qt { display: grid; justify-items: center; gap: 3px; padding: 6px 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 10.5px; font-weight: 700; color: var(--ink-2, #35475f); }
+.qt:hover { border-color: var(--primary); background: var(--mint); }
+.qt span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+body.is-wide .ws-rail { overflow-y: auto; }
+body.is-wide .ws-rail button { min-height: 50px; padding: 6px 0; }

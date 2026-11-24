@@ -97,7 +97,7 @@
     const JOB = '(학생|대학생|대학원생|회사원|직장인|간호사|의사|선생님|교사|디자이너|개발자|프로그래머|엔지니어|요리사|모델|공무원|자영업|사업가|유학생|老师|学生|大学生|研究生|护士|医生|设计师|程序员|工程师|上班族|公务员|厨师|模特|留学生|学生です|会社員|看護師|医者|先生|教師|デザイナー|エンジニア|公務員|大学生|留学生|sinh viên|giáo viên|y tá|bác sĩ|kỹ sư|nhà thiết kế|lập trình viên|nhân viên văn phòng|du học sinh|student|teacher|nurse|doctor|designer|developer|engineer|programmer|chef|model)';
     if ((m = s.match(new RegExp('(?:저는|전|직업은|직업이)\\s*' + JOB)) || s.match(new RegExp('(?:我|，|,|^)\\s*是(?:一[名个位])?' + JOB)) || s.match(new RegExp(JOB + '(?:로|으로)\\s*일')) || s.match(new RegExp('(?:私は|仕事は)\\s*' + JOB)) || s.match(new RegExp('(?:mình là|tôi là|em là|anh là|, là|^là)\\s*' + JOB, 'i')) || s.match(new RegExp("(?:I'?m an?|I am an?|I work as an?)\\s*" + JOB, 'i')))) out.job = m[1].replace(/です$/, '');
     // 사는 곳
-    if ((m = s.match(/([가-힣A-Za-z]{2,10})(?:에|에서)\s*살(?:아요|고 있어요|고 있|아|고요|아요\.|아\.)/)) || (m = s.match(/我(?:住在|在)([一-龥]{2,8}?)(?:住|生活|工作|上学|呢|，|。|$)/)) || (m = s.match(/([一-鿿゠-ヿA-Za-z]{2,10})に住んで/)) || (m = s.match(/(?:sống ở|ở)\s+([A-ZĐ][\wÀ-ỹ]+(?:\s[A-ZĐ][\wÀ-ỹ]+)?)/)) || (m = s.match(/\bI live in\s+([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/))) out.city = m[1];
+    if ((m = s.match(/([가-힣A-Za-z]{2,10})(?:에|에서)\s*살(?:아요|고 있어요|고 있|아|고요|아요\.|아\.)/)) || (m = s.match(/我(?:住在|在)([一-龥]{2,8}?)(?:住|生活|工作|上学|呢|，|。|$)/)) || (m = s.match(/([一-鿿゠-ヿA-Za-z]{2,10})に住んで/)) || (m = s.match(/(?:sống ở|đang ở)\s+([A-ZĐ][\wÀ-ỹ]+(?:\s[A-ZĐ][\wÀ-ỹ]+)?)/)) || (m = s.match(/\bI live in\s+([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/))) out.city = m[1];
     return out;
   }
 

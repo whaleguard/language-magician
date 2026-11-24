@@ -99,7 +99,7 @@
     document.documentElement.lang = uiLang === 'zh' ? 'zh-Hans' : uiLang;
     document.title = t('brand') + ' · ' + t('tagline');
     if (u.status === 'banned') return renderBlocked(u);
-    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide };
+    const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide, tools: renderTools };
     (pages[r.name] || renderChat)(r);
     window.scrollTo(0, 0); const _mn = document.querySelector('.ws-main'); if (_mn) _mn.scrollTop = 0;
   }
@@ -108,7 +108,8 @@
   WIDE.addEventListener('change', () => render());
   function shell(inner, active, opts) {
     const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
-    const navW = nav.concat([['guide', 'help', 'nav_guide']]);
+    const navW = nav.slice(0, 3).concat([['anniv', 'cake', 'nav_anniv'], ['coach', 'heart', 'nav_coach'], ['saju', 'yin', 'nav_saju'], ['gift', 'gift', 'nav_gift'], ['culture', 'globe', 'nav_culture'], nav[3], ['guide', 'help', 'nav_guide']]);
+    const navM = nav.slice(0, 3).concat([['tools', 'grid', 'nav_tools'], nav[3]]);
     if (WIDE.matches && !(opts && opts.noNav)) {
       document.body.classList.add('is-wide');
       $app.innerHTML = `<div class="ws">
@@ -122,7 +123,7 @@
       return;
     }
     document.body.classList.remove('is-wide');
-    $app.innerHTML = `<div class="screen">${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${nav.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
+    $app.innerHTML = `<div class="screen">${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${navM.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
   }
 
   /* 데스크탑 오른쪽 패널: 대화 중인 상대 목록 + 선택한 상대 정보 */
@@ -144,6 +145,7 @@
       const tips = (COACH[uiLang] || COACH.en)[stageKey];
       info = `<div class="ws-card">
         <div class="row">${avatar(c)}<div class="grow" style="min-width:0"><strong class="ellipsis" style="display:block" lang="${esc(c.lang)}">${esc(c.nickname)}</strong><span class="tiny muted">${esc(appName(c.app))} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</span></div></div>
+        <div class="quick-tools">${[['coach', 'heart', 'nav_coach', '#/coach/' + c.id], ['saju', 'yin', 'nav_saju', '#/saju/' + c.id], ['gift', 'gift', 'nav_gift', '#/gift/' + c.id], ['culture', 'globe', 'nav_culture', '#/culture?c=' + c.id], ['anniv', 'cake', 'nav_anniv', '#/anniv?c=' + c.id]].map(([k, ic, lb, h]) => `<button type="button" class="qt t-${k}" data-go="${h}">${icon(ic, 'sm')}<span>${t(lb)}</span></button>`).join('')}</div>
         <div class="between" style="gap:8px"><span class="row" style="gap:6px"><span class="tiny muted">${t('star_l')}</span>${starsHtml(c, true)}</span><button type="button" class="chip sm ${c.pinned ? 'on' : ''}" data-pin="${c.id}">📌 ${c.pinned ? t('unpin') : t('pin')}</button></div>
         <div class="row wrap" style="gap:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${c.metAt ? `<span class="badge gray">${esc(t('c_days_met', { n: daysBetween(c.metAt, td) + 1 }))}</span>` : ''}</div>
         ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
@@ -636,18 +638,28 @@
     const cfg = Engine.aiConfig();
     try {
       let text = '';
-      if (cfg.key && cfg.provider !== 'openai') {
+      const PROMPT = 'Transcribe the chat messages in this screenshot exactly, one message per line, oldest first. Prefix messages from the other person (usually left side, with avatar/name) with "THEM: " and from the phone owner (usually right side, colored bubbles) with "ME: ". Skip timestamps, dates and system notices. Output only the transcript.';
+      if (cfg.key) {
         const b64 = await fileToB64(file);
-        const r = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: b64 } }, { type: 'text', text: 'Transcribe the chat messages in this screenshot exactly, one message per line, oldest first. Prefix messages from the other person (usually left side) with "THEM: " and from the phone owner (usually right side) with "ME: ". Output only the transcript.' }] }] }),
-        });
-        if (!r.ok) throw new Error('vision');
-        const j = await r.json(); text = (j.content || []).map((x) => x.text || '').join('');
-        // 상대 메시지만 분석 대상으로
-        const them = text.split('\n').filter((l) => /^THEM:/i.test(l)).map((l) => l.replace(/^THEM:\s*/i, ''));
-        if (them.length) text = them.join('\n');
+        let r;
+        if (cfg.provider === 'openai') {
+          r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, { type: 'image_url', image_url: { url: 'data:' + (file.type || 'image/png') + ';base64,' + b64 } }] }] }) });
+          if (!r.ok) throw new Error('vision');
+          const j = await r.json(); text = j.choices[0].message.content || '';
+          if (window.LM_ON_AI_USAGE && j.usage) window.LM_ON_AI_USAGE({ provider: 'openai', model: cfg.model || 'gpt-4o-mini', in: j.usage.prompt_tokens, out: j.usage.completion_tokens, ts: Date.now() });
+        } else {
+          r = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+            body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: b64 } }, { type: 'text', text: PROMPT }] }] }),
+          });
+          if (!r.ok) throw new Error('vision');
+          const j = await r.json(); text = (j.content || []).map((x) => x.text || '').join('');
+          if (window.LM_ON_AI_USAGE && j.usage) window.LM_ON_AI_USAGE({ provider: 'anthropic', model: cfg.model || 'claude-haiku-5-5', in: j.usage.input_tokens, out: j.usage.output_tokens, ts: Date.now() });
+        }
+        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => /^THEM:/i.test(l) ? { dir: 'in', text: l.replace(/^THEM:\s*/i, '') } : /^ME:/i.test(l) ? { dir: 'out', text: l.replace(/^ME:\s*/i, '') } : null).filter(Boolean);
+        if (lines.length >= 2) { note.textContent = t('ocr_done'); helperState.source = 'ocr'; return { lines }; }
+        if (lines.length === 1) text = lines[0].text;
       } else {
         if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
         const c = helperState.contactId ? Store.contact(helperState.contactId) : null;
@@ -665,6 +677,37 @@
   }
   function fileToB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }); }
   function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+
+
+  /* ---------- 대화 묶음 가져오기 (스크린샷 인식 결과·카톡/LINE 내보내기 텍스트) ---------- */
+  function parseChatExport(text, c) {
+    const out = [];
+    const nick = c ? c.nickname.trim() : '';
+    const push = (name, msg) => { msg = (msg || '').trim(); if (!msg) return; const isThem = nick && (name.trim() === nick || name.includes(nick) || nick.includes(name.trim())); out.push({ dir: isThem ? 'in' : 'out', text: msg, name: name.trim() }); };
+    String(text).split(/\r?\n/).forEach((ln) => {
+      let m;
+      if ((m = ln.match(/^\[([^\]]+)\]\s*\[[^\]]+\]\s*(.+)$/))) push(m[1], m[2]); // 카톡 PC: [이름] [오후 3:12] 내용
+      else if ((m = ln.match(/^\d{4}[.년]\s*\d{1,2}[.월]\s*\d{1,2}[.일]?\s*(?:오전|오후|AM|PM)?\s*\d{1,2}:\d{2},\s*([^:]+?)\s*:\s*(.+)$/))) push(m[1], m[2]); // 카톡 모바일 내보내기
+      else if ((m = ln.match(/^\d{1,2}:\d{2}\t([^\t]+)\t(.+)$/))) push(m[1], m[2]); // LINE 내보내기
+      else if ((m = ln.match(/^(THEM|ME):\s*(.+)$/i))) out.push({ dir: m[1].toUpperCase() === 'THEM' ? 'in' : 'out', text: m[2].trim() });
+    });
+    return out.length >= 2 ? out : null;
+  }
+  async function bulkImport(c, lines, target) {
+    const base = Date.now() - lines.length * 60000;
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      const lang = Engine.detect(ln.text);
+      if (ln.dir === 'in') {
+        let tr = ''; try { tr = (await Engine.translate(ln.text, uiLang, lang)).text; } catch (e) {}
+        Store.addMessage({ contactId: c ? c.id : null, dir: 'in', text: ln.text, lang, translation: tr, trLang: uiLang, source: 'import', ts: base + i * 60000 });
+      } else {
+        let mean = ln.text; try { if (lang !== uiLang) mean = (await Engine.translate(ln.text, uiLang, lang)).text; } catch (e) {}
+        Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: mean, lang: uiLang, translation: lang !== uiLang ? ln.text : '', trLang: lang !== uiLang ? lang : target, source: 'import', sent: true, ts: base + i * 60000 });
+      }
+    }
+    toast(t('imported_n', { n: lines.length }));
+  }
 
   /* ---------- 받은 말 분석 ---------- */
   function pickReplySet(intents) {
@@ -940,11 +983,11 @@
 
   /* ================= 대화방: 받은 말·보낼 말을 한 흐름으로 ================= */
   const XT = {
-    ko: { chat_title: '대화방', chat_pick: '누구와의 대화인가요?', chat_none: '연락처 없이 번역만', smart_ph: '상대 메시지를 붙여넣거나, 내 말을 쓰세요', smart_hint: '상대 언어로 붙여넣으면 받은 말, 내 언어로 쓰면 보낼 말로 자동 인식해요.', det_in: '받은 말로 인식', det_out: '보낼 말로 인식', det_switch: '바꾸기', send: '넣기', use_reply: '이걸로 답장', copy: '복사', copied_short: '복사됨', analysis: '분석과 답장 추천', open_chat: '대화방 열기', chat_empty: '아직 대화가 없어요. 상대가 보낸 메시지를 붙여넣어 보세요.', all_chat: '전체 대화', thread_count: '대화 {n}건', pick_first: '대화 상대를 먼저 고르세요', translating: '번역 중…', show_more: '이전 대화 더 보기' },
-    zh: { chat_title: '对话', chat_pick: '和谁的对话？', chat_none: '不选联系人，仅翻译', smart_ph: '粘贴对方的消息，或写下你想说的话', smart_hint: '用对方语言粘贴会识别为收到的话，用你的语言写会识别为要发的话。', det_in: '识别为收到的话', det_out: '识别为要发的话', det_switch: '切换', send: '添加', use_reply: '用这句回复', copy: '复制', copied_short: '已复制', analysis: '分析与回复建议', open_chat: '打开对话', chat_empty: '还没有对话。粘贴对方发来的消息试试。', all_chat: '全部对话', thread_count: '共 {n} 条', pick_first: '请先选择联系人', translating: '翻译中…', show_more: '查看更早的对话' },
-    ja: { chat_title: 'トーク', chat_pick: '誰との会話ですか？', chat_none: '連絡先なしで翻訳だけ', smart_ph: '相手のメッセージを貼り付けるか、自分の言葉を書いてください', smart_hint: '相手の言語で貼ると「届いた言葉」、自分の言語で書くと「送る言葉」として自動で判別します。', det_in: '届いた言葉として判別', det_out: '送る言葉として判別', det_switch: '切り替え', send: '追加', use_reply: 'これで返信', copy: 'コピー', copied_short: 'コピー済み', analysis: '分析と返信案', open_chat: 'トークを開く', chat_empty: 'まだ会話がありません。相手のメッセージを貼り付けてみましょう。', all_chat: 'すべての会話', thread_count: '{n}件', pick_first: '先に相手を選んでください', translating: '翻訳中…', show_more: '以前の会話を表示' },
-    vi: { chat_title: 'Trò chuyện', chat_pick: 'Trò chuyện với ai?', chat_none: 'Chỉ dịch, không chọn liên hệ', smart_ph: 'Dán tin nhắn của họ hoặc viết điều bạn muốn nói', smart_hint: 'Dán bằng tiếng của họ sẽ là tin nhận được, viết bằng tiếng của bạn sẽ là tin để gửi.', det_in: 'Nhận diện: tin nhận được', det_out: 'Nhận diện: tin để gửi', det_switch: 'Đổi', send: 'Thêm', use_reply: 'Trả lời bằng câu này', copy: 'Sao chép', copied_short: 'Đã sao chép', analysis: 'Phân tích và gợi ý trả lời', open_chat: 'Mở trò chuyện', chat_empty: 'Chưa có tin nhắn. Hãy dán tin nhắn họ gửi.', all_chat: 'Toàn bộ hội thoại', thread_count: '{n} tin', pick_first: 'Hãy chọn người trò chuyện trước', translating: 'Đang dịch…', show_more: 'Xem tin cũ hơn' },
-    en: { chat_title: 'Chat', chat_pick: 'Who is this chat with?', chat_none: 'No contact, just translate', smart_ph: 'Paste their message, or write what you want to say', smart_hint: 'Paste in their language and it\'s a received message. Write in yours and it\'s a reply to send.', det_in: 'Detected: received', det_out: 'Detected: to send', det_switch: 'Switch', send: 'Add', use_reply: 'Reply with this', copy: 'Copy', copied_short: 'Copied', analysis: 'Analysis and reply ideas', open_chat: 'Open chat', chat_empty: 'No messages yet. Paste a message they sent.', all_chat: 'Full conversation', thread_count: '{n} messages', pick_first: 'Pick who you are talking to first', translating: 'Translating…', show_more: 'Show earlier messages' },
+    ko: { chat_title: '대화방', chat_pick: '누구와의 대화인가요?', chat_none: '연락처 없이 번역만', smart_ph: '상대 메시지 붙여넣기 · 내 말 쓰기 · 스크린샷은 Ctrl+V나 끌어다 놓기 · 카톡 대화 여러 줄도 한 번에', smart_hint: '상대 언어로 붙여넣으면 받은 말, 내 언어로 쓰면 보낼 말로 자동 인식해요.', det_in: '받은 말로 인식', det_out: '보낼 말로 인식', det_switch: '바꾸기', send: '넣기', use_reply: '이걸로 답장', copy: '복사', copied_short: '복사됨', analysis: '분석과 답장 추천', open_chat: '대화방 열기', chat_empty: '아직 대화가 없어요. 상대가 보낸 메시지를 붙여넣어 보세요.', all_chat: '전체 대화', thread_count: '대화 {n}건', pick_first: '대화 상대를 먼저 고르세요', translating: '번역 중…', show_more: '이전 대화 더 보기' },
+    zh: { chat_title: '对话', chat_pick: '和谁的对话？', chat_none: '不选联系人，仅翻译', smart_ph: '粘贴对方的消息 · 写下你想说的话 · 截图可 Ctrl+V 或拖进来 · 多条聊天记录也能一次粘贴', smart_hint: '用对方语言粘贴会识别为收到的话，用你的语言写会识别为要发的话。', det_in: '识别为收到的话', det_out: '识别为要发的话', det_switch: '切换', send: '添加', use_reply: '用这句回复', copy: '复制', copied_short: '已复制', analysis: '分析与回复建议', open_chat: '打开对话', chat_empty: '还没有对话。粘贴对方发来的消息试试。', all_chat: '全部对话', thread_count: '共 {n} 条', pick_first: '请先选择联系人', translating: '翻译中…', show_more: '查看更早的对话' },
+    ja: { chat_title: 'トーク', chat_pick: '誰との会話ですか？', chat_none: '連絡先なしで翻訳だけ', smart_ph: '相手のメッセージを貼り付け · 自分の言葉を書く · スクショは Ctrl+V かドラッグ · 複数行の会話もまとめて', smart_hint: '相手の言語で貼ると「届いた言葉」、自分の言語で書くと「送る言葉」として自動で判別します。', det_in: '届いた言葉として判別', det_out: '送る言葉として判別', det_switch: '切り替え', send: '追加', use_reply: 'これで返信', copy: 'コピー', copied_short: 'コピー済み', analysis: '分析と返信案', open_chat: 'トークを開く', chat_empty: 'まだ会話がありません。相手のメッセージを貼り付けてみましょう。', all_chat: 'すべての会話', thread_count: '{n}件', pick_first: '先に相手を選んでください', translating: '翻訳中…', show_more: '以前の会話を表示' },
+    vi: { chat_title: 'Trò chuyện', chat_pick: 'Trò chuyện với ai?', chat_none: 'Chỉ dịch, không chọn liên hệ', smart_ph: 'Dán tin nhắn của họ · viết điều bạn muốn nói · ảnh chụp: Ctrl+V hoặc kéo thả · dán nhiều dòng cùng lúc', smart_hint: 'Dán bằng tiếng của họ sẽ là tin nhận được, viết bằng tiếng của bạn sẽ là tin để gửi.', det_in: 'Nhận diện: tin nhận được', det_out: 'Nhận diện: tin để gửi', det_switch: 'Đổi', send: 'Thêm', use_reply: 'Trả lời bằng câu này', copy: 'Sao chép', copied_short: 'Đã sao chép', analysis: 'Phân tích và gợi ý trả lời', open_chat: 'Mở trò chuyện', chat_empty: 'Chưa có tin nhắn. Hãy dán tin nhắn họ gửi.', all_chat: 'Toàn bộ hội thoại', thread_count: '{n} tin', pick_first: 'Hãy chọn người trò chuyện trước', translating: 'Đang dịch…', show_more: 'Xem tin cũ hơn' },
+    en: { chat_title: 'Chat', chat_pick: 'Who is this chat with?', chat_none: 'No contact, just translate', smart_ph: 'Paste their message · write your reply · screenshots: Ctrl+V or drag in · paste many lines at once', smart_hint: 'Paste in their language and it\'s a received message. Write in yours and it\'s a reply to send.', det_in: 'Detected: received', det_out: 'Detected: to send', det_switch: 'Switch', send: 'Add', use_reply: 'Reply with this', copy: 'Copy', copied_short: 'Copied', analysis: 'Analysis and reply ideas', open_chat: 'Open chat', chat_empty: 'No messages yet. Paste a message they sent.', all_chat: 'Full conversation', thread_count: '{n} messages', pick_first: 'Pick who you are talking to first', translating: 'Translating…', show_more: 'Show earlier messages' },
   };
   Object.keys(XT).forEach((l) => Object.assign(T[l], XT[l]));
 
@@ -1001,6 +1044,9 @@
   const PIN_T = {"ko": {"pin": "상단 고정", "unpin": "고정 해제", "star_l": "관심도", "f_star": "관심", "sort_star": "관심도순", "dbl_hint": "이름을 두 번 누르면 상대 정보가 열려요"}, "zh": {"pin": "置顶", "unpin": "取消置顶", "star_l": "关注度", "f_star": "关注", "sort_star": "按关注度", "dbl_hint": "双击名字打开对方信息"}, "ja": {"pin": "上に固定", "unpin": "固定を解除", "star_l": "関心度", "f_star": "注目", "sort_star": "関心度順", "dbl_hint": "名前をダブルクリックで相手の情報"}, "vi": {"pin": "Ghim lên đầu", "unpin": "Bỏ ghim", "star_l": "Mức quan tâm", "f_star": "Quan tâm", "sort_star": "Theo mức quan tâm", "dbl_hint": "Nhấn đúp tên để mở thông tin"}, "en": {"pin": "Pin to top", "unpin": "Unpin", "star_l": "Interest", "f_star": "Starred", "sort_star": "Interest", "dbl_hint": "Double-click a name to open their info"}};
   Object.keys(PIN_T).forEach((l) => Object.assign(T[l], PIN_T[l]));
   function starsHtml(c, interactive) { const n = c.star || 0; return `<span class="stars" aria-label="${esc(t('star_l'))} ${n}/3">${[1, 2, 3].map((i) => interactive ? `<button type="button" class="star ${i <= n ? 'on' : ''}" data-star="${c.id}|${i}" title="${esc(t('star_l'))} ${i}">★</button>` : `<i class="star ${i <= n ? 'on' : ''}">★</i>`).join('')}</span>`; }
+  const TOOL_T = {"ko": {"nav_anniv": "기념일", "nav_coach": "관계 조언", "nav_saju": "사주·궁합", "nav_gift": "선물", "nav_culture": "문화", "nav_tools": "도구", "tools_title": "도구", "tools_lead": "상대를 더 잘 알고, 더 잘 챙기기 위한 기능이에요.", "tl_coach": "단계별로 다음에 할 말과 피할 말", "tl_saju": "사주·띠·별자리·혈액형·MBTI 궁합", "tl_gift": "날에 맞는 선물과 축하 문구", "tl_culture": "나라별 호칭·예절·금기와 예문", "tl_anniv": "생일·만난 날·기념일 한눈에", "tl_agenda": "달력·약속·오늘 할 일", "quick_tools": "바로가기"}, "zh": {"nav_anniv": "纪念日", "nav_coach": "关系建议", "nav_saju": "四柱·合盘", "nav_gift": "礼物", "nav_culture": "文化", "nav_tools": "工具", "tools_title": "工具", "tools_lead": "更了解对方、更好地关心对方的功能。", "tl_coach": "分阶段告诉你该说什么、避免什么", "tl_saju": "四柱·生肖·星座·血型·MBTI 合盘", "tl_gift": "适合日子的礼物和祝福语", "tl_culture": "各国称呼·礼仪·禁忌和例句", "tl_anniv": "生日·认识的日子·纪念日一目了然", "tl_agenda": "日历·约定·今天的事", "quick_tools": "快捷入口"}, "ja": {"nav_anniv": "記念日", "nav_coach": "関係アドバイス", "nav_saju": "四柱推命・相性", "nav_gift": "プレゼント", "nav_culture": "文化", "nav_tools": "ツール", "tools_title": "ツール", "tools_lead": "相手をもっと知り、もっと大切にするための機能です。", "tl_coach": "段階ごとに言うこと・避けること", "tl_saju": "四柱推命・干支・星座・血液型・MBTIの相性", "tl_gift": "日に合うプレゼントとお祝いの言葉", "tl_culture": "国ごとの呼び方・マナー・タブーと例文", "tl_anniv": "誕生日・出会った日・記念日をひと目で", "tl_agenda": "カレンダー・約束・今日やること", "quick_tools": "ショートカット"}, "vi": {"nav_anniv": "Kỷ niệm", "nav_coach": "Tư vấn", "nav_saju": "Tứ trụ·hợp tuổi", "nav_gift": "Quà tặng", "nav_culture": "Văn hóa", "nav_tools": "Công cụ", "tools_title": "Công cụ", "tools_lead": "Các tính năng giúp hiểu và quan tâm người ấy tốt hơn.", "tl_coach": "Nên nói gì, tránh gì theo từng giai đoạn", "tl_saju": "Hợp tuổi theo tứ trụ·con giáp·cung·nhóm máu·MBTI", "tl_gift": "Quà và lời chúc hợp từng dịp", "tl_culture": "Xưng hô·lễ nghi·kiêng kỵ và câu mẫu theo nước", "tl_anniv": "Sinh nhật·ngày quen·kỷ niệm", "tl_agenda": "Lịch·hẹn·việc hôm nay", "quick_tools": "Lối tắt"}, "en": {"nav_anniv": "Dates", "nav_coach": "Coaching", "nav_saju": "Saju·match", "nav_gift": "Gifts", "nav_culture": "Culture", "nav_tools": "Tools", "tools_title": "Tools", "tools_lead": "Features to know them better and care for them well.", "tl_coach": "What to say and avoid at each stage", "tl_saju": "Saju, zodiac, star sign, blood type, MBTI match", "tl_gift": "Gifts and messages for each occasion", "tl_culture": "Forms of address, etiquette, taboos and examples", "tl_anniv": "Birthdays, the day you met, anniversaries", "tl_agenda": "Calendar, plans, today", "quick_tools": "Shortcuts"}};
+  Object.keys(TOOL_T).forEach((l) => Object.assign(T[l], TOOL_T[l]));
+  Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
 
   function renderChat(r) {
@@ -1162,12 +1208,20 @@
     const tg = document.getElementById('ch-target'); if (tg) tg.addEventListener('change', () => { chatState.target = tg.value; renderChat({ id }); });
     const more = document.getElementById('ch-more'); if (more) more.addEventListener('click', () => { chatState.limit += 60; renderChat({ id }); });
     document.getElementById('ch-paste').addEventListener('click', async () => { try { const s = await navigator.clipboard.readText(); if (s) { input.value = s; refreshDet(); } } catch (e) { input.focus(); } });
-    document.getElementById('ch-shot').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) { await runOcr(f, input); chatState.dirOverride = 'in'; refreshDet(); } });
+    const handleImage = async (f) => { if (!f) return; const res = await runOcr(f, input); if (res && res.lines) { await bulkImport(c, res.lines, target); renderChat({ id }); return; } chatState.dirOverride = 'in'; refreshDet(); };
+    document.getElementById('ch-shot').addEventListener('change', async (e) => { await handleImage(e.target.files[0]); });
+    input.addEventListener('paste', (e) => { const it = [...(e.clipboardData || {}).items || []].find((x) => x.type && x.type.startsWith('image/')); if (it) { e.preventDefault(); handleImage(it.getAsFile()); } });
+    const comp = document.getElementById('composer');
+    comp.addEventListener('dragover', (e) => { e.preventDefault(); comp.classList.add('drop'); });
+    comp.addEventListener('dragleave', () => comp.classList.remove('drop'));
+    comp.addEventListener('drop', (e) => { e.preventDefault(); comp.classList.remove('drop'); const f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/')); if (f) handleImage(f); });
     document.getElementById('ch-send').addEventListener('click', async (ev) => {
       const text = input.value.trim(); if (!text) { input.focus(); return; }
       const d = detectDir(text, chatState.dirOverride);
       const btn = ev.currentTarget; spinBtn(btn, true, '');
       try {
+        const exp = parseChatExport(text, c);
+        if (exp) { await bulkImport(c, exp, target); input.value = ''; chatState.draft[id] = ''; spinBtn(btn, false); renderChat({ id }); return; }
         if (d === 'in') {
           const res = await analyzeIncoming(c, text);
           const msg = Store.me().messages.find((x) => x.id === res.msgId);
@@ -1301,6 +1355,19 @@
     const D = digestsOf(cid); const out = [];
     Object.keys(D).sort().reverse().forEach((k) => (D[k].facts || []).forEach((f) => { if (out.length < n) out.push(Object.assign({ day: k }, f)); }));
     return out;
+  }
+
+
+  /* ================= 도구 모음 ================= */
+  function renderTools() {
+    const u = Store.me();
+    const cid = helperState.contactId || (u.contacts[0] || {}).id || '';
+    const items = [['coach', 'heart', 'nav_coach', 'tl_coach', '#/coach/' + cid], ['saju', 'yin', 'nav_saju', 'tl_saju', '#/saju/' + cid], ['gift', 'gift', 'nav_gift', 'tl_gift', '#/gift/' + cid], ['culture', 'globe', 'nav_culture', 'tl_culture', '#/culture' + (cid ? '?c=' + cid : '')], ['anniv', 'cake', 'nav_anniv', 'tl_anniv', '#/anniv'], ['agenda', 'calendar', 'nav_agenda', 'tl_agenda', '#/agenda']];
+    shell(`${topBar(t('tools_title'), null)}
+      <div class="content stack">
+        <p class="muted">${t('tools_lead')}</p>
+        <div class="tool-grid">${items.map(([k, ic, lb, ds, href]) => `<button type="button" class="tool-card t-${k}" data-go="${href}"><span class="tool-ic">${icon(ic)}</span><strong>${t(lb)}</strong><span class="small muted">${t(ds)}</span></button>`).join('')}</div>
+      </div>`, 'tools');
   }
 
   /* ================= 사용법 ================= */
@@ -1479,6 +1546,7 @@
 
   /* ================= 관계 코칭 ================= */
   function renderCoach(r) {
+    if (!Store.contact(r.id)) { const u0 = Store.me(); const fb = Store.contact(helperState.contactId) || u0.contacts[0]; if (fb) return go('#/coach/' + fb.id); }
     const c = Store.contact(r.id);
     if (!c) return go('#/contacts');
     const ms = Store.messagesOf(c.id);
@@ -1705,6 +1773,7 @@
   }
 
   function renderSaju(r) {
+    if (!Store.contact(r.id)) { const u0 = Store.me(); const fb = Store.contact(helperState.contactId) || u0.contacts[0]; if (fb) return go('#/saju/' + fb.id); }
     const u = Store.me();
     const c = Store.contact(r.id);
     if (!c) return go('#/contacts');
