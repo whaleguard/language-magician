@@ -68,9 +68,9 @@
       ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'leader'
       ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
-      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '기업'], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
-      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '기업 관리' : '운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
+      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : '본사 운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>`;
   }
@@ -247,6 +247,25 @@
           <ul class="ops-queue">${queue.map(([n, l, sub, h, tone]) => `<li><a class="ops-task" href="${h}"><span>${l}${sub ? `<br><span class="ops-muted">${sub}</span>` : ''}</span><span class="ops-tag" data-tone="${n ? tone : 'good'}">${n ? num(n) + '건 →' : '없음'}</span></a></li>`).join('')}</ul></section>
         <section class="ops-panel" aria-label="최근 7일 활동"><header class="ops-panel-head"><h2>최근 7일 활동</h2><div class="ops-controls">${seg('m', metric, [['active', '활동 회원'], ['msgs', '메시지']])}</div></header>${chart}</section>
       </div>
+      ${!isLeader() && !isOrg() ? (() => {
+        const gs = Store.orgs(); if (!gs.length) return '';
+        const rowsO = gs.map((g) => {
+          const ids = new Set(Store.teamsOfOrg(g.id).flatMap((t) => t.members || []));
+          const gu = allUsers().filter((u) => ids.has(u.id));
+          const gm = gu.flatMap((u) => u.messages);
+          const m7 = gm.filter((m) => m.ts >= now - 7 * DAY).length, mT = gm.filter((m) => m.ts >= td).length;
+          const act = gu.filter((u) => u.messages.some((m) => m.ts >= now - 7 * DAY)).length;
+          const cost = usageSummary(gu.flatMap((u) => (u.aiUsage || []).filter((x) => x.ts >= mS).map((x) => ({ x, u }))), P).usd;
+          const ns = (Store.db.notices || []).filter((n) => ids.has(n.userId));
+          const unreadM = ns.filter((n) => n.from !== 'member' && !n.readAt).length, unreadR = ns.filter((n) => n.from === 'member' && !n.readAt).length;
+          const rep2 = reports().filter((x) => ids.has(x.userId) && x.status !== 'closed').length;
+          const last = gm.length ? Math.max(...gm.map((m) => m.ts)) : 0;
+          return { g, teams: Store.teamsOfOrg(g.id).length, agents: gu.length, act, mT, m7, cost, unreadM, unreadR, rep2, last };
+        });
+        return `<section class="ops-panel" aria-label="거래처별 현황"><header class="ops-panel-head"><h2>거래처별 현황 <span class="ops-muted">${gs.length}곳</span></h2><a class="link" href="#/admin/orgs">거래처 관리</a></header>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">거래처</th><th scope="col" class="ops-num">팀</th><th scope="col" class="ops-num">상담원</th><th scope="col" class="ops-num">7일 활동</th><th scope="col" class="ops-num">오늘 메시지</th><th scope="col" class="ops-num">7일 메시지</th><th scope="col" class="ops-num">이번 달 AI</th><th scope="col" class="ops-num">안 읽은 지시</th><th scope="col" class="ops-num">미확인 답장</th><th scope="col" class="ops-num">미처리 신고</th><th scope="col">최근 활동</th></tr></thead><tbody>
+          ${rowsO.map((o) => `<tr class="clickable" onclick="location.hash='#/admin/orgs?o=${o.g.id}'"><td><strong>${esc(o.g.name)}</strong> <span class="ops-muted">${esc(o.g.loginId)}</span></td><td class="ops-num">${o.teams}</td><td class="ops-num">${o.agents}</td><td class="ops-num">${o.act} (${pct(o.act, o.agents)}%)</td><td class="ops-num">${num(o.mT)}</td><td class="ops-num">${num(o.m7)}</td><td class="ops-num">${won(o.cost * fx)}</td><td class="ops-num">${o.unreadM ? `<span class="ops-tag" data-tone="info">${o.unreadM}</span>` : 0}</td><td class="ops-num">${o.unreadR ? `<span class="ops-tag" data-tone="attention">${o.unreadR}</span>` : 0}</td><td class="ops-num">${o.rep2 ? `<span class="ops-tag" data-tone="attention">${o.rep2}</span>` : 0}</td><td>${o.last ? ago(o.last) : '—'}</td></tr>`).join('')}</tbody></table></div></section>`;
+      })() : ''}
       <section class="ops-panel" aria-label="신고·위험 검토 큐"><header class="ops-panel-head"><h2>신고·위험 검토 큐 <span class="ops-muted">${rq.length}건</span></h2><a class="link" href="#/admin/reports">신고 전체 보기</a></header>
         ${rq.length ? `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">유형</th><th scope="col">회원</th><th scope="col">상대</th><th scope="col">메신저</th><th scope="col">감지 시각</th><th scope="col">상태</th><th scope="col"></th></tr></thead><tbody>
           ${rq.slice(0, 10).map((x) => `<tr class="clickable" data-open="${x.u.id}|${x.c ? x.c.id : ''}"><td><span class="ops-tag" data-tone="${x.tone}">${esc(x.kind)}</span></td><td>${esc(x.u.nickname)} <span class="ops-muted">${esc(x.u.id)}</span></td><td>${x.c ? esc(x.c.nickname) : '—'}</td><td>${x.c ? esc(APPN(x.c.app)) : '—'}</td><td class="ops-num">${fmt(x.ts)} <span class="ops-muted">${ago(x.ts)}</span></td><td>${x.st}</td><td><a class="link" href="#/admin/monitor?u=${x.u.id}&c=${x.c ? x.c.id : ''}">상세</a></td></tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">검토할 신고·위험 대화가 없습니다.</p>'}</section>
@@ -701,7 +720,7 @@
   /* ---------- 기업(상담회사) — 운영자 전용 ---------- */
   function orgsPage(r) {
     const gs = Store.orgs(); const sel = r.q.o ? Store.orgById(r.q.o) : gs[0];
-    page('orgs', `<div class="stack-sm"><h1>기업</h1><p class="muted">상담회사마다 기업 관리자 계정을 만들고 팀을 묶습니다. 기업 관리자는 자기 회사 팀·팀장·상담원만 관리하고, 팀장은 자기 팀만 봅니다.</p></div>
+    page('orgs', `<div class="stack-sm"><h1>거래처 (기업)</h1><p class="muted">상담회사마다 기업 관리자 계정을 만들고 팀을 묶습니다. 기업 관리자는 자기 회사 팀·팀장·상담원만 관리하고, 팀장은 자기 팀만 봅니다.</p></div>
       <div class="lm-msg-layout">
         <aside class="card lm-msg-list"><ul>${gs.map((g) => { const ts = Store.teamsOfOrg(g.id); return `<li><a class="lm-msg-row ${sel && sel.id === g.id ? 'on' : ''}" href="#/admin/orgs?o=${g.id}"><span class="grow"><strong>${esc(g.name)}</strong><br><span class="ops-muted">관리자 ${esc(g.adminName || '-')} · ${esc(g.loginId)} · 팀 ${ts.length} · 상담원 ${ts.reduce((a, t) => a + (t.members || []).length, 0)}명</span></span></a></li>`; }).join('') || '<li class="ops-muted" style="padding:8px">기업이 없습니다.</li>'}</ul>
           <form class="stack-sm" id="og-new" style="border-top:1px solid var(--line);padding-top:12px"><h3>기업 추가</h3><input class="field" name="name" placeholder="회사 이름" required><input class="field" name="adminName" placeholder="기업 관리자 이름" required><div class="row" style="gap:6px"><input class="field" name="loginId" placeholder="관리자 아이디" required><input class="field" name="pin" value="1234" placeholder="비밀번호" required></div><button class="btn full" type="submit">기업 추가</button></form></aside>

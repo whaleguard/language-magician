@@ -848,18 +848,25 @@
     const target = c ? c.lang : from;
     let replies = [];
     if (ai && Array.isArray(ai.replies) && ai.replies.length) {
-      replies = ai.replies.slice(0, 3).map((r) => ({ label: r.label, text: r.text, meaning: r.meaning, src: r.meaning }));
+      replies = ai.replies.slice(0, 6).map((r) => ({ label: r.label, text: r.text, meaning: r.meaning, src: r.meaning }));
     } else {
       const set = pickReplySet(res.intents, c, text);
-      const tpl = REPLIES[RL][set] || REPLIES[RL].general;
+      const biz6 = c && (c.relation === 'business' || c.tone === 'business');
+      const extraSets = (biz6 ? ['biz_question', 'biz_general', 'biz_thanks', 'biz_greeting', 'biz_request'] : res.intents.map((k) => k).concat(['question', 'general', 'positive', 'thanks', 'greeting'])).filter((k) => k !== set && REPLIES[RL][k]);
+      const tpl0 = REPLIES[RL][set] || REPLIES[RL].general;
+      const seenT = new Set(tpl0.map((x) => x[1])); const seenL = {};
+      const tpl = tpl0.slice();
+      for (const k of extraSets) { for (const it of REPLIES[RL][k]) { if (tpl.length >= 6) break; if (seenT.has(it[1]) || /\{answer\}|\{when\}|\{by\}/.test(it[1]) && k !== set) continue; seenT.add(it[1]); tpl.push(it); } if (tpl.length >= 6) break; }
       const wb = res.when ? fmtWhenUi(res.when) : '';
       const byTxt = !wb ? '' : ({ ko: wb + '까지 ', zh: wb + '之前', ja: wb + 'までに', vi: 'trước ' + wb + ' ', en: 'by ' + wb })[RL] || '';
       const whenTxt = res.when ? fmtWhenUi(res.when) + ' ' : '';
       const placeTxt = res.place ? res.place + (RL === 'ko' ? '에서' : RL === 'en' ? ' at ' : ' ') : '';
+      const usedLab = new Set();
       const built = tpl.map(([lab, s]) => {
         let x = s.replace('{when}', whenTxt).replace('{place}', RL === 'en' ? (res.place ? 'at ' + res.place : '') : placeTxt).replace('{answer}', REPLIES[RL].answer_ph).replace('{by}', byTxt);
         x = x.replace(/\s{2,}/g, ' ').replace(/\s+([!?.,])/g, '$1');
-        return { label: t(lab), src: x };
+        let L2 = lab; if (usedLab.has(L2)) L2 = ['dir_continue', 'dir_answer', 'dir_light', 'dir_ask', 'dir_thanks', 'dir_ok', 'dir_empathy', 'dir_resched'].find((k) => !usedLab.has(k)) || lab; usedLab.add(L2);
+        return { label: t(L2), src: x };
       });
       const outs = await Promise.all(built.map((b) => tr(b.src, target, RL, { relation: c ? c.relation : '' }).catch(() => ({ text: '' }))));
       replies = built.map((b, i) => ({ label: b.label, src: b.src, text: outs[i].text, meaning: b.src }));
@@ -1250,7 +1257,7 @@
         ${a.culture ? `<p class="tiny muted">🌏 ${esc(typeof a.culture === 'string' ? a.culture : a.culture.title + ' — ' + a.culture.body)}</p>` : ''}
       </details>
       <div class="sug-h"><h2>${t('suggest_title')}</h2><button class="link" type="button" data-analyze="${m.id}" style="min-height:24px;font-size:12px">▲</button></div>
-      <div class="sug-grid">${(a.replies || []).slice(0, 3).map((rp, i) => `<div class="sug-card ${m.chosen === rp.text ? 'on' : ''}">
+      <div class="sug-grid">${(a.replies || []).slice(0, 6).map((rp, i) => `<div class="sug-card ${m.chosen === rp.text ? 'on' : ''}">
         <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span>${rp.text && rp.text !== rp.meaning ? `<small lang="${esc(a.target)}">${esc(rp.text)}</small>` : ''}</button>
         <button type="button" class="sug-copy" data-use="${m.id}|${i}" title="${esc(t('use_reply'))}">${icon('copy', 'sm')} ${t('use_reply')}</button></div>`).join('')}</div>
       ${m.risk && m.risk.length ? `<button class="btn danger-btn sm" type="button" data-report="${m.id}">${t('c_report')}</button>` : ''}

@@ -584,7 +584,7 @@
       ' "nuance": "1-2 sentences in UI language on tone/nuance",',
       ' "situation": "1-2 sentences in UI language: what is happening now / what they want",',
       ' "facts": ["stated facts, UI language"], "inferences": ["your inferences, UI language"],',
-      ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x3],',
+      ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x6 — six clearly different approaches (e.g. accept, warm, ask back, playful/light, careful/polite, change topic), never two alike],',
       ' "culture": "one culture tip in UI language or empty",',
       ' "coach": "one next-step relationship tip in UI language",',
       ' "avoid": "one thing to avoid saying, UI language"}',
