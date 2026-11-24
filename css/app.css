@@ -685,3 +685,6 @@ button.star:hover { transform: scale(1.15); }
 .qt span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 body.is-wide .ws-rail { overflow-y: auto; }
 body.is-wide .ws-rail button { min-height: 50px; padding: 6px 0; }
+.side-info:not(.open) .ws-toggle { background: var(--mint); color: var(--primary); font-size: 13px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.ws-toggle-act { font-size: 12px; font-weight: 800; color: var(--primary); }
+.icon-btn.on { background: var(--mint); color: var(--primary); border-color: var(--primary); }
