@@ -30,7 +30,9 @@ img,video { display:block; max-width:100% }
 .wrap { width:min(1180px,calc(100% - 48px)); margin-inline:auto }
 .top,.row { display:flex; align-items:center; gap:14px; flex-wrap:wrap }
 .top { min-height:72px; justify-content:space-between; padding-block:10px }
-.brand { display:inline-flex; align-items:center; font-size:19px; font-weight:800; letter-spacing:-.045em }
+.brand { display:inline-flex; align-items:center; gap:10px; font-size:19px; font-weight:800; letter-spacing:-.045em }
+.logo-img { height:26px; width:auto; flex:none; display:block }
+footer .logo-img { height:22px; background:#fff; padding:4px 6px; border-radius:6px; filter:none !important }
 .mark { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:8px; margin-right:8px; background:var(--green); color:#fff; font-size:17px }
 .site-head nav { display:flex; flex-wrap:wrap; gap:24px; font-size:15px; font-weight:650 }
 .site-head nav a:hover,footer a:hover { text-decoration:underline }
@@ -118,7 +120,7 @@ details p { margin:8px 0 0; color:var(--muted) }
 footer { padding:36px 0; background:#10243e; color:#e6edf5 }
 footer a { text-decoration:underline; text-underline-offset:3px }
 footer p { max-width:850px; margin-top:10px; font-size:14px; color:#b4c3d4 }
-footer .brand { display:block; margin-bottom:8px }
+footer .brand { display:inline-flex; margin-bottom:8px }
 @media(max-width:960px) {
   .hero-grid { grid-template-columns:minmax(0,1fr) }
   .hero-media { aspect-ratio:16/10 }
@@ -322,7 +324,7 @@ footer .brand { display:block; margin-bottom:8px }
 </main>
 <footer id="privacy">
   <div class="wrap">
-    <span class="brand"><img class="logo-img" src="assets/lm-mark.png" alt="LM" style="filter:brightness(1.6)">언어의 마술사 <span lang="en" style="opacity:.7;font-weight:600;margin-left:6px">Language Magician</span></span>
+    <span class="brand"><img class="logo-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 <span lang="en" style="opacity:.7;font-weight:600;margin-left:6px">Language Magician</span></span>
     <div class="row"><a href="#consent">운영 열람 동의</a><a href="#privacy-note">개인정보 안내</a><a href="app.html#/admin">운영자</a></div>
     <p id="consent">서비스 관리, 번역·답장 개선, 악용 대응을 위해 권한 있는 운영자가 앱에 제출한 모든 대화를 열람할 수 있습니다. 첫 이용 시 필수 동의를 받습니다.</p>
     <p id="privacy-note">연락처는 직접 입력한 메신저와 닉네임으로 관리합니다. 필요한 대화만 붙여넣고 민감한 내용은 입력 전에 가려 주세요.</p>
