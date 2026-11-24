@@ -16,8 +16,10 @@
 
   let authed = sessionStorage.getItem('lm_admin_ok') === '1';
   // 권한: admin(전체) | leader:<teamId>(자기 팀만)
-  function role() { const r = sessionStorage.getItem('lm_admin_role') || 'admin'; if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { type: 'leader', team: t, name: t.leaderName || t.loginId } : { type: 'none' }; } return { type: 'admin', name: '관리자' }; }
+  function role() { const r = sessionStorage.getItem('lm_admin_role') || 'admin'; if (r.startsWith('org:')) { const g = Store.orgById(r.slice(4)); return g ? { type: 'org', org: g, name: g.adminName || g.loginId } : { type: 'none' }; } if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { type: 'leader', team: t, name: t.leaderName || t.loginId } : { type: 'none' }; } return { type: 'admin', name: '관리자' }; }
   const isLeader = () => role().type === 'leader';
+  const isOrg = () => role().type === 'org';
+  const scopedTeams = () => { const r = role(); return r.type === 'org' ? Store.teamsOfOrg(r.org.id) : r.type === 'leader' ? [r.team] : Store.teams(); };
   let serverUsers = null; // 서버에서 가져온 회원
   let serverShared = null;
   const viewGrants = {}; // 이번 세션에서 열람 사유를 기록한 대화
@@ -26,6 +28,7 @@
     const all = allUsers();
     const r = role();
     if (r.type === 'leader') { const ids = new Set(r.team.members || []); return all.filter((u) => ids.has(u.id)); }
+    if (r.type === 'org') { const ids = new Set(Store.teamsOfOrg(r.org.id).flatMap((t) => t.members || [])); return all.filter((u) => ids.has(u.id)); }
     return all;
   }
   function allUsers() {
@@ -37,7 +40,7 @@
     local.filter((u) => !u.demo && !map[u.id]).forEach((u) => { map[u.id] = u; });
     return Object.values(map);
   }
-  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (!isLeader()) return all; const ids = new Set(role().team.members || []); return all.filter((x) => ids.has(x.userId)); }
+  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (!isLeader() && !isOrg()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
   function findUser(id) { return users().find((u) => u.id === id); }
   function msgsOf(u, cid) { return u.messages.filter((m) => m.contactId === cid).sort((a, b) => a.ts - b.ts); }
 
@@ -61,11 +64,13 @@
     const rl = role();
     const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.from === 'member' && !n.readAt && users().some((u) => u.id === n.userId)).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
-    const items = rl.type === 'leader'
+    const items = rl.type === 'org'
+      ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
+      : rl.type === 'leader'
       ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
-      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '기업'], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
-      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : '운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : ''}</a>
+      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">언어의 마술사 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '기업 관리' : '운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>`;
   }
@@ -81,19 +86,27 @@
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
-        <p class="tiny muted">테스트 버전 · 관리자 admin / 1234 · 팀장 leader1 / 1234</p>
+        <p class="tiny muted">테스트 버전 · 운영 admin / 1234 · 기업 관리자 company1 / 1234 · 팀장 leader1 / 1234</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
     document.getElementById('al').addEventListener('submit', (e) => {
       e.preventDefault(); const f = new FormData(e.target);
-      const lt = Store.ensureDemoMembers() || Store.leaderLogin(f.get('id'), f.get('pin'));
+      Store.ensureDemoMembers();
+      const og = Store.orgLogin(f.get('id'), f.get('pin'));
+      if (og) {
+        Store.db.admin.operator = '기업관리자 ' + (og.adminName || og.loginId) + ' (' + og.loginId + ')'; Store.db.admin.orgId = og.id; Store.persist();
+        authed = true; sessionStorage.setItem('lm_admin_ok', '1'); sessionStorage.setItem('lm_admin_role', 'org:' + og.id);
+        Store.audit({ action: 'login', target: og.id, reason: '기업 관리자 로그인 · ' + og.name });
+        location.hash = '#/admin/dashboard'; return;
+      }
+      const lt = Store.leaderLogin(f.get('id'), f.get('pin'));
       if (lt && !(String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase())) {
-        Store.db.admin.operator = '팀장 ' + (lt.leaderName || lt.loginId) + ' (' + lt.loginId + ')'; Store.persist();
+        Store.db.admin.operator = '팀장 ' + (lt.leaderName || lt.loginId) + ' (' + lt.loginId + ')'; Store.db.admin.orgId = lt.orgId || ''; Store.persist();
         authed = true; sessionStorage.setItem('lm_admin_ok', '1'); sessionStorage.setItem('lm_admin_role', 'leader:' + lt.id);
         Store.audit({ action: 'login', target: lt.id, reason: '팀장 로그인 · ' + lt.name });
         location.hash = '#/admin/dashboard'; return;
       }
       if (String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase() && String(f.get('pin')) === String(Store.db.admin.pin)) {
-        Store.db.admin.operator = 'admin'; Store.persist(); sessionStorage.setItem('lm_admin_role', 'admin');
+        Store.db.admin.operator = 'admin'; Store.db.admin.orgId = ''; Store.persist(); sessionStorage.setItem('lm_admin_role', 'admin');
         authed = true; sessionStorage.setItem('lm_admin_ok', '1');
         Store.ensureDemoMembers();
         Store.audit({ action: 'login', target: '-', reason: '관리자 로그인' });
@@ -220,7 +233,7 @@
     const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${cur === v}">${l}</a>`).join('')}</div>`;
     const ts = new Date();
     page('dashboard', `<section class="lm-ops" aria-label="운영 현황">
-      <header class="ops-header"><div><h1>${isLeader() ? '팀 현황 · ' + esc(role().team.name) : '운영 현황'}</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
+      <header class="ops-header"><div><h1>${isLeader() ? '팀 현황 · ' + esc(role().team.name) : isOrg() ? '회사 현황 · ' + esc(role().org.name) : '운영 현황'}</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
         <div class="ops-controls"><a class="btn secondary sm" href="#/admin/ai">AI 사용량</a><a class="btn sm" href="#/admin/monitor">전체 대화 열기</a></div></header>
       <div class="ops-kpis">
         <a class="ops-kpi" href="#/admin/users"><h2>메시지 활동 회원</h2><strong class="ops-value">${num(actT.size)}명</strong>${delta(actT.size, actY.size, true, '명')}<p class="ops-muted">닉네임 ${actTm} · 게스트 ${actT.size - actTm}</p></a>
@@ -482,7 +495,7 @@
   /* ---------- 감사로그 ---------- */
   function auditPage(r) {
     const q = (r.q.q || '').toLowerCase();
-    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => (!isLeader() || a.operator === Store.db.admin.operator) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
+    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => (!isLeader() || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
     const act = { notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
     page('audit', `<div class="between wrap"><div class="stack-sm"><h1>열람 감사로그</h1><p class="muted">관리자·대상·시각·사유를 기록합니다. 기록은 수정·삭제할 수 없습니다.</p></div>
       <form id="au-f" class="row"><input class="field" name="q" type="search" placeholder="관리자 ID, 회원 ID, 대화 ID" value="${esc(r.q.q || '')}"><button class="btn" type="submit">검색</button></form></div>
@@ -624,7 +637,7 @@
         }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
         <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
           <textarea class="field" id="nt-text" rows="3" placeholder="예: 오늘 오후 문의는 환불 규정을 먼저 안내해 주세요." required></textarea>
-          <div class="between wrap"><label class="small row" style="gap:6px"><input type="checkbox" id="nt-all"> ${rl.type === 'leader' ? '팀원 전체' : '목록의 전체 회원'}에게 보내기 (각자 언어로)</label><button class="btn" type="submit">보내기</button></div></form>`;
+          <div class="between wrap"><label class="small row" style="gap:6px"><input type="checkbox" id="nt-all"> ${rl.type === 'leader' ? '팀원 전체' : rl.type === 'org' ? '회사 상담원 전체' : '목록의 전체 회원'}에게 보내기 (각자 언어로)</label><button class="btn" type="submit">보내기</button></div></form>`;
     }
     page('notices', `<div class="stack-sm"><h1>메시지 <span class="ops-muted" style="font-size:14px">지시·공지·경고</span></h1><p class="muted">${rl.type === 'leader' ? '팀원' : '회원·상담원'}에게 한국어로 보내면 받는 사람이 고른 언어로 번역돼 앱에 도착합니다. 읽음 여부와 답장(한국어 번역)이 여기 표시됩니다.</p></div>
       <div class="lm-msg-layout">
@@ -647,7 +660,7 @@
         const L = u.lang || 'ko'; let tr = {};
         if (L !== 'ko') { if (!trCache[L]) { try { trCache[L] = (await Engine.translate(text, L, 'ko')).text; } catch (x) { trCache[L] = ''; } } if (trCache[L]) tr[L] = trCache[L]; }
         const t = Store.teamOf(u.id);
-        Store.sendNotice({ userId: u.id, kind, from: rl.type === 'leader' ? 'leader' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
+        Store.sendNotice({ userId: u.id, kind, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
       }
       Store.audit({ action: 'notice', target: targets.map((u) => u.id).join(','), member: targets.length > 1 ? targets.length + '명' : targets[0].nickname, reason: (KIND[kind] || KIND.instruction)[0] + ' 메시지 발송' });
       LM.toast(targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');
@@ -658,28 +671,49 @@
   /* ---------- 팀·팀장 (관리자 전용) ---------- */
   function teamsPage(r) {
     if (isLeader()) return dashboard(r);
-    const ts = Store.teams();
-    const all = allUsers();
-    const sel = r.q.t ? Store.teamById(r.q.t) : ts[0];
+    const ts = scopedTeams();
+    const orgIds = isOrg() ? new Set(ts.flatMap((t) => t.members || [])) : null;
+    const all = isOrg() ? allUsers().filter((u) => orgIds.has(u.id)) : allUsers();
+    const sel = (r.q.t && ts.find((t) => t.id === r.q.t)) || ts[0];
     page('teams', `<div class="between wrap"><div class="stack-sm"><h1>팀·팀장</h1><p class="muted">기업용: 팀장은 자기 팀 상담원의 대화·신고·AI 사용량만 보고, 팀원에게 지시 메시지를 보낼 수 있습니다. 팀장의 열람은 모두 감사로그에 남습니다.</p></div></div>
       <div class="lm-msg-layout">
-        <aside class="card lm-msg-list"><ul>${ts.map((t) => `<li><a class="lm-msg-row ${sel && sel.id === t.id ? 'on' : ''}" href="#/admin/teams?t=${t.id}"><span class="grow"><strong>${esc(t.name)}</strong><br><span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${esc(t.loginId)} · ${(t.members || []).length}명</span></span></a></li>`).join('')}</ul>
+        <aside class="card lm-msg-list"><ul>${ts.map((t) => `<li><a class="lm-msg-row ${sel && sel.id === t.id ? 'on' : ''}" href="#/admin/teams?t=${t.id}"><span class="grow"><strong>${esc(t.name)}</strong><br><span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${esc(t.loginId)} · ${(t.members || []).length}명${!isOrg() && t.orgId && Store.orgById(t.orgId) ? ' · ' + esc(Store.orgById(t.orgId).name) : ''}</span></span></a></li>`).join('')}</ul>
           <form class="stack-sm" id="tm-new" style="border-top:1px solid var(--line);padding-top:12px"><h3>새 팀 만들기</h3>
             <input class="field" name="name" placeholder="팀 이름 (예: 베트남어 상담팀)" required><input class="field" name="leaderName" placeholder="팀장 이름" required>
             <div class="row" style="gap:6px"><input class="field" name="loginId" placeholder="팀장 아이디" required><input class="field" name="pin" placeholder="비밀번호" value="1234" required></div>
-            <button class="btn full" type="submit">팀 만들기</button></form></aside>
-        <section class="card lm-msg-main">${sel ? `<form class="stack" id="tm-edit"><div class="row wrap" style="gap:8px"><label class="stack-xs grow"><span class="label">팀 이름</span><input class="field" name="name" value="${esc(sel.name)}"></label><label class="stack-xs"><span class="label">팀장 이름</span><input class="field" name="leaderName" value="${esc(sel.leaderName || '')}"></label><label class="stack-xs"><span class="label">팀장 아이디</span><input class="field" name="loginId" value="${esc(sel.loginId)}"></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="${esc(sel.pin)}"></label></div>
+            ${isOrg() ? '' : `<select class="field" name="orgId"><option value="">소속 기업 (없음)</option>${Store.orgs().map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select>`}<button class="btn full" type="submit">팀 만들기</button></form></aside>
+        <section class="card lm-msg-main">${sel ? `<form class="stack" id="tm-edit"><div class="row wrap" style="gap:8px"><label class="stack-xs grow"><span class="label">팀 이름</span><input class="field" name="name" value="${esc(sel.name)}"></label><label class="stack-xs"><span class="label">팀장 이름</span><input class="field" name="leaderName" value="${esc(sel.leaderName || '')}"></label><label class="stack-xs"><span class="label">팀장 아이디</span><input class="field" name="loginId" value="${esc(sel.loginId)}"></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="${esc(sel.pin)}"></label>${isOrg() ? '' : `<label class="stack-xs"><span class="label">소속 기업</span><select class="field" name="orgId"><option value="">(없음)</option>${Store.orgs().map((g) => `<option value="${g.id}" ${sel.orgId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></label>`}</div>
             <h3>팀원(상담원) <span class="ops-muted">${(sel.members || []).length}명 선택 · 팀원은 기업용 요금제로 바뀝니다</span></h3>
-            <input class="field" id="tm-q" type="search" placeholder="닉네임·ID로 찾기">
+            <div class="row wrap" style="gap:6px"><input class="field grow" id="tm-q" type="search" placeholder="닉네임·ID로 찾기">${isOrg() ? `<input class="field" id="tm-add-id" placeholder="상담원 서비스 ID (예: U-0012)" style="max-width:220px"><button class="btn secondary" type="button" id="tm-add">ID로 추가</button>` : ''}</div>${isOrg() ? '<p class="ops-muted">상담원은 앱 설정에 보이는 자기 서비스 ID를 알려주면 추가할 수 있습니다. 다른 회사 소속 회원은 보이지 않습니다.</p>' : ''}
             <div class="tm-members">${all.sort((a, b) => ((sel.members || []).includes(b.id) - (sel.members || []).includes(a.id)) || a.nickname.localeCompare(b.nickname)).map((u) => { const other = Store.teamOf(u.id); return `<label class="tm-member" data-k="${esc((u.nickname + ' ' + u.id).toLowerCase())}"><input type="checkbox" name="m" value="${u.id}" ${(sel.members || []).includes(u.id) ? 'checked' : ''}> <span><strong>${esc(u.nickname)}</strong> <span class="ops-muted">${esc(u.id)} · ${esc(LN(u.lang || 'ko'))}${other && other.id !== sel.id ? ' · ' + esc(other.name) : ''}</span></span></label>`; }).join('')}</div>
             <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
       </div>`);
-    document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (Store.teams().some((t) => t.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || String(f.get('loginId')).toLowerCase() === 'admin') { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); location.hash = '#/admin/teams?t=' + t.id; });
+    document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (Store.teams().some((t) => t.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || Store.orgs().some((g) => g.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || String(f.get('loginId')).toLowerCase() === 'admin') { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ orgId: isOrg() ? role().org.id : (f.get('orgId') || ''), name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); location.hash = '#/admin/teams?t=' + t.id; });
     const ed = document.getElementById('tm-edit');
     if (ed) {
+      const addB = document.getElementById('tm-add'); if (addB) addB.addEventListener('click', () => { const id = document.getElementById('tm-add-id').value.trim().toUpperCase(); const u = Store.db.users[id]; const ot = u && Store.teamOf(id); if (!u) { LM.toast('그 ID의 회원이 없습니다'); return; } if (ot && ot.orgId !== role().org.id) { LM.toast('다른 회사에 소속된 회원입니다'); return; } Store.teamsOfOrg(role().org.id).forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((x) => x !== id); }); Store.updateTeam(sel.id, { members: Array.from(new Set((sel.members || []).concat(id))) }); Store.audit({ action: 'settings', target: sel.id, reason: '상담원 추가 · ' + id }); LM.toast(u.nickname + ' 님을 추가했습니다'); teamsPage(r); });
       document.getElementById('tm-q').addEventListener('input', (e) => { const v = e.target.value.toLowerCase(); ed.querySelectorAll('.tm-member').forEach((l) => { l.hidden = v && !l.dataset.k.includes(v); }); });
-      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); Store.teams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin'), members }); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
+      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); scopedTeams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, Object.assign(isOrg() ? {} : { orgId: f.get('orgId') || '' }, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin'), members })); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
       document.getElementById('tm-del').addEventListener('click', () => { Store.removeTeam(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '팀 삭제 · ' + sel.name }); location.hash = '#/admin/teams'; });
+    }
+  }
+
+  /* ---------- 기업(상담회사) — 운영자 전용 ---------- */
+  function orgsPage(r) {
+    const gs = Store.orgs(); const sel = r.q.o ? Store.orgById(r.q.o) : gs[0];
+    page('orgs', `<div class="stack-sm"><h1>기업</h1><p class="muted">상담회사마다 기업 관리자 계정을 만들고 팀을 묶습니다. 기업 관리자는 자기 회사 팀·팀장·상담원만 관리하고, 팀장은 자기 팀만 봅니다.</p></div>
+      <div class="lm-msg-layout">
+        <aside class="card lm-msg-list"><ul>${gs.map((g) => { const ts = Store.teamsOfOrg(g.id); return `<li><a class="lm-msg-row ${sel && sel.id === g.id ? 'on' : ''}" href="#/admin/orgs?o=${g.id}"><span class="grow"><strong>${esc(g.name)}</strong><br><span class="ops-muted">관리자 ${esc(g.adminName || '-')} · ${esc(g.loginId)} · 팀 ${ts.length} · 상담원 ${ts.reduce((a, t) => a + (t.members || []).length, 0)}명</span></span></a></li>`; }).join('') || '<li class="ops-muted" style="padding:8px">기업이 없습니다.</li>'}</ul>
+          <form class="stack-sm" id="og-new" style="border-top:1px solid var(--line);padding-top:12px"><h3>기업 추가</h3><input class="field" name="name" placeholder="회사 이름" required><input class="field" name="adminName" placeholder="기업 관리자 이름" required><div class="row" style="gap:6px"><input class="field" name="loginId" placeholder="관리자 아이디" required><input class="field" name="pin" value="1234" placeholder="비밀번호" required></div><button class="btn full" type="submit">기업 추가</button></form></aside>
+        <section class="card lm-msg-main">${sel ? `<form class="stack" id="og-edit"><div class="row wrap" style="gap:8px"><label class="stack-xs grow"><span class="label">회사 이름</span><input class="field" name="name" value="${esc(sel.name)}"></label><label class="stack-xs"><span class="label">관리자 이름</span><input class="field" name="adminName" value="${esc(sel.adminName || '')}"></label><label class="stack-xs"><span class="label">관리자 아이디</span><input class="field" name="loginId" value="${esc(sel.loginId)}"></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="${esc(sel.pin)}"></label></div>
+          <h3>소속 팀</h3><div class="tm-members">${Store.teams().map((t) => `<label class="tm-member"><input type="checkbox" name="t" value="${t.id}" ${t.orgId === sel.id ? 'checked' : ''}> <span><strong>${esc(t.name)}</strong> <span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${(t.members || []).length}명${t.orgId && t.orgId !== sel.id && Store.orgById(t.orgId) ? ' · 현재 ' + esc(Store.orgById(t.orgId).name) : ''}</span></span></label>`).join('') || '<p class="ops-muted">팀이 없습니다. 팀·팀장 메뉴에서 만드세요.</p>'}</div>
+          <div class="between wrap"><button class="btn danger-btn sm" type="button" id="og-del">기업 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/teams">팀·팀장</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">왼쪽에서 기업을 추가하세요.</p>'}</section></div>`);
+    const taken = (id) => Store.teams().some((t) => t.loginId.toLowerCase() === id) || Store.orgs().some((g) => g.loginId.toLowerCase() === id) || id === 'admin';
+    document.getElementById('og-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (taken(String(f.get('loginId')).toLowerCase())) { LM.toast('이미 쓰는 아이디입니다'); return; } const g = Store.createOrg({ name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: g.id, reason: '기업 추가 · ' + g.name }); location.hash = '#/admin/orgs?o=' + g.id; });
+    const ed = document.getElementById('og-edit');
+    if (ed) {
+      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const tids = f.getAll('t'); Store.teams().forEach((t) => { if (tids.includes(t.id)) t.orgId = sel.id; else if (t.orgId === sel.id) t.orgId = ''; }); Store.updateOrg(sel.id, { name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: sel.id, reason: '기업 수정 · ' + f.get('name') }); LM.toast('저장했습니다'); orgsPage(r); });
+      document.getElementById('og-del').addEventListener('click', () => { Store.removeOrg(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '기업 삭제 · ' + sel.name }); location.hash = '#/admin/orgs'; });
     }
   }
 
@@ -691,8 +725,8 @@
       if (!authed) return login();
       const p = r.id || 'dashboard';
       const r0 = role(); if (r0.type === 'none') { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); return login(); }
-      const leaderBlocked = ['quality', 'settings', 'teams'];
-      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage }[isLeader() && leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
+      const leaderBlocked = isOrg() ? ['quality', 'settings', 'orgs'] : ['quality', 'settings', 'teams', 'orgs'];
+      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage, orgs: orgsPage }[(isLeader() || isOrg()) && leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
       window.scrollTo(0, 0);
     },
   };

@@ -15,7 +15,7 @@
   function uid(p) { return (p || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   function blank() {
-    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], teams: [], notices: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
+    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], orgs: [], teams: [], notices: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
   }
   function load() {
     try {
@@ -223,13 +223,21 @@
   };
   function planOf(u) { return (u && u.plan) || 'free'; }
   function can(feature, u) { u = u || me(); const f = FEATURES[feature]; return !f || f.includes(planOf(u)); }
-  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; }
+  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; db.orgs = db.orgs || []; }
+  // 기업(상담회사) — 기업 관리자 → 팀장 → 상담원
+  function orgs() { ensureTeamArrays(); return db.orgs; }
+  function orgById(id) { return orgs().find((o) => o.id === id); }
+  function createOrg(o) { ensureTeamArrays(); const g = { id: uid('o_'), name: o.name || '새 기업', adminName: o.adminName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), createdAt: Date.now(), demo: !!o.demo }; db.orgs.push(g); persist(); Sync.pushShared(); return g; }
+  function updateOrg(id, patch) { const g = orgById(id); if (!g) return null; Object.assign(g, patch); persist(); Sync.pushShared(); return g; }
+  function removeOrg(id) { ensureTeamArrays(); db.orgs = db.orgs.filter((o) => o.id !== id); db.teams.forEach((t) => { if (t.orgId === id) t.orgId = ''; }); persist(); Sync.pushShared(); }
+  function orgLogin(loginId, pin) { return orgs().find((g) => g.loginId && g.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(g.pin) === String(pin)); }
+  function teamsOfOrg(orgId) { return teams().filter((t) => t.orgId === orgId); }
   function teams() { ensureTeamArrays(); return db.teams; }
   function teamById(id) { return teams().find((t) => t.id === id); }
   function teamOf(userId) { return teams().find((t) => (t.members || []).includes(userId)); }
   function createTeam(o) {
     ensureTeamArrays();
-    const t = { id: uid('t_'), name: o.name || '새 팀', leaderName: o.leaderName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), members: o.members || [], createdAt: Date.now(), demo: !!o.demo };
+    const t = { id: uid('t_'), orgId: o.orgId || '', name: o.name || '새 팀', leaderName: o.leaderName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), members: o.members || [], createdAt: Date.now(), demo: !!o.demo };
     db.teams.push(t); (t.members || []).forEach((id) => { if (db.users[id]) db.users[id].plan = 'business'; }); persist(); Sync.pushShared(); return t;
   }
   function updateTeam(id, patch) { const t = teamById(id); if (!t) return null; Object.assign(t, patch); (t.members || []).forEach((uid2) => { if (db.users[uid2] && db.users[uid2].plan !== 'business') db.users[uid2].plan = 'business'; }); persist(); Sync.pushShared(); return t; }
@@ -251,7 +259,7 @@
   function persistAny() { persist(); }
 
   function audit(entry) {
-    db.audit.unshift(Object.assign({ id: uid('au_'), ts: Date.now(), operator: db.admin.operator }, entry));
+    db.audit.unshift(Object.assign({ id: uid('au_'), ts: Date.now(), operator: db.admin.operator, orgId: db.admin.orgId || '' }, entry));
     if (db.audit.length > 3000) db.audit.length = 3000;
     persist();
     Sync.pushShared();
@@ -371,10 +379,14 @@
   /* 데모: 기업용 팀 (팀장 leader1 / 1234) */
   function ensureDemoTeam() {
     ensureTeamArrays();
+    if (!db.orgs.some((g) => g.demo)) { const g = createOrg({ name: '데모 상담회사', adminName: '박실장', loginId: 'company1', pin: '1234', demo: true }); db.teams.filter((t) => t.demo && !t.orgId).forEach((t) => { t.orgId = g.id; }); persist(); }
     if (db.teams.some((t) => t.demo)) return;
     const crowd = Object.values(db.users).filter((u) => u.demoCrowd && u.type === 'member').slice(0, 7).map((u) => u.id);
     const mine = db.currentUserId && db.users[db.currentUserId] && !db.users[db.currentUserId].demo ? [db.currentUserId] : [];
-    const t = createTeam({ name: '외국인 고객상담 1팀', leaderName: '김팀장', loginId: 'leader1', pin: '1234', members: mine.concat(crowd), demo: true });
+    const og = db.orgs.find((g) => g.demo);
+    const t = createTeam({ orgId: og ? og.id : '', name: '외국인 고객상담 1팀', leaderName: '김팀장', loginId: 'leader1', pin: '1234', members: mine.concat(crowd), demo: true });
+    const crowd2 = Object.values(db.users).filter((u) => u.demoCrowd && u.type === 'member').slice(7, 12).map((u) => u.id);
+    if (crowd2.length) createTeam({ orgId: og ? og.id : '', name: '베트남어 상담 2팀', leaderName: '이팀장', loginId: 'leader2', pin: '1234', members: crowd2, demo: true });
     const first = crowd[0] && db.users[crowd[0]];
     if (first) {
       sendNotice({ userId: first.id, kind: 'instruction', from: 'leader', fromName: t.leaderName, teamId: t.id, text: '오늘 오후 문의는 환불 규정을 먼저 안내해 주세요.', lang: 'ko', tr: {}, demo: true });
@@ -430,7 +442,7 @@
   function clearDemo() {
     Object.keys(db.users).forEach((k) => { if (db.users[k].demo) delete db.users[k]; });
     db.reports = db.reports.filter((r) => !r.demo);
-    db.teams = (db.teams || []).filter((t) => !t.demo); db.notices = (db.notices || []).filter((n) => !n.demo && db.users[n.userId]);
+    db.teams = (db.teams || []).filter((t) => !t.demo); db.orgs = (db.orgs || []).filter((g) => !g.demo); db.notices = (db.notices || []).filter((n) => !n.demo && db.users[n.userId]);
     persist();
   }
 
@@ -492,7 +504,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    PLANS, FEATURES, planOf, can, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
