@@ -102,3 +102,11 @@
 .lm-inbox .inbox-pending { border-color: #cdbff0; background: #faf8ff; }
 .lm-inbox .inbox-pending h2 { font-size: 15px; }
 .lm-inbox .inbox-msg.pending .inbox-bubble { box-shadow: 0 0 0 2px #cdbff0; }
+.org-tree { display: grid; gap: 12px; }
+.ot-node { display: inline-block; padding: 8px 12px; border-radius: 10px; background: var(--mint); border: 1px solid var(--sky-line, #cfe3f3); font-weight: 700; }
+.ot-node.ot-root { background: #10243e; color: #fff; border-color: #10243e; }
+.ot-children { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-left: 18px; border-left: 2px solid var(--line); }
+.ot-col { display: grid; gap: 6px; align-content: start; }
+.ot-leaf { padding: 4px 0 4px 14px; font-size: 13.5px; }
+.ot-sub { padding: 2px 0 2px 18px; font-size: 13px; color: var(--muted); }
+@media (max-width: 760px) { .ot-children { grid-template-columns: 1fr; } }

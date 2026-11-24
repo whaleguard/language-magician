@@ -15,7 +15,7 @@
   function uid(p) { return (p || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   function blank() {
-    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], orgs: [], teams: [], notices: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
+    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], staff: [], orgs: [], teams: [], notices: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
   }
   function load() {
     try {
@@ -223,7 +223,13 @@
   };
   function planOf(u) { return (u && u.plan) || 'free'; }
   function can(feature, u) { u = u || me(); const f = FEATURES[feature]; return !f || f.includes(planOf(u)); }
-  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; db.orgs = db.orgs || []; }
+  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; db.orgs = db.orgs || []; db.staff = db.staff || []; if (!db.staff.some((x) => x.demo)) { db.staff.push({ id: uid('s_'), type: 'personal', name: '일반고객 담당', loginId: 'personal1', pin: '1234', demo: true }, { id: uid('s_'), type: 'business', name: '기업고객 담당', loginId: 'business1', pin: '1234', demo: true }); } }
+  // 본사 관리자 계정: personal(일반고객 관리자) | business(기업고객 관리자). 최종 관리자는 admin 계정
+  function staff() { ensureTeamArrays(); return db.staff; }
+  function staffById(id) { return staff().find((x) => x.id === id); }
+  function staffLogin(loginId, pin) { return staff().find((x) => x.loginId && x.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(x.pin) === String(pin)); }
+  function addStaff(o) { const x = { id: uid('s_'), type: o.type === 'business' ? 'business' : 'personal', name: o.name || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234') }; staff().push(x); persist(); Sync.pushShared(); return x; }
+  function removeStaff(id) { db.staff = staff().filter((x) => x.id !== id); persist(); Sync.pushShared(); }
   // 기업(상담회사) — 기업 관리자 → 팀장 → 상담원
   function orgs() { ensureTeamArrays(); return db.orgs; }
   function orgById(id) { return orgs().find((o) => o.id === id); }
@@ -506,7 +512,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

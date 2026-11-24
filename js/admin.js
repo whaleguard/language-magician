@@ -16,9 +16,12 @@
 
   let authed = sessionStorage.getItem('lm_admin_ok') === '1';
   // 권한: admin(전체) | leader:<teamId>(자기 팀만)
-  function role() { const r = sessionStorage.getItem('lm_admin_role') || 'admin'; if (r.startsWith('org:')) { const g = Store.orgById(r.slice(4)); return g ? { type: 'org', org: g, name: g.adminName || g.loginId } : { type: 'none' }; } if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { type: 'leader', team: t, name: t.leaderName || t.loginId } : { type: 'none' }; } return { type: 'admin', name: '관리자' }; }
+  function role() { const r = sessionStorage.getItem('lm_admin_role') || 'admin'; if (r.startsWith('hq:')) { const x = Store.staffById(r.slice(3)); return x ? { type: x.type === 'business' ? 'hqb' : 'hqp', staff: x, name: x.name || x.loginId } : { type: 'none' }; } if (r.startsWith('org:')) { const g = Store.orgById(r.slice(4)); return g ? { type: 'org', org: g, name: g.adminName || g.loginId } : { type: 'none' }; } if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { type: 'leader', team: t, name: t.leaderName || t.loginId } : { type: 'none' }; } return { type: 'admin', name: '관리자' }; }
   const isLeader = () => role().type === 'leader';
   const isOrg = () => role().type === 'org';
+  const isSuper = () => role().type === 'admin';
+  const isHqp = () => role().type === 'hqp';
+  const isHqb = () => role().type === 'hqb';
   const scopedTeams = () => { const r = role(); return r.type === 'org' ? Store.teamsOfOrg(r.org.id) : r.type === 'leader' ? [r.team] : Store.teams(); };
   let serverUsers = null; // 서버에서 가져온 회원
   let serverShared = null;
@@ -29,6 +32,8 @@
     const r = role();
     if (r.type === 'leader') { const ids = new Set(r.team.members || []); return all.filter((u) => ids.has(u.id)); }
     if (r.type === 'org') { const ids = new Set(Store.teamsOfOrg(r.org.id).flatMap((t) => t.members || [])); return all.filter((u) => ids.has(u.id)); }
+    if (r.type === 'hqp') return all.filter((u) => !Store.teamOf(u.id));
+    if (r.type === 'hqb') return all.filter((u) => !!Store.teamOf(u.id));
     return all;
   }
   function allUsers() {
@@ -40,7 +45,7 @@
     local.filter((u) => !u.demo && !map[u.id]).forEach((u) => { map[u.id] = u; });
     return Object.values(map);
   }
-  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (!isLeader() && !isOrg()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
+  function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports); if (isSuper()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
   function findUser(id) { return users().find((u) => u.id === id); }
   function msgsOf(u, cid) { return u.messages.filter((m) => m.contactId === cid).sort((a, b) => a.ts - b.ts); }
 
@@ -64,13 +69,17 @@
     const rl = role();
     const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.from === 'member' && !n.readAt && users().some((u) => u.id === n.userId)).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
-    const items = rl.type === 'org'
+    const items = rl.type === 'hqp'
+      ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      : rl.type === 'hqb'
+      ? [['dashboard', '기업고객 현황'], ['orgs', '거래처'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
+      : rl.type === 'org'
       ? [['dashboard', '회사 현황'], ['teams', '팀·팀장'], ['users', '상담원'], ['monitor', '상담원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '열람 기록'], ['ai', 'AI 사용량']]
       : rl.type === 'leader'
       ? [['dashboard', '팀 현황'], ['users', '팀원'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
-      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+      : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
-      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : '본사 운영'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : ''}</a>
+      <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : rl.type === 'hqp' ? '본사 · 일반고객 관리' : rl.type === 'hqb' ? '본사 · 기업고객 관리' : '본사 · 최종 관리자'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : (rl.type === 'hqp' || rl.type === 'hqb') ? ` <span class="badge">${esc(rl.name)}</span>` : ''}</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>`;
   }
@@ -86,11 +95,18 @@
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
-        <p class="tiny muted">테스트 버전 · 운영 admin / 1234 · 기업 관리자 company1 / 1234 · 팀장 leader1 / 1234</p>
+        <p class="tiny muted">테스트 버전 · 최종 admin · 일반고객 personal1 · 기업고객 business1 · 거래처 company1 · 팀장 leader1 (비밀번호 모두 1234)</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
     document.getElementById('al').addEventListener('submit', (e) => {
       e.preventDefault(); const f = new FormData(e.target);
       Store.ensureDemoMembers();
+      const sf = Store.staffLogin(f.get('id'), f.get('pin'));
+      if (sf) {
+        Store.db.admin.operator = (sf.type === 'business' ? '기업고객 관리자 ' : '일반고객 관리자 ') + (sf.name || sf.loginId) + ' (' + sf.loginId + ')'; Store.db.admin.orgId = ''; Store.persist();
+        authed = true; sessionStorage.setItem('lm_admin_ok', '1'); sessionStorage.setItem('lm_admin_role', 'hq:' + sf.id);
+        Store.audit({ action: 'login', target: sf.id, reason: (sf.type === 'business' ? '기업고객' : '일반고객') + ' 관리자 로그인' });
+        location.hash = '#/admin/dashboard'; return;
+      }
       const og = Store.orgLogin(f.get('id'), f.get('pin'));
       if (og) {
         Store.db.admin.operator = '기업관리자 ' + (og.adminName || og.loginId) + ' (' + og.loginId + ')'; Store.db.admin.orgId = og.id; Store.persist();
@@ -233,7 +249,7 @@
     const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${cur === v}">${l}</a>`).join('')}</div>`;
     const ts = new Date();
     page('dashboard', `<section class="lm-ops" aria-label="운영 현황">
-      <header class="ops-header"><div><h1>${isLeader() ? '팀 현황 · ' + esc(role().team.name) : isOrg() ? '회사 현황 · ' + esc(role().org.name) : '운영 현황'}</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
+      <header class="ops-header"><div><h1>${isLeader() ? '팀 현황 · ' + esc(role().team.name) : isOrg() ? '회사 현황 · ' + esc(role().org.name) : isHqp() ? '일반고객 현황' : isHqb() ? '기업고객 현황' : '운영 현황 · 전체'}</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
         <div class="ops-controls"><a class="btn secondary sm" href="#/admin/ai">AI 사용량</a><a class="btn sm" href="#/admin/monitor">전체 대화 열기</a></div></header>
       <div class="ops-kpis">
         <a class="ops-kpi" href="#/admin/users"><h2>메시지 활동 회원</h2><strong class="ops-value">${num(actT.size)}명</strong>${delta(actT.size, actY.size, true, '명')}<p class="ops-muted">닉네임 ${actTm} · 게스트 ${actT.size - actTm}</p></a>
@@ -247,7 +263,7 @@
           <ul class="ops-queue">${queue.map(([n, l, sub, h, tone]) => `<li><a class="ops-task" href="${h}"><span>${l}${sub ? `<br><span class="ops-muted">${sub}</span>` : ''}</span><span class="ops-tag" data-tone="${n ? tone : 'good'}">${n ? num(n) + '건 →' : '없음'}</span></a></li>`).join('')}</ul></section>
         <section class="ops-panel" aria-label="최근 7일 활동"><header class="ops-panel-head"><h2>최근 7일 활동</h2><div class="ops-controls">${seg('m', metric, [['active', '활동 회원'], ['msgs', '메시지']])}</div></header>${chart}</section>
       </div>
-      ${!isLeader() && !isOrg() ? (() => {
+      ${(isSuper() || isHqb()) ? (() => {
         const gs = Store.orgs(); if (!gs.length) return '';
         const rowsO = gs.map((g) => {
           const ids = new Set(Store.teamsOfOrg(g.id).flatMap((t) => t.members || []));
@@ -514,7 +530,7 @@
   /* ---------- 감사로그 ---------- */
   function auditPage(r) {
     const q = (r.q.q || '').toLowerCase();
-    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => (!isLeader() || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
+    const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => ((!isLeader() && !isHqp() && !isHqb()) || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
     const act = { notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
     page('audit', `<div class="between wrap"><div class="stack-sm"><h1>열람 감사로그</h1><p class="muted">관리자·대상·시각·사유를 기록합니다. 기록은 수정·삭제할 수 없습니다.</p></div>
       <form id="au-f" class="row"><input class="field" name="q" type="search" placeholder="관리자 ID, 회원 ID, 대화 ID" value="${esc(r.q.q || '')}"><button class="btn" type="submit">검색</button></form></div>
@@ -702,7 +718,7 @@
         let fail = false;
         if (L !== 'ko') { if (trCache[L] === undefined) { try { trCache[L] = (await Engine.translate(text, L, 'ko')).text; } catch (x) { trCache[L] = ''; } } if (trCache[L]) tr[L] = trCache[L]; else fail = true; }
         const t = Store.teamOf(u.id);
-        Store.sendNotice({ userId: u.id, kind, needReply: document.getElementById('nt-need').checked, due: document.getElementById('nt-due').value, trFail: fail, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
+        Store.sendNotice({ userId: u.id, kind, needReply: document.getElementById('nt-need').checked, due: document.getElementById('nt-due').value, trFail: fail, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : (rl.type === 'hqp' || rl.type === 'hqb') ? '본사 ' + (rl.name || '관리자') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
       }
       Store.audit({ action: 'notice', target: targets.map((u) => u.id).join(','), member: targets.length > 1 ? targets.length + '명' : targets[0].nickname, reason: (KIND[kind] || KIND.instruction)[0] + ' 메시지 발송' });
       LM.toast(targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');
@@ -740,6 +756,26 @@
     }
   }
 
+  /* ---------- 본사 관리자 계정 (최종 관리자 전용) ---------- */
+  function staffPage() {
+    if (!isSuper()) return dashboard({ q: {} });
+    const ls = Store.staff();
+    const T2 = { personal: '일반고객 관리자', business: '기업고객 관리자' };
+    page('staff', `<div class="stack-sm"><h1>관리자 계정</h1><p class="muted">최종 관리자(admin) 아래에 일반고객 관리자와 기업고객 관리자를 둡니다. 기업고객 관리자는 거래처(기업 관리자 → 팀장 → 상담원)를, 일반고객 관리자는 개인 회원을 관리합니다. 각 관리자의 열람·발송은 감사로그에 남습니다.</p></div>
+      <div class="card"><div class="org-tree">
+        <div class="ot-node ot-root">👑 최종 관리자 <span class="ops-muted">admin</span></div>
+        <div class="ot-children">
+          <div class="ot-col"><div class="ot-node">🙋 일반고객 관리자</div>${ls.filter((x) => x.type === 'personal').map((x) => `<div class="ot-leaf">${esc(x.name)} · ${esc(x.loginId)}</div>`).join('') || '<div class="ot-leaf ops-muted">없음</div>'}<div class="ot-leaf ops-muted">→ 개인 회원 ${allUsers().filter((u) => !Store.teamOf(u.id)).length}명</div></div>
+          <div class="ot-col"><div class="ot-node">🏢 기업고객 관리자</div>${ls.filter((x) => x.type === 'business').map((x) => `<div class="ot-leaf">${esc(x.name)} · ${esc(x.loginId)}</div>`).join('') || '<div class="ot-leaf ops-muted">없음</div>'}
+            ${Store.orgs().map((g) => `<div class="ot-leaf">└ 거래처 <b>${esc(g.name)}</b> (${esc(g.loginId)})${Store.teamsOfOrg(g.id).map((t) => `<div class="ot-sub">└ 팀장 ${esc(t.leaderName || '-')} · ${esc(t.name)} — 상담원 ${(t.members || []).length}명</div>`).join('')}</div>`).join('')}</div>
+        </div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>구분</th><th>이름</th><th>아이디</th><th>비밀번호</th><th></th></tr></thead><tbody>
+        ${ls.map((x) => `<tr><td>${T2[x.type]}</td><td>${esc(x.name)}</td><td>${esc(x.loginId)}</td><td>${esc(x.pin)}</td><td><button class="btn sm danger-btn" type="button" data-del-staff="${x.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>
+      <form class="card row wrap" id="sf-new" style="gap:8px;align-items:flex-end"><label class="stack-xs"><span class="label">구분</span><select class="field" name="type"><option value="personal">일반고객 관리자</option><option value="business">기업고객 관리자</option></select></label><label class="stack-xs"><span class="label">이름</span><input class="field" name="name" required></label><label class="stack-xs"><span class="label">아이디</span><input class="field" name="loginId" required></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="1234" required></label><button class="btn" type="submit">관리자 추가</button></form>`);
+    document.getElementById('sf-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); const id = String(f.get('loginId')).trim().toLowerCase(); if (id === 'admin' || Store.staff().some((x) => x.loginId.toLowerCase() === id) || Store.orgs().some((g) => g.loginId.toLowerCase() === id) || Store.teams().some((t) => t.loginId.toLowerCase() === id)) { LM.toast('이미 쓰는 아이디입니다'); return; } const x = Store.addStaff({ type: f.get('type'), name: f.get('name'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: x.id, reason: '관리자 계정 추가 · ' + T2[x.type] + ' ' + x.name }); staffPage(); });
+    $app.querySelectorAll('[data-del-staff]').forEach((b) => b.addEventListener('click', () => { const x = Store.staffById(b.dataset.delStaff); Store.removeStaff(b.dataset.delStaff); Store.audit({ action: 'settings', target: b.dataset.delStaff, reason: '관리자 계정 삭제 · ' + (x ? x.name : '') }); staffPage(); }));
+  }
+
   /* ---------- 기업(상담회사) — 운영자 전용 ---------- */
   function orgsPage(r) {
     const gs = Store.orgs(); const sel = r.q.o ? Store.orgById(r.q.o) : gs[0];
@@ -751,7 +787,7 @@
           <label class="small row" style="gap:6px"><input type="checkbox" name="byo" ${sel.allowOwnKey ? 'checked' : ''}> 이 거래처 상담원은 자체 AI 키 사용 허용 (끄면 본사 AI로 동작)</label>
           <h3>소속 팀</h3><div class="tm-members">${Store.teams().map((t) => `<label class="tm-member"><input type="checkbox" name="t" value="${t.id}" ${t.orgId === sel.id ? 'checked' : ''}> <span><strong>${esc(t.name)}</strong> <span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${(t.members || []).length}명${t.orgId && t.orgId !== sel.id && Store.orgById(t.orgId) ? ' · 현재 ' + esc(Store.orgById(t.orgId).name) : ''}</span></span></label>`).join('') || '<p class="ops-muted">팀이 없습니다. 팀·팀장 메뉴에서 만드세요.</p>'}</div>
           <div class="between wrap"><button class="btn danger-btn sm" type="button" id="og-del">기업 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/teams">팀·팀장</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">왼쪽에서 기업을 추가하세요.</p>'}</section></div>`);
-    const taken = (id) => Store.teams().some((t) => t.loginId.toLowerCase() === id) || Store.orgs().some((g) => g.loginId.toLowerCase() === id) || id === 'admin';
+    const taken = (id) => Store.staff().some((x) => x.loginId.toLowerCase() === id) || Store.teams().some((t) => t.loginId.toLowerCase() === id) || Store.orgs().some((g) => g.loginId.toLowerCase() === id) || id === 'admin';
     document.getElementById('og-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (taken(String(f.get('loginId')).toLowerCase())) { LM.toast('이미 쓰는 아이디입니다'); return; } const g = Store.createOrg({ name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: g.id, reason: '기업 추가 · ' + g.name }); location.hash = '#/admin/orgs?o=' + g.id; });
     const ed = document.getElementById('og-edit');
     if (ed) {
@@ -768,8 +804,8 @@
       if (!authed) return login();
       const p = r.id || 'dashboard';
       const r0 = role(); if (r0.type === 'none') { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); return login(); }
-      const leaderBlocked = isOrg() ? ['quality', 'settings', 'orgs'] : ['quality', 'settings', 'teams', 'orgs'];
-      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage, orgs: orgsPage }[(isLeader() || isOrg()) && leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
+      const leaderBlocked = isSuper() ? [] : isHqp() ? ['settings', 'teams', 'orgs', 'staff'] : isHqb() ? ['quality', 'settings', 'staff'] : isOrg() ? ['quality', 'settings', 'orgs', 'staff'] : ['quality', 'settings', 'teams', 'orgs', 'staff'];
+      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage, notices: noticesPage, teams: teamsPage, orgs: orgsPage, staff: staffPage }[ leaderBlocked.includes(p) ? 'dashboard' : p] || dashboard)(r);
       window.scrollTo(0, 0);
     },
   };
