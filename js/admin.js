@@ -527,7 +527,20 @@
   /* ---------- 운영 설정 ---------- */
   function settings() {
     const sc = Store.Sync.cfg();
+    const hq = Engine.hqAi();
     page('settings', `<div class="stack-sm"><h1>운영 설정</h1></div>
+      <form class="card stack" id="hq-ai"><div class="between wrap"><h2>본사 AI 연결 <span class="ops-muted" style="font-size:13px">개인 회원은 본사 AI를 요금제로 사용합니다</span></h2>${hq.key || hq.proxy ? '<span class="badge">✓ 연결됨</span>' : '<span class="badge warning">미연결 · 무료 번역만 동작</span>'}</div>
+        <p class="small muted">회원은 자기 키를 넣지 않습니다. 여기 넣은 본사 키(또는 본사 AI 서버 주소)로 번역·뉘앙스 분석·답장 추천·스크린샷 인식·하루 기억이 동작하고, 사용량과 금액은 'AI 사용량'에 회원별로 쌓입니다. 기업 거래처는 '거래처'에서 자체 키 사용을 허용할 수 있습니다.</p>
+        <div class="row wrap" style="gap:10px">
+          <label class="stack-xs"><span class="label">AI 회사</span><select class="field" name="provider"><option value="openai" ${hq.provider !== 'anthropic' ? 'selected' : ''}>OpenAI (ChatGPT)</option><option value="anthropic" ${hq.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option></select></label>
+          <label class="stack-xs grow"><span class="label">본사 API 키</span><input class="field" name="key" type="password" autocomplete="off" value="${esc(hq.key || '')}" placeholder="sk-... / sk-ant-..."></label>
+          <label class="stack-xs"><span class="label">모델</span><input class="field" name="model" value="${esc(hq.model || '')}" placeholder="gpt-4o-mini / claude-haiku-5-5"></label>
+        </div>
+        <label class="stack-xs"><span class="label">본사 AI 서버 주소 (운영용 · 넣으면 키 대신 이 서버로 호출)</span><input class="field" name="proxy" value="${esc(hq.proxy || '')}" placeholder="https://xxxx.supabase.co/functions/v1/ai-proxy"></label>
+        <label class="small row" style="gap:6px"><input type="checkbox" name="freeAi" ${hq.freeAi !== false ? 'checked' : ''}> 무료 회원에게도 AI 허용 (테스트 기간) — 끄면 프로·프리미엄·기업용만 AI 사용</label>
+        <p class="tiny muted">⚠ 키를 여기만 넣으면 이 브라우저에서만 동작합니다. 모든 회원 기기에서 쓰려면 키를 서버(Supabase 비밀값)에 두고 저장소의 <code>supabase/functions/ai-proxy</code>를 배포한 뒤 서버 주소를 넣으세요. 키를 화면 코드에 넣으면 누구나 볼 수 있어 도용됩니다.</p>
+        <div class="row" style="gap:8px"><button class="btn secondary" type="button" id="hq-test">연결 테스트</button><button class="btn" type="submit">저장</button><span class="small muted" id="hq-msg"></span></div>
+      </form>
       <div class="admin-grid">
         <form class="card stack" id="sv"><h2>서버 연결 (전 회원 대화 모니터링)</h2>
           <p class="small muted">Supabase 무료 프로젝트를 만들고 저장소의 <code>supabase/schema.sql</code>을 실행한 뒤 URL과 anon 키를 넣으세요. 연결하면 모든 회원·게스트의 대화가 서버에 모이고, 이 화면에서 전부 확인할 수 있습니다. 회원 앱에도 같은 값이 필요하므로 <code>js/config.js</code>에 넣어 배포하세요.</p>
@@ -546,6 +559,10 @@
           <button class="btn secondary" type="button" id="logout">관리자 로그아웃</button>
         </div>
       </div>`);
+    const hqf = document.getElementById('hq-ai');
+    const readHq = () => { const f = new FormData(hqf); return { provider: f.get('provider'), key: String(f.get('key') || '').trim(), model: String(f.get('model') || '').trim(), proxy: String(f.get('proxy') || '').trim(), freeAi: !!f.get('freeAi') }; };
+    hqf.addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('lm_hq_ai', JSON.stringify(readHq())); Store.audit({ action: 'settings', target: '-', reason: '본사 AI 연결 변경' }); LM.toast('저장했습니다'); settings(); });
+    document.getElementById('hq-test').addEventListener('click', async () => { const prev = localStorage.getItem('lm_hq_ai'); localStorage.setItem('lm_hq_ai', JSON.stringify(readHq())); const m = document.getElementById('hq-msg'); m.textContent = '테스트 중…'; try { const out = await Engine.callLLM('Reply with one word.', 'Say OK', false); m.textContent = '✓ 연결됨: ' + String(out).slice(0, 40); } catch (x) { m.textContent = '✗ 실패: ' + (x.message || x); if (prev) localStorage.setItem('lm_hq_ai', prev); else localStorage.removeItem('lm_hq_ai'); } });
     document.getElementById('sv').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); localStorage.setItem('lm_sync', JSON.stringify({ url: String(f.get('url')).trim(), key: String(f.get('key')).trim() })); Store.audit({ action: 'settings', target: '-', reason: '서버 연결 설정 변경' }); LM.toast('저장했습니다'); });
     document.getElementById('sv-pull').addEventListener('click', pull);
     document.getElementById('pin').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); const p = String(f.get('pin') || ''); if (p && p.length < 4) { LM.toast('비밀번호는 4자리 이상'); return; } if (p) Store.db.admin.pin = p; Store.db.admin.operator = String(f.get('op') || 'OP-01'); Store.persist(); Store.audit({ action: 'settings', target: '-', reason: '관리자 계정 변경' }); LM.toast('저장했습니다'); });
@@ -731,13 +748,14 @@
         <aside class="card lm-msg-list"><ul>${gs.map((g) => { const ts = Store.teamsOfOrg(g.id); return `<li><a class="lm-msg-row ${sel && sel.id === g.id ? 'on' : ''}" href="#/admin/orgs?o=${g.id}"><span class="grow"><strong>${esc(g.name)}</strong><br><span class="ops-muted">관리자 ${esc(g.adminName || '-')} · ${esc(g.loginId)} · 팀 ${ts.length} · 상담원 ${ts.reduce((a, t) => a + (t.members || []).length, 0)}명</span></span></a></li>`; }).join('') || '<li class="ops-muted" style="padding:8px">기업이 없습니다.</li>'}</ul>
           <form class="stack-sm" id="og-new" style="border-top:1px solid var(--line);padding-top:12px"><h3>기업 추가</h3><input class="field" name="name" placeholder="회사 이름" required><input class="field" name="adminName" placeholder="기업 관리자 이름" required><div class="row" style="gap:6px"><input class="field" name="loginId" placeholder="관리자 아이디" required><input class="field" name="pin" value="1234" placeholder="비밀번호" required></div><button class="btn full" type="submit">기업 추가</button></form></aside>
         <section class="card lm-msg-main">${sel ? `<form class="stack" id="og-edit"><div class="row wrap" style="gap:8px"><label class="stack-xs grow"><span class="label">회사 이름</span><input class="field" name="name" value="${esc(sel.name)}"></label><label class="stack-xs"><span class="label">관리자 이름</span><input class="field" name="adminName" value="${esc(sel.adminName || '')}"></label><label class="stack-xs"><span class="label">관리자 아이디</span><input class="field" name="loginId" value="${esc(sel.loginId)}"></label><label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" value="${esc(sel.pin)}"></label></div>
+          <label class="small row" style="gap:6px"><input type="checkbox" name="byo" ${sel.allowOwnKey ? 'checked' : ''}> 이 거래처 상담원은 자체 AI 키 사용 허용 (끄면 본사 AI로 동작)</label>
           <h3>소속 팀</h3><div class="tm-members">${Store.teams().map((t) => `<label class="tm-member"><input type="checkbox" name="t" value="${t.id}" ${t.orgId === sel.id ? 'checked' : ''}> <span><strong>${esc(t.name)}</strong> <span class="ops-muted">팀장 ${esc(t.leaderName || '-')} · ${(t.members || []).length}명${t.orgId && t.orgId !== sel.id && Store.orgById(t.orgId) ? ' · 현재 ' + esc(Store.orgById(t.orgId).name) : ''}</span></span></label>`).join('') || '<p class="ops-muted">팀이 없습니다. 팀·팀장 메뉴에서 만드세요.</p>'}</div>
           <div class="between wrap"><button class="btn danger-btn sm" type="button" id="og-del">기업 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/teams">팀·팀장</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">왼쪽에서 기업을 추가하세요.</p>'}</section></div>`);
     const taken = (id) => Store.teams().some((t) => t.loginId.toLowerCase() === id) || Store.orgs().some((g) => g.loginId.toLowerCase() === id) || id === 'admin';
     document.getElementById('og-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (taken(String(f.get('loginId')).toLowerCase())) { LM.toast('이미 쓰는 아이디입니다'); return; } const g = Store.createOrg({ name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: g.id, reason: '기업 추가 · ' + g.name }); location.hash = '#/admin/orgs?o=' + g.id; });
     const ed = document.getElementById('og-edit');
     if (ed) {
-      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const tids = f.getAll('t'); Store.teams().forEach((t) => { if (tids.includes(t.id)) t.orgId = sel.id; else if (t.orgId === sel.id) t.orgId = ''; }); Store.updateOrg(sel.id, { name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: sel.id, reason: '기업 수정 · ' + f.get('name') }); LM.toast('저장했습니다'); orgsPage(r); });
+      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const tids = f.getAll('t'); Store.teams().forEach((t) => { if (tids.includes(t.id)) t.orgId = sel.id; else if (t.orgId === sel.id) t.orgId = ''; }); Store.updateOrg(sel.id, { name: f.get('name'), adminName: f.get('adminName'), loginId: f.get('loginId'), pin: f.get('pin'), allowOwnKey: !!f.get('byo') }); Store.audit({ action: 'settings', target: sel.id, reason: '기업 수정 · ' + f.get('name') }); LM.toast('저장했습니다'); orgsPage(r); });
       document.getElementById('og-del').addEventListener('click', () => { Store.removeOrg(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '기업 삭제 · ' + sel.name }); location.hash = '#/admin/orgs'; });
     }
   }

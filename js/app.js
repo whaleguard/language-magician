@@ -687,22 +687,7 @@
       const PROMPT = 'Transcribe the chat messages in this screenshot exactly, one message per line, oldest first. Prefix messages from the other person (usually left side, with avatar/name) with "THEM: " and from the phone owner (usually right side, colored bubbles) with "ME: ". Skip timestamps, dates and system notices. Output only the transcript.';
       if (cfg.key) {
         const b64 = await fileToB64(file);
-        let r;
-        if (cfg.provider === 'openai') {
-          r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, { type: 'image_url', image_url: { url: 'data:' + (file.type || 'image/png') + ';base64,' + b64 } }] }] }) });
-          if (!r.ok) throw new Error('vision');
-          const j = await r.json(); text = j.choices[0].message.content || '';
-          if (window.LM_ON_AI_USAGE && j.usage) window.LM_ON_AI_USAGE({ provider: 'openai', model: cfg.model || 'gpt-4o-mini', in: j.usage.prompt_tokens, out: j.usage.completion_tokens, ts: Date.now() });
-        } else {
-          r = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-            body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: file.type || 'image/png', data: b64 } }, { type: 'text', text: PROMPT }] }] }),
-          });
-          if (!r.ok) throw new Error('vision');
-          const j = await r.json(); text = (j.content || []).map((x) => x.text || '').join('');
-          if (window.LM_ON_AI_USAGE && j.usage) window.LM_ON_AI_USAGE({ provider: 'anthropic', model: cfg.model || 'claude-haiku-5-5', in: j.usage.input_tokens, out: j.usage.output_tokens, ts: Date.now() });
-        }
+        text = await Engine.visionCall(b64, file.type || 'image/png', PROMPT);
         const lines = text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => /^THEM:/i.test(l) ? { dir: 'in', text: l.replace(/^THEM:\s*/i, '') } : /^ME:/i.test(l) ? { dir: 'out', text: l.replace(/^ME:\s*/i, '') } : null).filter(Boolean);
         if (lines.length >= 2) { note.textContent = t('ocr_done'); helperState.source = 'ocr'; return { lines }; }
         if (lines.length === 1) text = lines[0].text;
@@ -1184,7 +1169,7 @@
           <div class="row wrap" style="gap:2px 14px">
             <button class="link" type="button" id="ch-paste" style="min-height:32px;font-size:13px">${icon('copy', 'sm')} ${t('paste_btn')}</button>
             <label class="link" style="cursor:pointer;min-height:32px;font-size:13px">${icon('image', 'sm')} ${t('upload_shot')}<input type="file" id="ch-shot" accept="image/*" hidden></label>
-            ${ai ? `<span class="tiny muted">${t('ai_on')}</span>` : `<button class="link" type="button" data-go="#/settings" style="min-height:32px;font-size:13px">✨ ${t('g_ai_btn')}</button>`}
+            ${ai ? `<span class="tiny muted">${t('ai_on')}</span>` : `<button class="link" type="button" data-go="#/settings" style="min-height:32px;font-size:13px">${t('ai_upsell')}</button>`}
           </div>
           <button class="btn primary-btn" type="button" id="ch-send">${t('send')}</button>
         </div>
@@ -1463,11 +1448,11 @@
   /* ================= 도구 모음 ================= */
   /* ---------- 받은 지시·공지 (관리자·팀장 → 나), 내 언어로 번역 ---------- */
   const INBOX_T = {
-    ko: { ib_need: '답장 필요', ib_replied: '답장함', ib_due: '마감', ib_pending: '답장해야 할 지시 {n}건', nav_inbox: '공지함', ib_title: '받은 지시·공지', ib_lead: '관리자·팀장이 보낸 메시지가 내 언어로 번역돼 도착해요. 답장은 내 언어로 쓰면 한국어로 번역돼 전달돼요.', ib_empty: '아직 받은 메시지가 없어요.', ib_orig: '원문 보기', ib_reply_l: '답장 (내 언어로 쓰세요)', ib_send: '답장 보내기', ib_sent: '답장을 보냈어요', ib_me: '나', ib_tr_to: '{lang}로 전달됨', k_instruction: '지시', k_notice: '공지', k_warning: '경고', k_reply: '답장', ib_banner: '📩 새 지시·공지 {n}건', ib_open: '보기', ib_read: '읽음', ib_translating: '번역 중…' },
-    zh: { ib_need: '需要回复', ib_replied: '已回复', ib_due: '截止', ib_pending: '需要回复的指示 {n} 条', nav_inbox: '通知', ib_title: '收到的指示·通知', ib_lead: '管理员·组长发来的消息会翻译成你的语言。用你的语言回复，会翻译成韩语发送。', ib_empty: '还没有收到消息。', ib_orig: '查看原文', ib_reply_l: '回复（用你的语言写）', ib_send: '发送回复', ib_sent: '已发送回复', ib_me: '我', ib_tr_to: '已用{lang}发送', k_instruction: '指示', k_notice: '通知', k_warning: '警告', k_reply: '回复', ib_banner: '📩 新指示·通知 {n} 条', ib_open: '查看', ib_read: '已读', ib_translating: '翻译中…' },
-    ja: { ib_need: '返信が必要', ib_replied: '返信済み', ib_due: '締切', ib_pending: '返信が必要な指示 {n}件', nav_inbox: 'お知らせ', ib_title: '受け取った指示・お知らせ', ib_lead: '管理者・チームリーダーからのメッセージが自分の言語に翻訳されて届きます。返信は自分の言語で書くと韓国語に翻訳されて届きます。', ib_empty: 'まだメッセージはありません。', ib_orig: '原文を見る', ib_reply_l: '返信（自分の言語で）', ib_send: '返信を送る', ib_sent: '返信を送りました', ib_me: '自分', ib_tr_to: '{lang}で届けました', k_instruction: '指示', k_notice: 'お知らせ', k_warning: '警告', k_reply: '返信', ib_banner: '📩 新しい指示・お知らせ {n}件', ib_open: '見る', ib_read: '既読', ib_translating: '翻訳中…' },
-    vi: { ib_need: 'Cần trả lời', ib_replied: 'Đã trả lời', ib_due: 'Hạn', ib_pending: '{n} chỉ thị cần trả lời', nav_inbox: 'Thông báo', ib_title: 'Chỉ thị · thông báo nhận được', ib_lead: 'Tin của quản trị viên·trưởng nhóm được dịch sang ngôn ngữ của bạn. Trả lời bằng ngôn ngữ của bạn sẽ được dịch sang tiếng Hàn.', ib_empty: 'Chưa có tin nhắn nào.', ib_orig: 'Xem bản gốc', ib_reply_l: 'Trả lời (viết bằng ngôn ngữ của bạn)', ib_send: 'Gửi trả lời', ib_sent: 'Đã gửi trả lời', ib_me: 'Tôi', ib_tr_to: 'Đã gửi bằng {lang}', k_instruction: 'Chỉ thị', k_notice: 'Thông báo', k_warning: 'Cảnh báo', k_reply: 'Trả lời', ib_banner: '📩 {n} chỉ thị·thông báo mới', ib_open: 'Xem', ib_read: 'Đã đọc', ib_translating: 'Đang dịch…' },
-    en: { ib_need: 'Reply needed', ib_replied: 'Replied', ib_due: 'Due', ib_pending: '{n} instruction(s) need a reply', nav_inbox: 'Inbox', ib_title: 'Instructions & notices', ib_lead: 'Messages from admins and team leaders arrive translated into your language. Reply in your language and it is delivered in Korean.', ib_empty: 'No messages yet.', ib_orig: 'Show original', ib_reply_l: 'Reply (write in your language)', ib_send: 'Send reply', ib_sent: 'Reply sent', ib_me: 'Me', ib_tr_to: 'Delivered in {lang}', k_instruction: 'Instruction', k_notice: 'Notice', k_warning: 'Warning', k_reply: 'Reply', ib_banner: '📩 {n} new instruction(s)/notice(s)', ib_open: 'Open', ib_read: 'Read', ib_translating: 'Translating…' },
+    ko: { ai_hq_title: 'AI 기능', ai_hq_on: '본사 AI 사용 중', ai_hq_desc: 'AI 번역·뉘앙스 분석·답장 추천·스크린샷 인식이 요금제에 포함돼 있어요. 따로 키를 넣을 필요가 없어요.', ai_hq_locked: 'AI 분석은 프로·프리미엄 요금제에서 쓸 수 있어요. 지금은 무료 번역으로 동작해요.', ai_hq_none: '지금은 무료 번역으로 동작해요. AI 기능은 곧 열려요.', my_plan: '내 요금제', plan_free: '무료', plan_pro: '프로', plan_premium: '프리미엄', plan_business: '기업용', ai_upsell: '✨ AI 분석 (프로 요금제)', ib_need: '답장 필요', ib_replied: '답장함', ib_due: '마감', ib_pending: '답장해야 할 지시 {n}건', nav_inbox: '공지함', ib_title: '받은 지시·공지', ib_lead: '관리자·팀장이 보낸 메시지가 내 언어로 번역돼 도착해요. 답장은 내 언어로 쓰면 한국어로 번역돼 전달돼요.', ib_empty: '아직 받은 메시지가 없어요.', ib_orig: '원문 보기', ib_reply_l: '답장 (내 언어로 쓰세요)', ib_send: '답장 보내기', ib_sent: '답장을 보냈어요', ib_me: '나', ib_tr_to: '{lang}로 전달됨', k_instruction: '지시', k_notice: '공지', k_warning: '경고', k_reply: '답장', ib_banner: '📩 새 지시·공지 {n}건', ib_open: '보기', ib_read: '읽음', ib_translating: '번역 중…' },
+    zh: { ai_hq_title: 'AI 功能', ai_hq_on: '正在使用总部 AI', ai_hq_desc: 'AI 翻译·语气分析·回复建议·截图识别已包含在套餐中，不需要自己输入密钥。', ai_hq_locked: 'AI 分析在专业版·高级版中可用。现在使用免费翻译。', ai_hq_none: '现在使用免费翻译，AI 功能即将开放。', my_plan: '我的套餐', plan_free: '免费', plan_pro: '专业版', plan_premium: '高级版', plan_business: '企业版', ai_upsell: '✨ AI 分析（专业版）', ib_need: '需要回复', ib_replied: '已回复', ib_due: '截止', ib_pending: '需要回复的指示 {n} 条', nav_inbox: '通知', ib_title: '收到的指示·通知', ib_lead: '管理员·组长发来的消息会翻译成你的语言。用你的语言回复，会翻译成韩语发送。', ib_empty: '还没有收到消息。', ib_orig: '查看原文', ib_reply_l: '回复（用你的语言写）', ib_send: '发送回复', ib_sent: '已发送回复', ib_me: '我', ib_tr_to: '已用{lang}发送', k_instruction: '指示', k_notice: '通知', k_warning: '警告', k_reply: '回复', ib_banner: '📩 新指示·通知 {n} 条', ib_open: '查看', ib_read: '已读', ib_translating: '翻译中…' },
+    ja: { ai_hq_title: 'AI機能', ai_hq_on: '本社AIを利用中', ai_hq_desc: 'AI翻訳・ニュアンス分析・返信案・スクショ認識は料金プランに含まれています。キーを入れる必要はありません。', ai_hq_locked: 'AI分析はプロ・プレミアムで使えます。今は無料翻訳で動いています。', ai_hq_none: '今は無料翻訳で動いています。AI機能はまもなく公開されます。', my_plan: '私のプラン', plan_free: '無料', plan_pro: 'プロ', plan_premium: 'プレミアム', plan_business: '法人向け', ai_upsell: '✨ AI分析（プロ）', ib_need: '返信が必要', ib_replied: '返信済み', ib_due: '締切', ib_pending: '返信が必要な指示 {n}件', nav_inbox: 'お知らせ', ib_title: '受け取った指示・お知らせ', ib_lead: '管理者・チームリーダーからのメッセージが自分の言語に翻訳されて届きます。返信は自分の言語で書くと韓国語に翻訳されて届きます。', ib_empty: 'まだメッセージはありません。', ib_orig: '原文を見る', ib_reply_l: '返信（自分の言語で）', ib_send: '返信を送る', ib_sent: '返信を送りました', ib_me: '自分', ib_tr_to: '{lang}で届けました', k_instruction: '指示', k_notice: 'お知らせ', k_warning: '警告', k_reply: '返信', ib_banner: '📩 新しい指示・お知らせ {n}件', ib_open: '見る', ib_read: '既読', ib_translating: '翻訳中…' },
+    vi: { ai_hq_title: 'Tính năng AI', ai_hq_on: 'Đang dùng AI của hệ thống', ai_hq_desc: 'Dịch AI, phân tích sắc thái, gợi ý trả lời, nhận diện ảnh chụp đã bao gồm trong gói. Không cần nhập khóa.', ai_hq_locked: 'Phân tích AI có trong gói Pro·Premium. Hiện đang dùng dịch miễn phí.', ai_hq_none: 'Hiện đang dùng dịch miễn phí. Tính năng AI sắp mở.', my_plan: 'Gói của tôi', plan_free: 'Miễn phí', plan_pro: 'Pro', plan_premium: 'Premium', plan_business: 'Doanh nghiệp', ai_upsell: '✨ Phân tích AI (gói Pro)', ib_need: 'Cần trả lời', ib_replied: 'Đã trả lời', ib_due: 'Hạn', ib_pending: '{n} chỉ thị cần trả lời', nav_inbox: 'Thông báo', ib_title: 'Chỉ thị · thông báo nhận được', ib_lead: 'Tin của quản trị viên·trưởng nhóm được dịch sang ngôn ngữ của bạn. Trả lời bằng ngôn ngữ của bạn sẽ được dịch sang tiếng Hàn.', ib_empty: 'Chưa có tin nhắn nào.', ib_orig: 'Xem bản gốc', ib_reply_l: 'Trả lời (viết bằng ngôn ngữ của bạn)', ib_send: 'Gửi trả lời', ib_sent: 'Đã gửi trả lời', ib_me: 'Tôi', ib_tr_to: 'Đã gửi bằng {lang}', k_instruction: 'Chỉ thị', k_notice: 'Thông báo', k_warning: 'Cảnh báo', k_reply: 'Trả lời', ib_banner: '📩 {n} chỉ thị·thông báo mới', ib_open: 'Xem', ib_read: 'Đã đọc', ib_translating: 'Đang dịch…' },
+    en: { ai_hq_title: 'AI features', ai_hq_on: 'Using our AI', ai_hq_desc: 'AI translation, nuance analysis, reply ideas and screenshot reading are included in your plan — no key needed.', ai_hq_locked: 'AI analysis is available on Pro and Premium. You are on free translation now.', ai_hq_none: 'You are on free translation now. AI features are coming soon.', my_plan: 'My plan', plan_free: 'Free', plan_pro: 'Pro', plan_premium: 'Premium', plan_business: 'Business', ai_upsell: '✨ AI analysis (Pro plan)', ib_need: 'Reply needed', ib_replied: 'Replied', ib_due: 'Due', ib_pending: '{n} instruction(s) need a reply', nav_inbox: 'Inbox', ib_title: 'Instructions & notices', ib_lead: 'Messages from admins and team leaders arrive translated into your language. Reply in your language and it is delivered in Korean.', ib_empty: 'No messages yet.', ib_orig: 'Show original', ib_reply_l: 'Reply (write in your language)', ib_send: 'Send reply', ib_sent: 'Reply sent', ib_me: 'Me', ib_tr_to: 'Delivered in {lang}', k_instruction: 'Instruction', k_notice: 'Notice', k_warning: 'Warning', k_reply: 'Reply', ib_banner: '📩 {n} new instruction(s)/notice(s)', ib_open: 'Open', ib_read: 'Read', ib_translating: 'Translating…' },
   };
   Object.keys(INBOX_T).forEach((l) => Object.assign(T[l], INBOX_T[l]));
   function hasInbox(u) { u = u || Store.me(); return !!u && (Store.can('team_inbox', u) || Store.noticesOf(u.id).length > 0); }
@@ -1540,7 +1525,7 @@
           ${step(3, t('g3t'), t('g3'), `<div class="g-demo"><span class="g-msg">${uiLang === 'ko' ? '좋아요! 3시에 봐요' : 'Sure! See you at 3'}</span><span class="g-arrow">→</span><span class="g-msg out" lang="zh-Hans">好啊！三点见</span><span class="badge">${icon('copy', 'sm')}</span></div>`)}
           ${step(4, t('g4t'), t('g4'))}
         </ol>
-        <div class="card stack-sm ${ai ? '' : 'g-ai'}"><h2>${t('g_ai_t')} ${ai ? '<span class="badge">✓ ' + t('ai_on') + '</span>' : ''}</h2><p class="small muted">${t('g_ai')}</p>${ai ? '' : `<button class="btn secondary" type="button" data-go="#/settings">${t('g_ai_btn')}</button>`}</div>
+        <div class="card stack-sm ${ai ? '' : 'g-ai'}"><h2>${t('ai_hq_title')} ${ai ? '<span class="badge">✓ ' + t('ai_hq_on') + '</span>' : ''}</h2><p class="small muted">${ai ? t('ai_hq_desc') : (Engine.aiConfig().source === 'locked' ? t('ai_hq_locked') : t('ai_hq_none'))}</p></div>
         <div class="two"><button class="btn" type="button" data-go="${hasContacts ? '#/chat' : '#/contact-edit/new'}">${hasContacts ? t('g_open_chat') : t('g_add')}</button>${u.contacts.some((c) => c.sample) ? `<button class="btn secondary" type="button" data-go="#/contact-edit/new">+ ${t('g_add')}</button>` : `<button class="btn secondary" type="button" id="g-sample">${t('g_try')}</button>`}</div>
         <p class="tiny muted">${t('g_note')}</p>
       </div>`, 'guide');
@@ -2068,7 +2053,7 @@
     const meI = u.me || {};
     shell(`${topBar(t('set_title'), null)}
       <div class="content stack-lg">
-        <form class="card stack" id="st-ai">
+        ${ai.source === 'own' || (ai.source !== 'hq' && (() => { const tm = Store.teamOf(u.id); const og = tm && tm.orgId ? Store.orgById(tm.orgId) : null; return !!(og && og.allowOwnKey); })()) ? `        <form class="card stack" id="st-ai">
           <h2>${t('set_ai')} ${ai.key ? '<span class="badge">✓ ' + t('ai_on') + '</span>' : ''}</h2>
           <p class="small muted">${t('g_ai')} ${t('set_ai_hint')}</p>
           <label class="stack-xs"><span class="label">${t('set_provider')}</span><select class="field" name="provider" id="st-provider"><option value="openai" ${ai.provider !== 'anthropic' ? 'selected' : ''}>OpenAI (ChatGPT)</option><option value="anthropic" ${ai.provider === 'anthropic' ? 'selected' : ''}>Claude (Anthropic)</option></select></label>
@@ -2077,7 +2062,11 @@
           <label class="stack-xs"><span class="label">${t('set_key')}</span><input class="field" name="key" type="password" autocomplete="off" value="${esc(ai.key || '')}" placeholder="${ai.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}"></label>
           <details><summary class="small muted">${t('set_model')}</summary><input class="field" name="model" value="${esc(ai.model || '')}" placeholder="gpt-4o-mini / claude-haiku-5-5" style="margin-top:6px"></details>
           <div class="two"><button class="btn secondary" type="button" id="st-ai-test">${t('set_test')}</button><button class="btn" type="submit">${t('save')}</button></div>
-        </form>
+        </form>` : `<div class="card stack-sm" id="st-ai-hq">
+          <h2>${t('ai_hq_title')} ${ai.source === 'hq' ? '<span class="badge">✓ ' + t('ai_hq_on') + '</span>' : ''}</h2>
+          <p class="small muted">${ai.source === 'hq' ? t('ai_hq_desc') : ai.source === 'locked' ? t('ai_hq_locked') : t('ai_hq_none')}</p>
+          <p class="small"><b>${t('my_plan')}</b> ${esc(t('plan_' + Store.planOf(u)))}</p>
+        </div>`}
 
         <div class="card stack-sm">
           <h2>${t('set_account')}</h2>
@@ -2124,6 +2113,7 @@
     $app.querySelectorAll('[data-n]').forEach((cb) => cb.addEventListener('change', () => { u.settings.notif[cb.dataset.n] = cb.checked; Store.save(); }));
     document.getElementById('st-push').addEventListener('click', askNotify);
     const aiForm = document.getElementById('st-ai');
+    if (aiForm) {
     const readAi = () => { const f = new FormData(aiForm); const key = (f.get('key') || '').trim(); let provider = f.get('provider'); if (/^sk-ant-/.test(key)) provider = 'anthropic'; else if (/^sk-/.test(key) && provider === 'anthropic') provider = 'openai'; return { provider, key, model: (f.get('model') || '').trim() }; };
     const provSel = document.getElementById('st-provider');
     provSel.addEventListener('change', () => { const an = provSel.value === 'anthropic'; const ln = document.getElementById('st-ai-link'); ln.href = an ? 'https://console.anthropic.com/settings/keys' : 'https://platform.openai.com/api-keys'; ln.textContent = (an ? t('ai_get_claude') : t('ai_get_openai')) + ' ↗'; document.getElementById('st-ai-s4').textContent = an ? t('ai_s4c') : t('ai_s4'); aiForm.key.placeholder = an ? 'sk-ant-...' : 'sk-...'; });
@@ -2135,6 +2125,7 @@
       try { const x = await Engine.callLLM('Reply with OK.', 'ping', false); toast(x ? t('set_ai_ok') : t('set_ai_fail')); } catch (e) { toast(t('set_ai_fail') + ' (' + e.message + ')'); }
       spinBtn(ev.currentTarget, false);
     });
+    }
     document.getElementById('st-export').addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(u, null, 2)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'language-magician-' + u.id + '.json'; a.click();
@@ -2148,6 +2139,7 @@
   window.LM = { t, esc, icon, toast, sheet, closeSheet, go, render, fmtTs, fmtDate, appName, langName, avatar, who, whoText };
   Store.onChange(() => {});
   render();
+  Engine.setPlanResolver(() => { if (/^#\/admin/.test(location.hash)) return { plan: 'business', admin: true }; const u = Store.me(); if (!u) return { plan: 'free' }; const tm = Store.teamOf(u.id); const og = tm && tm.orgId ? Store.orgById(tm.orgId) : null; return { plan: Store.planOf(u), byo: !!(og && og.allowOwnKey) }; });
   window.LM_ON_AI_USAGE = (x) => { const u = Store.me(); if (!u) return; u.aiUsage = u.aiUsage || []; u.aiUsage.push(x); if (u.aiUsage.length > 5000) u.aiUsage.splice(0, u.aiUsage.length - 5000); Store.save(); };
   window.LM_ON_MESSAGE = (m) => { if (m.contactId) setTimeout(() => { try { runDigests(m.contactId); } catch (e) {} }, 30); };
   setTimeout(() => { try { runDigests(); } catch (e) { console.warn(e); } }, 600);

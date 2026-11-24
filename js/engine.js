@@ -101,8 +101,39 @@
     return out;
   }
 
+  /* AI 연결: 개인 회원은 본사(HQ) AI를 요금제로 사용. 기업 거래처가 허용한 경우에만 자체 키 사용 */
+  function readJson(k) { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) { return {}; } }
+  function ownAi() { return readJson('lm_ai'); }
+  function hqAi() { return readJson('lm_hq_ai'); }
+  let planResolver = null;
+  function setPlanResolver(fn) { planResolver = fn; }
   function aiConfig() {
-    try { return JSON.parse(localStorage.getItem('lm_ai') || '{}'); } catch (e) { return {}; }
+    const ctx = (planResolver && planResolver()) || { plan: 'free' };
+    const own = ownAi();
+    if (ctx.byo && own.key) return Object.assign({ source: 'own' }, own);
+    const hq = hqAi();
+    const has = !!(hq.proxy || hq.key);
+    const allowed = ctx.admin || ['pro', 'premium', 'business'].includes(ctx.plan) || (ctx.plan === 'free' && hq.freeAi !== false);
+    if (has && allowed) return { source: 'hq', provider: hq.provider || 'openai', model: hq.model || '', key: hq.proxy ? 'proxy' : hq.key, proxy: hq.proxy || '' };
+    return { source: has ? 'locked' : 'none' };
+  }
+  async function viaProxy(cfg, payload) {
+    const r = await fetch(cfg.proxy, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ provider: cfg.provider, model: cfg.model }, payload)) });
+    if (!r.ok) throw new Error('proxy-' + r.status);
+    const j = await r.json();
+    reportUsage(cfg.provider === 'openai' ? 'openai' : 'anthropic', j.model || cfg.model || (cfg.provider === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-5-5'), j.usage && (j.usage.input || j.usage.prompt_tokens || j.usage.input_tokens), j.usage && (j.usage.output || j.usage.completion_tokens || j.usage.output_tokens));
+    return String(j.text || '');
+  }
+  // 이미지(스크린샷) 인식 — 본사 프록시·OpenAI·Claude 공통
+  async function visionCall(b64, mime, prompt) {
+    const cfg = aiConfig(); if (!cfg.key) throw new Error('no-key');
+    if (cfg.proxy) return viaProxy(cfg, { system: '', user: prompt, image: { data: b64, mime: mime || 'image/png' } });
+    if (cfg.provider === 'openai') {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:' + (mime || 'image/png') + ';base64,' + b64 } }] }] }) });
+      if (!r.ok) throw new Error('vision'); const j = await r.json(); reportUsage('openai', cfg.model || 'gpt-4o-mini', j.usage && j.usage.prompt_tokens, j.usage && j.usage.completion_tokens); return j.choices[0].message.content || '';
+    }
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mime || 'image/png', data: b64 } }, { type: 'text', text: prompt }] }] }) });
+    if (!r.ok) throw new Error('vision'); const j = await r.json(); reportUsage('anthropic', cfg.model || 'claude-haiku-5-5', j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens); return (j.content || []).map((x) => x.text || '').join('');
   }
 
   function reportUsage(provider, model, tin, tout) {
@@ -111,6 +142,7 @@
   async function callLLM(system, user, wantJson) {
     const cfg = aiConfig();
     if (!cfg.key) throw new Error('no-key');
+    if (cfg.proxy) return viaProxy(cfg, { system, user, json: !!wantJson });
     if (cfg.provider === 'openai') {
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -632,7 +664,7 @@
   }
 
   global.Engine = {
-    LANGS, detect, translate, callLLM, aiConfig, aiAnalyze,
+    LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
     extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
