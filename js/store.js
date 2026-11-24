@@ -70,6 +70,8 @@
 
   /* 관리자 '회원 화면으로 보기': 그 회원 데이터의 복사본을 보여줍니다 (저장 안 됨). */
   let viewAs = null;
+  // 관리자 화면으로 돌아오면 '회원 화면 보기'를 자동 해제 (해제 안 하면 관리자 작업이 저장되지 않음)
+  try { if (/^#\/admin/.test(location.hash || '')) sessionStorage.removeItem('lm_view_as'); } catch (e) { /* noop */ }
   try { const va = sessionStorage.getItem('lm_view_as'); if (va && db.users[va]) viewAs = JSON.parse(JSON.stringify(db.users[va])); } catch (e) { viewAs = null; }
   function me() { if (viewAs) return viewAs; return db.currentUserId ? db.users[db.currentUserId] : null; }
   function startViewAs(id) { try { sessionStorage.setItem('lm_view_as', id); } catch (e) {} }

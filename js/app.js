@@ -87,7 +87,7 @@
     return { name: parts[0] || '', id: parts[1] || '', q };
   }
   function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
-  window.addEventListener('hashchange', render);
+  window.addEventListener('hashchange', () => { if (/^#\/admin/.test(location.hash) && Store.viewingAs()) { Store.stopViewAs(); location.reload(); return; } render(); });
 
   /* ---------- 보안: 워터마크 · 우클릭/개발자도구 단축키 차단 ---------- */
   let wmKey = '';
