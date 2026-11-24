@@ -112,7 +112,7 @@
     if (WIDE.matches && !(opts && opts.noNav)) {
       document.body.classList.add('is-wide');
       $app.innerHTML = `<div class="ws">
-        <aside class="ws-rail" aria-label="main"><span class="mark" style="margin:4px auto 14px">${icon('brand')}</span>
+        <aside class="ws-rail" aria-label="main"><span class="rail-logo"><img src="assets/lm-mark.png" alt="LM"></span>
           ${navW.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}" ${k === 'guide' ? 'style="margin-top:auto"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
         </aside>
         <main class="ws-main"><div class="screen">${inner}</div></main>
@@ -203,7 +203,7 @@
   });
 
   function topBar(title, back, right) {
-    return `<header class="top between"><div class="row grow" style="min-width:0">${back ? `<button class="icon-btn" type="button" data-go="${back}" aria-label="${t('back')}">${icon('back')}</button>` : `<span class="brand"><span class="mark">${icon('brand')}</span>${esc(t('brand'))}</span>`}${title ? `<strong class="ellipsis">${title}</strong>` : ''}</div>${right || ''}</header>`;
+    return `<header class="top between"><div class="row grow" style="min-width:0">${back ? `<button class="icon-btn" type="button" data-go="${back}" aria-label="${t('back')}">${icon('back')}</button>` : `<span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span>`}${title ? `<strong class="ellipsis">${title}</strong>` : ''}</div>${right || ''}</header>`;
   }
 
   /* 전역 클릭 위임 */
@@ -220,7 +220,7 @@
       uiLang = sel;
       document.documentElement.lang = sel === 'zh' ? 'zh-Hans' : sel;
       $app.innerHTML = `<div class="screen">
-        <header class="top row"><span class="brand"><span class="mark">${icon('brand')}</span>${esc(t('brand'))}</span></header>
+        <header class="top row"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span></header>
         <div class="content stack-lg">
           <div class="stack-sm"><h1>${t('ob_title')}</h1><p class="muted">${t('ob_sub')}</p></div>
           <div class="card language-select" role="radiogroup">
@@ -260,7 +260,7 @@
   }
 
   function renderBlocked(u) {
-    $app.innerHTML = `<div class="screen"><header class="top row"><span class="brand"><span class="mark">${icon('brand')}</span>${esc(t('brand'))}</span></header>
+    $app.innerHTML = `<div class="screen"><header class="top row"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span></header>
       <div class="content stack-lg"><div class="card danger stack-sm"><h1>${t('blocked_title')}</h1><p>${t('blocked_body')}</p>${u.banReason ? `<p class="small">${esc(u.banReason)}</p>` : ''}</div>
       <p class="small muted">ID · ${esc(u.id)}</p></div></div>`;
   }
