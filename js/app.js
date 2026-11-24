@@ -157,7 +157,8 @@
     if (r.name === 'agent') return renderAgentLogin();
     const u = Store.me();
     if (!u) return renderOnboarding();
-    uiLang = u.lang || uiLang;
+    // 관리자 '직원 화면 보기'는 관리자 언어(한국어)로: 화면·번역 줄·지시 모두 한국어
+    uiLang = Store.viewingAs() ? 'ko' : (u.lang || uiLang);
     document.documentElement.lang = uiLang === 'zh' ? 'zh-Hans' : uiLang;
     document.title = t('brand') + ' · ' + t('tagline');
     if (u.status === 'banned') return renderBlocked(u);
@@ -305,7 +306,7 @@
         ${!nextP.length && !ann.length ? `<p class="tiny muted">${t('none')}</p>` : ''}
         <div class="row" style="gap:8px"><button class="btn sm secondary" type="button" data-go="#/agenda?c=${c.id}">${t('add_promise')}</button><button class="btn sm secondary" type="button" data-go="#/gift/${c.id}">🎁</button><button class="btn sm secondary" type="button" data-go="#/saju/${c.id}">☯</button></div>
       </div>
-      ${rc.unanswered.length ? `<div class="ws-card" style="background:var(--warm);border-color:#efdfc5"><span class="ws-h" style="color:var(--warm-ink)">${t('mem_unanswered')}</span>${rc.unanswered.slice(-3).map((m) => `<div class="small">💬 ${esc((m.translation || m.text).slice(0, 70))}</div>`).join('')}</div>` : ''}
+      ${rc.unanswered.length ? `<div class="ws-card" style="background:var(--warm);border-color:#efdfc5"><span class="ws-h" style="color:var(--warm-ink)">${t('mem_unanswered')}</span>${rc.unanswered.slice(-3).map((m) => `<div class="small">💬 ${esc((m.translation || m.text).slice(0, 70))}${vaLine(m.text, m.lang)}</div>`).join('')}</div>` : ''}
       <div class="ws-card"><span class="ws-h">${t('coach_next')}</span><p class="small">${esc(tips[0])}</p><p class="tiny" style="color:var(--warm-ink)">⚠ ${esc(tips[1])}</p><button class="link" type="button" data-go="#/coach/${c.id}" style="min-height:28px">${t('coach_link')} ${icon('arrow', 'sm')}</button></div>
       ${c.note ? `<div class="ws-card"><span class="ws-h">${t('c_note')}</span><p class="small" style="white-space:pre-wrap">${esc(c.note)}</p></div>` : ''}`;
     }
@@ -375,11 +376,11 @@
   /* ================= 온보딩 ================= */
   // 기업용 상담원 로그인 (관리자·팀장이 만든 아이디·비밀번호)
   const AG_T = {
-    ko: { nt: '새 지시가 도착했습니다', later: '나중에', t: '상담원 로그인', s: '회사(팀장)에게 받은 상담원 아이디와 비밀번호를 입력하세요.', id: '아이디', pw: '비밀번호', go: '로그인', back: '← 처음 화면', chk: '서버 확인 중…', bad: '비밀번호가 맞지 않습니다', none: '없는 아이디입니다. 팀장에게 확인하세요', off: '서버에 연결할 수 없습니다. 인터넷을 확인하세요', link: '상담원 로그인 (회사 계정)', ok: '로그인했습니다', sw: '상담원 계정으로 전환' },
-    zh: { nt: '收到新的指示', later: '稍后', t: '客服登录', s: '请输入公司（组长）提供的客服账号和密码。', id: '账号', pw: '密码', go: '登录', back: '← 返回', chk: '正在连接服务器…', bad: '密码不正确', none: '账号不存在，请联系组长', off: '无法连接服务器，请检查网络', link: '客服登录（公司账号）', ok: '已登录', sw: '切换到客服账号' },
-    ja: { nt: '新しい指示が届きました', later: 'あとで', t: 'オペレーターログイン', s: '会社（チームリーダー）から受け取ったIDとパスワードを入力してください。', id: 'ID', pw: 'パスワード', go: 'ログイン', back: '← 最初の画面', chk: 'サーバー確認中…', bad: 'パスワードが違います', none: 'IDがありません。リーダーに確認してください', off: 'サーバーに接続できません', link: 'オペレーターログイン（会社アカウント）', ok: 'ログインしました', sw: 'オペレーターアカウントに切替' },
-    vi: { nt: 'Có chỉ thị mới', later: 'Để sau', t: 'Đăng nhập nhân viên tư vấn', s: 'Nhập ID và mật khẩu do công ty (trưởng nhóm) cấp.', id: 'ID', pw: 'Mật khẩu', go: 'Đăng nhập', back: '← Màn hình đầu', chk: 'Đang kiểm tra máy chủ…', bad: 'Sai mật khẩu', none: 'ID không tồn tại. Hãy hỏi trưởng nhóm', off: 'Không kết nối được máy chủ', link: 'Đăng nhập nhân viên (tài khoản công ty)', ok: 'Đã đăng nhập', sw: 'Chuyển sang tài khoản nhân viên' },
-    en: { nt: 'New instruction from your team', later: 'Later', t: 'Agent sign-in', s: 'Enter the agent ID and password from your company (team leader).', id: 'ID', pw: 'Password', go: 'Sign in', back: '← Back', chk: 'Checking server…', bad: 'Wrong password', none: 'No such ID. Ask your team leader', off: 'Cannot reach the server', link: 'Agent sign-in (company account)', ok: 'Signed in', sw: 'Switch to agent account' },
+    ko: { seat: '등록된 자리(PC)에서만 로그인할 수 있습니다. 자리를 바꾸려면 팀장에게 「자리 초기화」를 요청하세요', kicked: '자리가 초기화되었거나 다른 자리에서 로그인되어 로그아웃되었습니다', nt: '새 지시가 도착했습니다', later: '나중에', t: '상담원 로그인', s: '회사(팀장)에게 받은 상담원 아이디와 비밀번호를 입력하세요.', id: '아이디', pw: '비밀번호', go: '로그인', back: '← 처음 화면', chk: '서버 확인 중…', bad: '비밀번호가 맞지 않습니다', none: '없는 아이디입니다. 팀장에게 확인하세요', off: '서버에 연결할 수 없습니다. 인터넷을 확인하세요', link: '상담원 로그인 (회사 계정)', ok: '로그인했습니다', sw: '상담원 계정으로 전환' },
+    zh: { seat: '只能在登记的座位（电脑）上登录。如需更换座位，请让组长「重置座位」', kicked: '座位已被重置或在其他座位登录，已自动退出', nt: '收到新的指示', later: '稍后', t: '客服登录', s: '请输入公司（组长）提供的客服账号和密码。', id: '账号', pw: '密码', go: '登录', back: '← 返回', chk: '正在连接服务器…', bad: '密码不正确', none: '账号不存在，请联系组长', off: '无法连接服务器，请检查网络', link: '客服登录（公司账号）', ok: '已登录', sw: '切换到客服账号' },
+    ja: { seat: '登録された席（PC）でのみログインできます。席を変える場合はリーダーに「席リセット」を依頼してください', kicked: '席がリセットされたか、別の席でログインしたためログアウトしました', nt: '新しい指示が届きました', later: 'あとで', t: 'オペレーターログイン', s: '会社（チームリーダー）から受け取ったIDとパスワードを入力してください。', id: 'ID', pw: 'パスワード', go: 'ログイン', back: '← 最初の画面', chk: 'サーバー確認中…', bad: 'パスワードが違います', none: 'IDがありません。リーダーに確認してください', off: 'サーバーに接続できません', link: 'オペレーターログイン（会社アカウント）', ok: 'ログインしました', sw: 'オペレーターアカウントに切替' },
+    vi: { seat: 'Chỉ đăng nhập được tại chỗ ngồi (máy) đã đăng ký. Muốn đổi chỗ, hãy nhờ trưởng nhóm «đặt lại chỗ ngồi»', kicked: 'Chỗ ngồi đã được đặt lại hoặc đã đăng nhập ở máy khác nên bạn đã bị đăng xuất', nt: 'Có chỉ thị mới', later: 'Để sau', t: 'Đăng nhập nhân viên tư vấn', s: 'Nhập ID và mật khẩu do công ty (trưởng nhóm) cấp.', id: 'ID', pw: 'Mật khẩu', go: 'Đăng nhập', back: '← Màn hình đầu', chk: 'Đang kiểm tra máy chủ…', bad: 'Sai mật khẩu', none: 'ID không tồn tại. Hãy hỏi trưởng nhóm', off: 'Không kết nối được máy chủ', link: 'Đăng nhập nhân viên (tài khoản công ty)', ok: 'Đã đăng nhập', sw: 'Chuyển sang tài khoản nhân viên' },
+    en: { seat: 'You can sign in only at your registered seat (PC). To move, ask your team leader to reset your seat', kicked: 'Signed out: your seat was reset or you signed in at another seat', nt: 'New instruction from your team', later: 'Later', t: 'Agent sign-in', s: 'Enter the agent ID and password from your company (team leader).', id: 'ID', pw: 'Password', go: 'Sign in', back: '← Back', chk: 'Checking server…', bad: 'Wrong password', none: 'No such ID. Ask your team leader', off: 'Cannot reach the server', link: 'Agent sign-in (company account)', ok: 'Signed in', sw: 'Switch to agent account' },
   };
   const agT = (k) => (AG_T[uiLang] || AG_T.en)[k];
   // 다른 PC의 팀장·관리자가 보낸 지시를 바로 창으로 띄움
@@ -402,7 +403,16 @@
       el.querySelector('#np-open').addEventListener('click', closeSheet);
     });
   }
-  window.addEventListener('lm-sync', () => setTimeout(() => { if (!typing()) popNotices(); }, 300));
+  // 내 자리가 아니게 되면(초기화·다른 자리 로그인) 즉시 로그아웃
+  function seatGuard() {
+    const u = Store.me(); if (!u || !u.agent || Store.viewingAs() || /^#\/admin/.test(location.hash)) return false;
+    const st = Store.seatState(u.id);
+    if (st === 'free') { if (Store.Sync.enabled() && !Store.Sync.lastOk) return false; Store.bindSeat(u.id); return false; }
+    if (st === 'ok') return false;
+    closeSheet(); Store.logout(); location.hash = '#/agent'; render(); setTimeout(() => toast(agT('kicked'), 6000), 100); return true;
+  }
+  window.addEventListener('lm-sync', () => { if (seatGuard()) return; setTimeout(() => { if (!typing()) popNotices(); }, 300); });
+  setTimeout(() => { try { seatGuard(); } catch (e) { /* noop */ } }, 2500);
   setTimeout(() => { try { popNotices(); } catch (e) { /* noop */ } }, 1500);
   function renderAgentLogin() {
     document.body.classList.remove('is-admin');
@@ -419,6 +429,10 @@
       if (!u) { const loc = Store.findAgentLocal(f.get('id'), f.get('pin')); if (loc) u = loc; }
       bt.disabled = false; bt.textContent = agT('go');
       if (!u) { toast(res === 'badpin' || Store.findAgentLocal(f.get('id')) ? agT('bad') : res === undefined ? agT('off') : agT('none'), 4000); return; }
+      // 자리 고정: 다른 PC에 등록된 계정이면 막음
+      try { await Store.Sync.pull(); } catch (x) { /* noop */ }
+      if (Store.seatState(u.id) === 'other') { toast(agT('seat'), 6000); return; }
+      Store.bindSeat(u.id);
       if (u.status === 'banned') { Store.agentLoginAs(u); go('#/home'); render(); return; }
       u.lastActive = Date.now(); Store.agentLoginAs(u); try { sessionStorage.removeItem('lm_admin_ok'); } catch (x) { /* noop */ }
       uiLang = u.lang && T[u.lang] ? u.lang : uiLang; toast(agT('ok')); location.hash = '#/home'; render();
@@ -1426,6 +1440,17 @@
     }
     return '…';
   }
+  // 관리자 '직원 화면 보기': 직원 언어로 된 추천 답장·메모도 한국어 뜻을 함께 표시
+  const VAKO = {}; let vaT = null;
+  function vaKo(text, from) {
+    if (!Store.viewingAs() || !text) return '';
+    if ((from || Engine.detect(text)) === 'ko') return '';
+    if (VAKO[text] !== undefined) return VAKO[text];
+    VAKO[text] = '…';
+    Engine.translate(text, 'ko', from).then((r) => { VAKO[text] = r && r.text && r.text !== text ? r.text : ''; clearTimeout(vaT); vaT = setTimeout(() => render(), 300); }).catch(() => { VAKO[text] = ''; });
+    return '…';
+  }
+  const vaLine = (text, from) => { const v = vaKo(text, from); return v ? `<span class="va-ko" lang="ko">🇰🇷 ${esc(v)}</span>` : ''; };
   function bubbleHtml(c, m, isLatestIn) {
     const a = m.analysis;
     const risk = m.risk && m.risk.length;
@@ -1468,7 +1493,7 @@
       </details>
       <div class="sug-h"><h2>${t('suggest_title')}</h2><button class="link" type="button" data-analyze="${m.id}" style="min-height:24px;font-size:12px">▲</button></div>
       <div class="sug-grid">${(a.replies || []).slice(0, 6).map((rp, i) => `<div class="sug-card ${m.chosen === rp.text ? 'on' : ''}">
-        <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span>${rp.text && rp.text !== rp.meaning ? `<small lang="${esc(a.target)}">${esc(rp.text)}</small>` : ''}</button>
+        <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span>${rp.text && rp.text !== rp.meaning ? `<small lang="${esc(a.target)}">${esc(rp.text)}</small>` : ''}${vaLine(rp.meaning || rp.text)}</button>
         <button type="button" class="sug-copy" data-use="${m.id}|${i}" title="${esc(t('use_reply'))}">${icon('copy', 'sm')} ${t('use_reply')}</button></div>`).join('')}</div>
       ${m.risk && m.risk.length ? `<button class="btn danger-btn sm" type="button" data-report="${m.id}">${t('c_report')}</button>` : ''}
     </div>`;

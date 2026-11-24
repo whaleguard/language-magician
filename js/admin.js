@@ -370,6 +370,17 @@
   }
   function bindOpen() { $app.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', (e) => { if (e.target.closest('a')) return; const [u, c, m] = tr.dataset.open.split('|'); location.hash = `#/admin/monitor?u=${u}&c=${c || ''}${m ? '&m=' + m : ''}`; })); }
 
+  // 상담원 계정 만들기 (거래처·본사·팀장 공통)
+  function agentForm(sel) { const t = sel; return `<form class="stack-sm tm-agent" id="tm-agent"><h3>상담원 계정 만들기 <span class="ops-muted">아이디·비밀번호로 어느 PC에서든 로그인 · 이 팀에 자동 소속</span></h3>
+            <div class="row wrap" style="gap:6px"><input class="field" name="nickname" placeholder="상담원 이름" required style="max-width:160px"><select class="field" name="lang" style="max-width:150px">${['ko', 'zh', 'ja', 'vi', 'en', 'th', 'id', 'es', 'ru', 'mn', 'uz', 'ne', 'tl', 'hi', 'ar', 'fr', 'de', 'pt'].map((l) => `<option value="${l}">${esc(LN(l))}</option>`).join('')}</select><input class="field" name="loginId" placeholder="상담원 아이디 (영문)" required style="max-width:170px"><input class="field" name="pin" value="1234" placeholder="비밀번호" required style="max-width:110px"><button class="btn" type="submit">상담원 추가</button></div>
+            ${(() => { const ag = (sel.members || []).map((id) => Store.db.users[id]).filter((u) => u && u.loginId); return ag.length ? `<div class="tm-agents">${ag.map((u) => `<span class="tm-agent-chip"><b>${esc(u.nickname)}</b> ${esc(u.loginId)} / ${esc(u.pin)} · ${esc(LN(u.lang || 'ko'))} · ${u.lastActive ? '접속 ' + new Date(u.lastActive).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span class="ops-muted">미접속</span>'}${(() => { const b = Store.bindOf(u.id); return b && b.dev ? ` · 🔒 자리 ${esc(b.label || '')} (${new Date(b.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}) <button class="btn sm secondary" type="button" data-seat-reset="${u.id}">자리 초기화</button>` : ' · <span class="ops-muted">자리 미등록 (첫 로그인 PC로 고정)</span>'; })()}</span>`).join('')}</div>` : ''; })()}
+            <p class="ops-muted">🔒 상담원 계정은 처음 로그인한 PC(브라우저) 한 자리에서만 열립니다. 자리를 옮기면 「자리 초기화」 후 새 PC에서 로그인 · 초기화하면 기존 자리는 바로 로그아웃됩니다.</p>
+            <p class="ops-muted">상담원은 앱 주소의 첫 화면 → 「상담원 로그인」에서 이 아이디·비밀번호로 들어옵니다 · ${Store.Sync.enabled() ? '공용 서버 연결됨 · 다른 PC에서도 로그인됩니다' : '서버 미연결 · 같은 브라우저에서만'}</p></form>`; }
+  function bindAgentForm(sel, rerender) {
+    const fm = document.getElementById('tm-agent'); if (!fm) return;
+    fm.addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('상담원 아이디는 영문·숫자로 2자 이상'); return; } if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const u = Store.createAgent({ nickname: String(f.get('nickname')).trim(), lang: f.get('lang'), loginId: lid, pin: f.get('pin'), teamId: sel.id }); Store.audit({ action: 'settings', target: u.id, reason: '상담원 계정 생성 · ' + u.nickname + ' (' + lid + ') · ' + sel.name }); LM.toast('상담원 로그인: ' + lid + ' / ' + u.pin, 6000); rerender(); });
+    document.querySelectorAll('[data-seat-reset]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.seatReset; const u = Store.db.users[id]; Store.resetSeat(id); Store.audit({ action: 'settings', target: id, reason: '상담원 자리 초기화 · ' + (u ? u.nickname : id) }); LM.toast('자리를 초기화했습니다 · 새 PC에서 로그인하면 그 자리로 고정됩니다', 5000); rerender(); }));
+  }
   /* ---------- 회원 CRM ---------- */
   function crm(r) {
     const q = (r.q.q || '').toLowerCase();
@@ -379,6 +390,8 @@
     const sel = r.q.u ? findUser(r.q.u) : (list[0] && list[0].u);
     page('users', `
       <div class="stack-sm"><h1>회원 CRM</h1><p class="muted">닉네임·서비스 ID·상대 닉네임으로 검색하고, 회원별 연락처·대화 흐름·위험 표시를 확인합니다. 실명은 수집하지 않습니다.</p></div>
+      ${sel && r.q.u ? crmDetail(sel) : ''}
+      ${isLeader() && role().team ? `<section class="card stack-sm">${agentForm(role().team)}</section>` : ''}
       <form class="card row wrap" id="crm-f" role="search">
         <label class="grow stack-xs"><span class="label">닉네임 / 서비스 ID / 상대 닉네임</span><input class="field" name="q" type="search" value="${esc(r.q.q || '')}" placeholder="예: Lin, U-0001, 서준"></label>
         <label class="stack-xs"><span class="label">계정 유형</span><select class="field" name="type">${[['all', '전체'], ['member', '닉네임 회원'], ['guest', '게스트'], ['banned', '차단 계정']].map(([v, l]) => `<option value="${v}" ${type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -386,18 +399,21 @@
       </form>
       <div class="table-wrap"><table style="min-width:980px"><caption>회원 ${list.length}명</caption><thead><tr><th>닉네임 / ID</th><th>유형</th><th>표시 언어</th><th>대화 상대</th><th>들어온 대화</th><th>주 사용 앱</th><th>평균 깊이</th><th>최근 대화</th><th>위험·신고</th><th>상태</th></tr></thead>
       <tbody>${list.map(({ u, s }) => { const top = Object.entries(s.apps).sort((a, b) => b[1] - a[1])[0]; return `<tr class="clickable ${sel && sel.id === u.id ? 'selected' : ''}" data-u="${u.id}"><th scope="row">${esc(u.nickname)} / ${esc(u.id)}${u.demo ? ' <span class="badge gray">데모</span>' : ''}</th><td>${u.type === 'member' ? '닉네임 회원' : '게스트'}</td><td>${LN(u.lang)}</td><td>${u.contacts.length}명</td><td>${s.msgCount}건</td><td>${top ? esc(APPN(top[0])) : '—'}</td><td>${s.avgDepth}</td><td>${fmt(s.lastTs)} <span class="tiny muted">(${daysAgo(s.lastTs)}일 전)</span></td><td>${s.risk ? `<span class="badge alert">위험 ${s.risk}</span>` : ''} ${s.reps ? `<span class="badge warning">신고 ${s.reps}</span>` : ''}${!s.risk && !s.reps ? '<span class="badge gray">없음</span>' : ''}</td><td>${u.status === 'banned' ? '<span class="badge alert">차단</span>' : '<span class="badge">이용 중</span>'}</td></tr>`; }).join('')}</tbody></table></div>
-      ${sel ? crmDetail(sel) : ''}`);
+      ${sel && !r.q.u ? crmDetail(sel) : ''}`);
     document.getElementById('crm-f').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); location.hash = `#/admin/users?q=${encodeURIComponent(f.get('q'))}&type=${f.get('type')}`; });
     $app.querySelectorAll('[data-u]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/admin/users?q=${encodeURIComponent(r.q.q || '')}&type=${type}&u=${tr.dataset.u}`; }));
     bindOpen();
     bindBan();
+    if (isLeader() && role().team) bindAgentForm(role().team, () => crm(r));
+    // 행을 누르면 아래 상세로 바로 이동 (표가 길어 이동이 안 보이던 문제)
+    if (r.q.u) setTimeout(() => { const d = document.getElementById('crm-detail'); if (d) { d.scrollIntoView({ behavior: 'smooth', block: 'start' }); d.classList.add('crm-flash'); setTimeout(() => d.classList.remove('crm-flash'), 1600); } }, 60);
   }
   function crmDetail(u) {
     const s = memberStats(u);
     const totApps = Object.values(s.apps).reduce((a, b) => a + b, 0) || 1;
     return `<article class="card stack-lg" id="crm-detail">
       <div class="between wrap"><div class="row"><span class="avatar">${esc([...u.nickname][0] || '?')}</span><div><h2>${esc(u.nickname)} <span class="small muted">${esc(u.id)}</span></h2><p class="small muted">${u.type === 'member' ? '닉네임 회원' : '게스트'} · 표시 언어 ${LN(u.lang)} · 가입 ${fmtD(u.createdAt)}</p></div></div>
-        <div class="row wrap" style="gap:8px">${viewAsBtn(u)}<a class="btn secondary" href="#/admin/notices?u=${u.id}">✉ 메시지 보내기</a><a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div></div>
+        <div class="row wrap" style="gap:8px"><button class="btn ghost sm" type="button" onclick="var t=document.querySelector('#crm-f');if(t)t.scrollIntoView({behavior:'smooth'})">↓ 목록</button>${viewAsBtn(u)}<a class="btn secondary" href="#/admin/notices?u=${u.id}">✉ 메시지 보내기</a><a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div></div>
       <div class="metrics">
         <div class="card stack-sm"><span class="label">대화 상대</span><strong class="metric">${u.contacts.length}명</strong></div>
         <div class="card stack-sm"><span class="label">들어온 대화</span><strong class="metric">${s.msgCount}건</strong></div>
@@ -503,12 +519,28 @@
     if (jm) setTimeout(() => { const el = $app.querySelector(`tr[data-mid="${jm}"]`); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('hit-flash'); } }, 80);
   }
 
+  // 관리자 열람용 한국어 번역 (회원 데이터는 건드리지 않고 이 기기에만 캐시)
+  let KO = null; const koQ = new Set();
+  function koCache() { if (!KO) { try { KO = JSON.parse(localStorage.getItem('lm_ko_tr') || '{}'); } catch (e) { KO = {}; } } return KO; }
+  function koOf(m) {
+    if (!m || !m.text) return '';
+    if (m.lang === 'ko') return m.text;
+    if (m.trLang === 'ko' && m.translation) return m.translation;
+    if (m.trs && (m.trs['ko|in'] || m.trs['ko|out'])) return m.trs['ko|in'] || m.trs['ko|out'];
+    const k = m.id; const ca = koCache(); if (ca[k]) return ca[k];
+    if (!koQ.has(k) && window.Engine && Engine.translate) {
+      koQ.add(k);
+      Engine.translate(m.text, 'ko', m.lang || undefined).then((r) => { if (r && r.text) { ca[k] = r.text; try { const ks = Object.keys(ca); if (ks.length > 3000) ks.slice(0, 500).forEach((x) => delete ca[x]); localStorage.setItem('lm_ko_tr', JSON.stringify(ca)); } catch (e) { /* noop */ } document.querySelectorAll('[data-ko="' + k + '"]').forEach((el) => { el.textContent = r.text; el.classList.remove('ops-muted'); }); } }).catch(() => {});
+    }
+    return null;
+  }
+  function koCell(m) { const v = koOf(m); return v === null ? `<span class="ops-muted" data-ko="${m.id}">번역 중…</span>` : esc(v); }
   function convoHtml(u, c, ms) {
     const pf = Engine.profile(ms);
     return `<div class="row wrap"><span class="badge">열람 사유: ${esc(viewGrants[u.id + '|' + (c ? c.id : 'none')])}</span><a class="link" href="#/admin/audit?q=${u.id}">이 회원의 열람 로그</a></div>
       ${c ? `<div class="metrics"><div class="card stack-xs"><span class="label">진행 기간</span><strong>${pf.firstTs ? Math.round((pf.lastTs - pf.firstTs) / 86400000) + '일' : '—'}</strong></div><div class="card stack-xs"><span class="label">단절 일수</span><strong>${pf.silentDays ?? '—'}일</strong></div><div class="card stack-xs"><span class="label">깊이 점수</span><strong>${pf.depth} / 100</strong></div><div class="card stack-xs"><span class="label">상대 분위기</span><strong>${pf.inCount ? { good: '좋음', low: '가라앉음', neutral: '보통' }[pf.mood] : '—'}</strong></div></div>` : ''}
-      <div class="table-wrap"><table style="min-width:760px"><caption>원문 · 사용자 표시 번역 · AI 답장 제안 비교</caption><thead><tr><th style="width:80px">시각</th><th style="width:60px">방향</th><th>원문</th><th>번역</th><th>AI 답장 제안 / 사용자가 고른 답장</th><th style="width:90px">입력 방식</th><th style="width:70px"></th></tr></thead>
-      <tbody>${ms.map((m) => `<tr data-mid="${m.id}"${m.risk && m.risk.length ? ' style="background:var(--danger-bg)"' : ''}><td class="tiny">${fmt(m.ts)}</td><td>${m.dir === 'in' ? '<span class="badge gray">받음</span>' : '<span class="badge">보냄</span>'}</td><td class="wrap-cell" lang="${esc(m.lang)}">${esc(m.text)}${m.risk && m.risk.length ? `<br>${m.risk.map((x) => `<span class="badge alert">${x === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}` : ''}</td><td class="wrap-cell" lang="${esc(m.trLang)}">${esc(m.translation || '—')}</td><td class="wrap-cell small">${m.suggestions && m.suggestions.length ? m.suggestions.map((s) => `<div class="${m.chosen === s ? 'strong' : 'muted'}">${m.chosen === s ? '✓ ' : '· '}${esc(s)}</div>`).join('') : (m.chosen ? '✓ ' + esc(m.chosen) : '—')}${m.nuance ? `<div class="tiny muted" style="margin-top:4px">뉘앙스: ${esc(m.nuance.slice(0, 120))}</div>` : ''}</td><td class="tiny">${esc({ paste: '붙여넣기', ocr: '스크린샷', home: '홈 번역', reply: '답장 복사', write: '직접 작성', coach: '코칭 예문', gift: '축하 문구', sample: '샘플' }[m.source] || m.source || '')}${m.provider === 'ai' ? '<br><span class="badge">AI</span>' : ''}</td><td><button class="btn sm secondary" type="button" data-note="${m.id}">메모</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대화가 없습니다.</td></tr>'}</tbody></table></div>
+      <div class="table-wrap"><table style="min-width:760px"><caption>원문 · 사용자 표시 번역 · AI 답장 제안 비교</caption><thead><tr><th style="width:80px">시각</th><th style="width:60px">방향</th><th>원문</th><th>한국어</th><th>사용자 화면 번역</th><th>AI 답장 제안 / 사용자가 고른 답장</th><th style="width:90px">입력 방식</th><th style="width:70px"></th></tr></thead>
+      <tbody>${ms.map((m) => `<tr data-mid="${m.id}"${m.risk && m.risk.length ? ' style="background:var(--danger-bg)"' : ''}><td class="tiny">${fmt(m.ts)}</td><td>${m.dir === 'in' ? '<span class="badge gray">받음</span>' : '<span class="badge">보냄</span>'}</td><td class="wrap-cell" lang="${esc(m.lang)}">${esc(m.text)}${m.risk && m.risk.length ? `<br>${m.risk.map((x) => `<span class="badge alert">${x === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}` : ''}</td><td class="wrap-cell" lang="ko"><span data-ko-cell>${koCell(m)}</span></td><td class="wrap-cell small muted" lang="${esc(m.trLang)}">${esc(m.translation || '—')}</td><td class="wrap-cell small">${m.suggestions && m.suggestions.length ? m.suggestions.map((s) => `<div class="${m.chosen === s ? 'strong' : 'muted'}">${m.chosen === s ? '✓ ' : '· '}${esc(s)}</div>`).join('') : (m.chosen ? '✓ ' + esc(m.chosen) : '—')}${m.nuance ? `<div class="tiny muted" style="margin-top:4px">뉘앙스: ${esc(m.nuance.slice(0, 120))}</div>` : ''}</td><td class="tiny">${esc({ paste: '붙여넣기', ocr: '스크린샷', home: '홈 번역', reply: '답장 복사', write: '직접 작성', coach: '코칭 예문', gift: '축하 문구', sample: '샘플' }[m.source] || m.source || '')}${m.provider === 'ai' ? '<br><span class="badge">AI</span>' : ''}</td><td><button class="btn sm secondary" type="button" data-note="${m.id}">메모</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대화가 없습니다.</td></tr>'}</tbody></table></div>
       <div class="card soft stack" id="note-box"><h3>개선 메모</h3>
         <label class="stack-xs"><span class="label">개선 항목</span><select class="field" id="nt-cat"><option>번역·뉘앙스</option><option>답장 제안</option><option>지난 대화 연결</option><option>약속 추출</option><option>관계 코칭</option><option>문화 가이드</option><option>위험 감지</option></select></label>
         <label class="stack-xs"><span class="label">관찰 내용</span><textarea class="field" id="nt-body" rows="3" placeholder="예: '볼까요?'의 부드러운 제안 톤이 번역에서 사라짐"></textarea></label>
@@ -799,10 +831,7 @@
             <div class="row wrap" style="gap:6px"><input class="field grow" id="tm-q" type="search" placeholder="닉네임·ID로 찾기">${isOrg() ? `<input class="field" id="tm-add-id" placeholder="상담원 서비스 ID (예: U-0012)" style="max-width:220px"><button class="btn secondary" type="button" id="tm-add">ID로 추가</button>` : ''}</div>${isOrg() ? '<p class="ops-muted">상담원은 앱 설정에 보이는 자기 서비스 ID를 알려주면 추가할 수 있습니다. 다른 회사 소속 회원은 보이지 않습니다.</p>' : ''}
             <div class="tm-members">${all.sort((a, b) => ((sel.members || []).includes(b.id) - (sel.members || []).includes(a.id)) || a.nickname.localeCompare(b.nickname)).map((u) => { const other = Store.teamOf(u.id); return `<label class="tm-member" data-k="${esc((u.nickname + ' ' + u.id).toLowerCase())}"><input type="checkbox" name="m" value="${u.id}" ${(sel.members || []).includes(u.id) ? 'checked' : ''}> <span><strong>${esc(u.nickname)}</strong> <span class="ops-muted">${esc(u.id)} · ${esc(LN(u.lang || 'ko'))}${other && other.id !== sel.id ? ' · ' + esc(other.name) : ''}</span></span></label>`; }).join('')}</div>
             <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>
-          <form class="stack-sm tm-agent" id="tm-agent"><h3>상담원 계정 만들기 <span class="ops-muted">아이디·비밀번호로 어느 PC에서든 로그인 · 이 팀에 자동 소속</span></h3>
-            <div class="row wrap" style="gap:6px"><input class="field" name="nickname" placeholder="상담원 이름" required style="max-width:160px"><select class="field" name="lang" style="max-width:150px">${['ko', 'zh', 'ja', 'vi', 'en', 'th', 'id', 'es', 'ru', 'mn', 'uz', 'ne', 'tl', 'hi', 'ar', 'fr', 'de', 'pt'].map((l) => `<option value="${l}">${esc(LN(l))}</option>`).join('')}</select><input class="field" name="loginId" placeholder="상담원 아이디 (영문)" required style="max-width:170px"><input class="field" name="pin" value="1234" placeholder="비밀번호" required style="max-width:110px"><button class="btn" type="submit">상담원 추가</button></div>
-            ${(() => { const ag = (sel.members || []).map((id) => Store.db.users[id]).filter((u) => u && u.loginId); return ag.length ? `<div class="tm-agents">${ag.map((u) => `<span class="tm-agent-chip"><b>${esc(u.nickname)}</b> ${esc(u.loginId)} / ${esc(u.pin)} · ${esc(LN(u.lang || 'ko'))} · ${u.lastActive ? '접속 ' + new Date(u.lastActive).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span class="ops-muted">미접속</span>'}</span>`).join('')}</div>` : ''; })()}
-            <p class="ops-muted">상담원은 앱 주소의 첫 화면 → 「상담원 로그인」에서 이 아이디·비밀번호로 들어옵니다 · ${Store.Sync.enabled() ? '공용 서버 연결됨 · 다른 PC에서도 로그인됩니다' : '서버 미연결 · 같은 브라우저에서만'}</p></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
+${agentForm(sel)}` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
       </div>`);
     document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('팀장 아이디는 영문·숫자로 2자 이상'); return; } f.set('loginId', lid); if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ orgId: isOrg() ? role().org.id : (f.get('orgId') || ''), name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); LM.toast('팀장 로그인: ' + t.loginId + ' / ' + t.pin + ' · 로그아웃 후 이 화면에서 로그인', 6000); location.hash = '#/admin/teams?t=' + t.id; });
     const ed = document.getElementById('tm-edit');
@@ -810,7 +839,7 @@
       const addB = document.getElementById('tm-add'); if (addB) addB.addEventListener('click', () => { const id = document.getElementById('tm-add-id').value.trim().toUpperCase(); const u = Store.db.users[id]; const ot = u && Store.teamOf(id); if (!u) { LM.toast('그 ID의 회원이 없습니다'); return; } if (ot && ot.orgId !== role().org.id) { LM.toast('다른 회사에 소속된 회원입니다'); return; } Store.teamsOfOrg(role().org.id).forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((x) => x !== id); }); Store.updateTeam(sel.id, { members: Array.from(new Set((sel.members || []).concat(id))) }); Store.audit({ action: 'settings', target: sel.id, reason: '상담원 추가 · ' + id }); LM.toast(u.nickname + ' 님을 추가했습니다'); teamsPage(r); });
       document.getElementById('tm-q').addEventListener('input', (e) => { const v = e.target.value.toLowerCase(); ed.querySelectorAll('.tm-member').forEach((l) => { l.hidden = v && !l.dataset.k.includes(v); }); });
       ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); scopedTeams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, Object.assign(isOrg() ? {} : { orgId: f.get('orgId') || '' }, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: Store.normId(f.get('loginId')), pin: String(f.get('pin') || '').trim(), members })); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
-      document.getElementById('tm-agent').addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('상담원 아이디는 영문·숫자로 2자 이상'); return; } if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const u = Store.createAgent({ nickname: String(f.get('nickname')).trim(), lang: f.get('lang'), loginId: lid, pin: f.get('pin'), teamId: sel.id }); Store.audit({ action: 'settings', target: u.id, reason: '상담원 계정 생성 · ' + u.nickname + ' (' + lid + ') · ' + sel.name }); LM.toast('상담원 로그인: ' + lid + ' / ' + u.pin, 6000); teamsPage(r); });
+      bindAgentForm(sel, () => teamsPage(r));
       document.getElementById('tm-del').addEventListener('click', () => { Store.removeTeam(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '팀 삭제 · ' + sel.name }); location.hash = '#/admin/teams'; });
     }
   }
@@ -842,7 +871,7 @@
     const lvl = (min) => (!min ? 0 : min < 120 ? 1 : min < 300 ? 2 : min < 420 ? 3 : 4);
     page('attendance', `<section class="lm-ops">
       <header class="ops-header"><div><h1>근태 · 월별 <span class="ops-muted" style="font-size:16px">${Y}년 ${M}월</span></h1><p class="ops-muted">출근일·지각(09:30 이후 첫 접속)·평균 출퇴근·총 접속·활동·대화 시간을 상담원별로 집계합니다.</p></div>
-        <div class="ops-controls"><div class="ops-seg"><a href="#/admin/attendance">오늘</a><a href="#/admin/attendance?d=yesterday">어제</a><a href="#/admin/attendance?d=week">최근 7일</a><a href="#/admin/attendance?d=month" aria-current="true">월별</a></div>
+        <div class="ops-controls"><div class="ops-seg"><a href="#/admin/attendance">오늘</a><a href="#/admin/attendance?d=yesterday">어제</a><a href="#/admin/attendance?d=week">최근 7일</a><a href="#/admin/attendance?d=month" aria-current="true">월별·달력</a></div>
           <div class="ops-seg"><a href="#/admin/attendance?d=month&m=${ymOf(prev)}">‹ ${prev.getMonth() + 1}월</a><a aria-current="true">${M}월</a><a href="#/admin/attendance?d=month&m=${ymOf(next)}">${next.getMonth() + 1}월 ›</a></div></div></header>
       <div class="ops-kpis">
         <div class="ops-kpi"><h2>상담원</h2><strong class="ops-value">${rows.length}명</strong><p class="ops-muted">이번 달 출근 ${rows.filter((x) => x.days).length}명</p></div>
@@ -851,6 +880,22 @@
         <div class="ops-kpi"><h2>지각 (09:30 이후)</h2><strong class="ops-value">${rows.reduce((a, x) => a + x.late, 0)}회</strong></div>
         <div class="ops-kpi"><h2>총 대화 시간</h2><strong class="ops-value">${dur(rows.reduce((a, x) => a + x.talk, 0))}</strong></div>
       </div>
+      ${(() => {
+        const pid = r.q.p || ''; const pr = pid ? rows.find((x) => x.u.id === pid) : null;
+        const first = new Date(Y, M - 1, 1).getDay(); const cells = [];
+        for (let i = 0; i < first; i++) cells.push('<div class="att-cal-cell empty"></div>');
+        const todayK = Store.dkey(Date.now());
+        keys.forEach((k, i) => {
+          const wd = new Date(Y, M - 1, i + 1).getDay(); let body = ''; let lv = 0;
+          if (pr) { const rc = pr.recs[i]; lv = lvl(rc && rc.online); body = rc ? `<span class="att-cal-t">${hmMin(minOfDay(rc.first))}~${hmMin(minOfDay(rc.logoutAt || rc.last))}</span><span class="att-cal-v">${dur(rc.online || 0)}</span>${minOfDay(rc.first) > 570 ? '<span class="ops-tag" data-tone="attention">지각</span>' : ''}` : (wd === 0 || wd === 6 ? '' : (k < todayK ? '<span class="att-cal-off">미접속</span>' : '')); }
+          else { const day = rows.map((x) => x.recs[i]).filter(Boolean); const on = day.reduce((a, x) => a + (x.online || 0), 0); const lt = day.filter((x) => minOfDay(x.first) > 570).length; lv = lvl(day.length ? on / day.length : 0); body = day.length ? `<span class="att-cal-v">출근 ${day.length}명</span><span class="att-cal-t">총 ${dur(on)}</span>${lt ? `<span class="ops-tag" data-tone="attention">지각 ${lt}</span>` : ''}` : ''; }
+          cells.push(`<a class="att-cal-cell ${wd === 0 ? 'sun' : wd === 6 ? 'sat' : ''} ${k === todayK ? 'today' : ''}" data-level="${lv}" href="#/admin/attendance?date=${k}${pid ? '&p=' + pid : ''}"><b>${i + 1}</b>${body}</a>`);
+        });
+        return `<section class="ops-panel"><header class="ops-panel-head"><h2>📅 근태 달력</h2><label class="row" style="gap:6px"><span class="ops-muted">상담원</span><select class="field" id="att-p" style="min-width:180px"><option value="">전체 (인원 합계)</option>${rows.map((x) => `<option value="${x.u.id}" ${pid === x.u.id ? 'selected' : ''}>${esc(x.u.nickname)}${x.team ? ' · ' + esc(x.team.name) : ''}</option>`).join('')}</select></label></header>
+          ${pr ? `<p class="ops-muted" style="margin:0 0 8px">${esc(pr.u.nickname)} · 출근 ${pr.days}일 · 지각 ${pr.late}회 · 총 접속 ${dur(pr.online)} · 평균 ${hmMin(pr.avgIn)}~${hmMin(pr.avgOut)}</p>` : ''}
+          <div class="att-cal">${['일', '월', '화', '수', '목', '금', '토'].map((w, i) => `<div class="att-cal-h ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('')}${cells.join('')}</div>
+          <p class="ops-muted" style="margin-top:8px">날짜를 누르면 그날 상담원별 출퇴근·접속·대화 시간을 봅니다.</p></section>`;
+      })()}
       <section class="ops-panel"><header class="ops-panel-head"><h2>상담원별 월 합계</h2></header>
         <div class="ops-table-wrap"><table class="ops-table att-table"><thead><tr><th>상담원</th><th class="ops-num">출근일</th><th class="ops-num">지각</th><th class="ops-num">평균 첫 접속</th><th class="ops-num">평균 마지막</th><th class="ops-num">총 접속</th><th class="ops-num">일평균</th><th class="ops-num">실제 활동</th><th class="ops-num">대화 시간</th><th class="ops-num">처리 메시지</th></tr></thead><tbody>
         ${rows.map((x) => `<tr><td><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.u.id)}${x.team ? ' · ' + esc(x.team.name) : ''}</span></td><td class="ops-num">${x.days}일</td><td class="ops-num">${x.late ? `<span class="ops-tag" data-tone="attention">${x.late}</span>` : 0}</td><td class="ops-num">${hmMin(x.avgIn)}</td><td class="ops-num">${hmMin(x.avgOut)}</td><td class="ops-num">${x.online ? dur(x.online) : '—'}</td><td class="ops-num">${x.days ? dur(Math.round(x.online / x.days)) : '—'}</td><td class="ops-num">${x.active ? dur(x.active) : '—'}</td><td class="ops-num">${x.talk ? dur(x.talk) : '—'}</td><td class="ops-num">${x.msgs}</td></tr>`).join('')}
@@ -860,6 +905,7 @@
         ${rows.map((x) => `<tr><th scope="row">${esc(x.u.nickname)}</th>${x.recs.map((rc, i) => `<td data-level="${lvl(rc && rc.online)}" title="${keys[i]} · ${rc ? dur(rc.online) : '미접속'}">${rc ? Math.round(rc.online / 60) : ''}</td>`).join('')}</tr>`).join('')}
         </tbody></table></div></section>
     </section>`);
+    const ap = document.getElementById('att-p'); if (ap) ap.addEventListener('change', () => { location.hash = '#/admin/attendance?d=month&m=' + ym + (ap.value ? '&p=' + ap.value : ''); });
   }
   function attendancePage(r) {
     if (r.q.d === 'month') return attendanceMonth(r);
@@ -867,7 +913,8 @@
     const DAY = 86400000; const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const range = r.q.d || 'today';
     const th = Number(r.q.th || 30);
-    const days = range === 'yesterday' ? [d0.getTime() - DAY] : range === 'week' ? Array.from({ length: 7 }, (_, i) => d0.getTime() - i * DAY) : [d0.getTime()];
+    const dSel = r.q.date ? (() => { const [y, m, d] = r.q.date.split('-').map(Number); return new Date(y, m - 1, d).getTime(); })() : null;
+    const days = dSel ? [dSel] : range === 'yesterday' ? [d0.getTime() - DAY] : range === 'week' ? Array.from({ length: 7 }, (_, i) => d0.getTime() - i * DAY) : [d0.getTime()];
     const keyOf = (ts) => Store.dkey(ts);
     const hm = (ts) => { if (!ts) return '—'; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const dur = (min) => (min >= 60 ? Math.floor(min / 60) + '시간 ' + (min % 60) + '분' : Math.round(min) + '분');
@@ -899,7 +946,7 @@
     const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${String(cur) === String(v)}">${l}</a>`).join('')}</div>`;
     const bar = (ss, ds) => { if (!ss || !ss.length) return '<span class="ops-muted">—</span>'; return `<div class="att-bar" title="0시 ~ 24시">${ss.map((s) => { const L = Math.max(0, (s[0] - ds) / DAY * 100), W = Math.max(0.6, (s[1] - s[0]) / DAY * 100); return `<span style="left:${L}%;width:${W}%" title="${hm(s[0])}~${hm(s[1])}${s[2] === 2 ? ' 로그아웃' : s[2] === 1 ? ' 종료' : ' 접속 중'}"></span>`; }).join('')}<i style="left:${9 / 24 * 100}%"></i><i style="left:${18 / 24 * 100}%"></i></div>`; };
     page('attendance', `<section class="lm-ops">
-      <header class="ops-header"><div><h1>근태</h1><p class="ops-muted">접속(로그인)·로그아웃·접속 시간·실제 활동·대화 시간·답장 대기를 상담원별로 봅니다. 활동은 화면을 보며 최근 3분 안에 입력·클릭이 있었던 시간입니다.</p></div>
+      <header class="ops-header"><div><h1>근태${dSel ? ` <span class="ops-muted" style="font-size:16px">${esc(r.q.date)}</span> <a class="btn sm secondary" href="#/admin/attendance?d=month&m=${r.q.date.slice(0, 7)}${r.q.p ? '&p=' + r.q.p : ''}">📅 달력으로</a>` : ''}</h1><p class="ops-muted">접속(로그인)·로그아웃·접속 시간·실제 활동·대화 시간·답장 대기를 상담원별로 봅니다. 활동은 화면을 보며 최근 3분 안에 입력·클릭이 있었던 시간입니다.</p></div>
         <div class="ops-controls">${seg('d', range, [['today', '오늘'], ['yesterday', '어제'], ['week', '최근 7일'], ['month', '월별']])}${seg('th', th, [[10, '10분'], [30, '30분'], [60, '60분']])}<span class="ops-muted">무응답 기준</span></div></header>
       <div class="ops-kpis">
         <div class="ops-kpi"><h2>접속 중</h2><strong class="ops-value">${cntS('on') + cntS('idle')}명</strong><p class="ops-muted">전체 ${rows.length}명</p></div>
@@ -958,7 +1005,7 @@
     }
   }
 
-  function viewAsBtn(u) { return `<button class="btn secondary sm" type="button" data-viewas="${esc(u.id)}">👁 이 회원 화면으로 보기</button>`; }
+  function viewAsBtn(u) { return `<button class="btn secondary sm" type="button" data-viewas="${esc(u.id)}">👁 이 사람 화면 보기 (한국어)</button>`; }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-viewas]'); if (!b) return; const id = b.dataset.viewas; const u = Store.db.users[id]; Store.audit({ action: 'view', target: id, member: u ? u.nickname : id, contact: '회원 화면 전체', convId: '-', reason: '회원 화면으로 보기' }); Store.startViewAs(id); location.href = 'app.html#/chat'; location.reload(); });
   document.addEventListener('click', (e) => { if (e.target.closest('#adm-logout')) { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); Store.db.admin.operator = 'admin'; location.hash = '#/admin'; login(); } });
   window.Admin = {

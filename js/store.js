@@ -36,7 +36,7 @@
     return blank();
   }
   // 다른 창(팝업·잠든 탭)이 예전 데이터로 덮어써 팀·거래처·계정이 사라지지 않도록 병합 후 저장
-  const SHARED = ['teams', 'orgs', 'staff', 'notices'];
+  const SHARED = ['teams', 'orgs', 'staff', 'notices', 'binds'];
   function mergeShared(stored) {
     const del = new Set((db._del || []).concat(stored._del || []));
     SHARED.forEach((k) => {
@@ -69,6 +69,14 @@
   }
   function findAgentLocal(loginId, pin) { const id = normId(loginId); return Object.values(db.users).find((u) => u.loginId && u.loginId.toLowerCase() === id && (pin == null || String(u.pin).trim() === String(pin).trim())); }
   function agentLoginAs(u) { if (db.users[u.id]) Object.assign(db.users[u.id], u); else db.users[u.id] = u; db.currentUserId = u.id; persist(); }
+  // 상담원 자리 고정: 처음 로그인한 PC(브라우저)에서만 열림. 팀장·관리자가 '자리 초기화'하면 새 자리에서 다시 등록
+  function deviceId() { let d = ''; try { d = localStorage.getItem('lm_dev') || ''; if (!d) { d = 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('lm_dev', d); } } catch (e) { d = 'D-nostore'; } return d; }
+  function deviceLabel() { const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || ''; const os = /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Linux/.test(ua) ? 'Linux' : '기기'; const br = /Edg\//.test(ua) ? 'Edge' : /Whale\//.test(ua) ? 'Whale' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '브라우저'; return os + ' · ' + br; }
+  function bindOf(userId) { db.binds = db.binds || []; return db.binds.find((b) => b.id === userId) || null; }
+  // 'free'(미등록) | 'ok' | 'other'(다른 자리에 등록됨) | 'reset'(초기화됨 → 다시 로그인 필요)
+  function seatState(userId) { const b = bindOf(userId); if (!b) return 'free'; if (!b.dev) return 'reset'; return b.dev === deviceId() ? 'ok' : 'other'; }
+  function bindSeat(userId) { db.binds = db.binds || []; const b = bindOf(userId); const rec = { id: userId, dev: deviceId(), label: deviceLabel(), at: Date.now(), updatedAt: Date.now() }; if (b) Object.assign(b, rec); else db.binds.push(rec); persist(); }
+  function resetSeat(userId) { db.binds = db.binds || []; const b = bindOf(userId); const rec = { id: userId, dev: '', label: '', at: 0, updatedAt: Date.now() }; if (b) Object.assign(b, rec); else db.binds.push(rec); persist(); }
   function markDel(id) { db._del = (db._del || []).concat(id); }
   function save(opts) {
     const cu = !viewAs && me(); if (cu) cu.updatedAt = Date.now();
@@ -278,7 +286,7 @@
   };
   function planOf(u) { return (u && u.plan) || 'free'; }
   function can(feature, u) { u = u || me(); const f = FEATURES[feature]; return !f || f.includes(planOf(u)); }
-  function ensureTeamArrays() { db.teams = db.teams || []; db.notices = db.notices || []; db.orgs = db.orgs || []; db.staff = db.staff || []; if (!db.staff.some((x) => x.demo)) { db.staff.push({ id: uid('s_'), type: 'personal', name: '일반고객 담당', loginId: 'personal1', pin: '1234', demo: true }, { id: uid('s_'), type: 'business', name: '기업고객 담당', loginId: 'business1', pin: '1234', demo: true }); } }
+  function ensureTeamArrays() { db.binds = db.binds || []; db.teams = db.teams || []; db.notices = db.notices || []; db.orgs = db.orgs || []; db.staff = db.staff || []; if (!db.staff.some((x) => x.demo)) { db.staff.push({ id: uid('s_'), type: 'personal', name: '일반고객 담당', loginId: 'personal1', pin: '1234', demo: true }, { id: uid('s_'), type: 'business', name: '기업고객 담당', loginId: 'business1', pin: '1234', demo: true }); } }
   // 본사 관리자 계정: personal(일반고객 관리자) | business(기업고객 관리자). 최종 관리자는 admin 계정
   function staff() { ensureTeamArrays(); return db.staff; }
   function staffById(id) { return staff().find((x) => x.id === id); }
@@ -564,7 +572,7 @@
       try {
         const hs = this.hs(); const rows = []; const now = Date.now();
         const add = (k, obj) => { const sg = this.sig(obj); if (hs[k] !== sg) { rows.push({ key: k, data: obj, sg }); } };
-        ['orgs', 'teams', 'staff', 'notices'].forEach((col) => (db[col] || []).forEach((x) => { if (!x || !x.id || x.demo) return; add(col.slice(0, -1) + ':' + x.id, x); }));
+        ['orgs', 'teams', 'staff', 'notices', 'binds'].forEach((col) => (db[col] || []).forEach((x) => { if (!x || !x.id || x.demo) return; add(col.slice(0, -1) + ':' + x.id, x); }));
         Object.values(db.users).forEach((u) => { if (u && u.srv && !u.demo) add('user:' + u.id, u); });
         (db._del || []).forEach((id) => { const k = 'del:' + id; if (!hs[k]) rows.push({ key: k, data: { id, ts: now }, sg: '1' }); });
         for (let i = 0; i < rows.length; i += 20) {
@@ -591,8 +599,8 @@
       rows.forEach((row) => {
         this._since = row.updated_at;
         const [kind, ...rest] = row.key.split(':'); const id = rest.join(':'); const d = row.data;
-        if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); ['orgs', 'teams', 'staff', 'notices'].forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; changed++; } hs[row.key] = '1'; return; }
-        const col = { org: 'orgs', team: 'teams', staff: 'staff', notice: 'notices' }[kind];
+        if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); ['orgs', 'teams', 'staff', 'notices', 'binds'].forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; changed++; } hs[row.key] = '1'; return; }
+        const col = { org: 'orgs', team: 'teams', staff: 'staff', notice: 'notices', bind: 'binds' }[kind];
         if (col) {
           if ((db._del || []).includes(id)) return;
           db[col] = db[col] || []; const i = db[col].findIndex((x) => x.id === id); const loc = i >= 0 ? db[col][i] : null;
@@ -682,7 +690,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
