@@ -2,8 +2,10 @@
 (function () {
   'use strict';
   const L = document.documentElement.lang.startsWith('zh') ? 'zh' : 'ko';
-  const APP = 'app.html';
-  const IMG = (n) => `assets/tour/${L}/${n}.jpg`;
+  const BASE = window.TOUR_BASE || '';
+  const APP = BASE + 'app.html';
+  const IMG = (n) => (window.TOUR_IMG && window.TOUR_IMG[n]) || `assets/tour/${L}/${n}.jpg`;
+  const PRINT = /[?&]print=1/.test(location.search) || window.TOUR_PRINT;
   const ACC = {
     member: { ko: '게스트로 바로 시작 (가입 없음)', zh: '游客直接开始（无需注册）' },
     admin: 'admin / 1234', personal: 'personal1 / 1234', business: 'business1 / 1234', company: 'company1 / 1234', leader: 'leader1 / 1234',
@@ -45,7 +47,7 @@
       { id: 'security-audit', ch: 2, title: '열람 감사로그', shots: [['33-audit']], cap: '누가·언제·어떤 대화를·왜 열었는지, 캡처 시도와 메시지 발송까지 기록', points: ['기록은 수정·삭제 불가', '팀장·일반/기업고객 관리자는 자기 기록만, 최종 관리자는 전체'], try: { href: APP + '#/admin/audit', creds: [['최종 관리자', ACC.admin]] } },
       { id: 'security-readonly', ch: 2, title: '회원 화면으로 보기 (읽기 전용)', shots: [['28-viewas']], cap: '관리자가 회원 앱을 그대로 확인 — 변경은 저장되지 않음', points: ['문의 대응·품질 점검 때 회원이 보는 화면 그대로', '열람은 감사로그에 남고 워터마크에 “관리자 열람” 표시'], try: { href: APP + '#/admin/users', creds: [['최종 관리자', ACC.admin]] } },
       { id: 'security-ai-key', ch: 2, title: '본사 AI — 키는 서버에만', shots: [['35-hq-ai'], ['09-settings']], cap: '회원은 키를 넣지 않고 요금제로 본사 AI 사용, 사용량·금액은 회원별 집계', points: ['본사 키는 서버 비밀값에 보관하고 AI 서버(프록시)로만 호출', '무료 회원 AI 허용 여부, 거래처별 자체 키 허용 설정', '모델별 호출·토큰·예상 금액 대시보드'], try: { href: APP + '#/admin/settings', creds: [['최종 관리자', ACC.admin]] } },
-      { id: 'pricing', ch: 3, title: '요금제', shots: [['50-pricing']], cap: '개인: 무료 0원 · 프로 5,900원 · 프리미엄 9,900원 / 기업용: 도입 문의', points: ['기업용: 상담원 수 제한 없음, 팀장·근태·지시 번역·감사로그 포함', '한 버전에서 요금제별로 기능을 여는 구조'], try: { href: 'index.html#plans' } },
+      { id: 'pricing', ch: 3, title: '요금제', shots: [['50-pricing']], cap: '개인: 무료 0원 · 프로 5,900원 · 프리미엄 9,900원 / 기업용: 도입 문의', points: ['기업용: 상담원 수 제한 없음, 팀장·근태·지시 번역·감사로그 포함', '한 버전에서 요금제별로 기능을 여는 구조'], try: { href: BASE + 'index.html#plans' } },
       { id: 'onboarding', ch: 3, title: '도입 절차', shots: [['51-business']], cap: '거래처 생성 → 팀장 계정 → 상담원 서비스 ID 추가 → 지시·근태 운영', points: ['1일차: 거래처·팀·팀장 계정 생성 (본사 기업고객 관리자)', '2일차: 상담원 앱 사용 시작, 서비스 ID로 팀에 추가', '운영: 근태·지시·감사로그로 관리, 본사 AI로 번역·분석'], try: { href: APP + '#/admin', creds: [['기업고객 관리자', ACC.business], ['거래처 관리자', ACC.company]] } },
     ],
     zh: [
@@ -69,7 +71,7 @@
       { id: 'security-audit', ch: 2, title: '查看审计日志', shots: [['33-audit']], cap: '记录谁、何时、打开了哪段对话、原因，以及截屏尝试和消息发送', points: ['日志不可修改或删除', '组长、个人/企业客户管理员只看自己的记录，最终管理员看全部'], try: { href: APP + '#/admin/audit', creds: [['最终管理员', ACC.admin]] } },
       { id: 'security-readonly', ch: 2, title: '以会员画面查看（只读）', shots: [['28-viewas']], cap: '管理员直接查看会员应用 — 修改不会保存', points: ['处理咨询、质量检查时看到会员看到的同样画面', '查看会写入审计日志，水印显示“管理员查看”'], try: { href: APP + '#/admin/users', creds: [['最终管理员', ACC.admin]] } },
       { id: 'security-ai-key', ch: 2, title: '总部 AI — 密钥只在服务器', shots: [['35-hq-ai'], ['09-settings']], cap: '会员不需输入密钥，按套餐使用总部 AI，用量和费用按会员统计', points: ['总部密钥保存在服务器机密中，只通过 AI 服务器（代理）调用', '可设置是否允许免费会员使用 AI、是否允许客户公司使用自己的密钥', '按模型统计调用、Token 和预计费用'], try: { href: APP + '#/admin/settings', creds: [['最终管理员', ACC.admin]] } },
-      { id: 'pricing', ch: 3, title: '价格', shots: [['50-pricing']], cap: '个人：免费 0韩元 · 专业版 5,900韩元 · 高级版 9,900韩元 / 企业版：咨询', points: ['企业版：咨询员人数不限，含组长、考勤、指示翻译、审计日志', '同一版本按套餐开放功能'], try: { href: 'index.html?lang=zh#plans' } },
+      { id: 'pricing', ch: 3, title: '价格', shots: [['50-pricing']], cap: '个人：免费 0韩元 · 专业版 5,900韩元 · 高级版 9,900韩元 / 企业版：咨询', points: ['企业版：咨询员人数不限，含组长、考勤、指示翻译、审计日志', '同一版本按套餐开放功能'], try: { href: BASE + 'index.html?lang=zh#plans' } },
       { id: 'onboarding', ch: 3, title: '开通流程', shots: [['51-business']], cap: '创建客户公司 → 组长账号 → 按服务ID添加咨询员 → 指示与考勤运营', points: ['第1天：创建客户公司、团队、组长账号（总部企业客户管理员）', '第2天：咨询员开始使用应用，按服务ID加入团队', '运营：用考勤、指示、审计日志管理，用总部 AI 翻译与分析'], try: { href: APP + '#/admin', creds: [['企业客户管理员', ACC.business], ['客户公司管理员', ACC.company]] } },
     ],
   }[L];
@@ -82,10 +84,10 @@
   const root = document.getElementById('tour');
   root.innerHTML = `
     <header class="tour-top"><div class="tour-wrap tour-top-inner">
-      <a class="tour-brand" href="index.html${L === 'zh' ? '?lang=zh' : ''}"><img src="assets/lm-mark.png" alt="LM">${esc(T.brand)}</a>
+      <a class="tour-brand" href="${BASE}index.html${L === 'zh' ? '?lang=zh' : ''}"><img src="${(window.TOUR_IMG && window.TOUR_IMG.__logo) || 'assets/lm-mark.png'}" alt="LM">${esc(T.brand)}</a>
       <div class="tour-actions">
         <button class="tour-btn" type="button" data-go="contents">${esc(T.toc)}</button>
-        <nav class="tour-langs" aria-label="language"><a class="tour-btn" href="demo-tour.html" ${L === 'ko' ? 'aria-current="true"' : ''} data-lang>한국어</a><a class="tour-btn" href="demo-tour-zh.html" ${L === 'zh' ? 'aria-current="true"' : ''} data-lang>简体中文</a></nav>
+        <nav class="tour-langs" aria-label="language"><a class="tour-btn" href="${BASE}demo-tour.html" ${L === 'ko' ? 'aria-current="true"' : ''} data-lang>한국어</a><a class="tour-btn" href="${BASE}demo-tour-zh.html" ${L === 'zh' ? 'aria-current="true"' : ''} data-lang>简体中文</a></nav>
         <button class="tour-btn" type="button" id="tour-present" aria-pressed="false">${esc(T.present)}</button>
       </div></div></header>
     <main class="tour-wrap tour-main">
@@ -151,5 +153,6 @@
     else if (e.key === 'Escape' && root.dataset.mode === 'present') document.getElementById('tour-present').click();
   });
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h && h !== cur) show(h, false); });
+  if (PRINT) { root.classList.add('tour-print'); ids.forEach((x) => { const el = document.getElementById(x); if (el) el.hidden = x === 'contents' && false; }); document.querySelectorAll('img[loading]').forEach((i) => i.removeAttribute('loading')); return; }
   show((location.hash || '#cover').slice(1), false);
 })();

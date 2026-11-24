@@ -83,3 +83,17 @@
 .lm-tour .tour-table thead th { background: var(--tour-tint); color: var(--tour-navy); }
 .lm-tour .tour-table-wrap { overflow-x: auto; }
 .lm-tour .tour-scene-head h2:focus { outline: none; }
+/* 인쇄·PDF용: 장면을 한 장씩 */
+.lm-tour.tour-print .tour-top, .lm-tour.tour-print .tour-footer, .lm-tour.tour-print .tour-try .tour-actions { display: none !important; }
+.lm-tour.tour-print .tour-main { padding: 0; width: 100%; }
+.lm-tour.tour-print :is(.tour-cover, .tour-toc, .tour-scene) { break-after: page; page-break-after: always; min-height: auto; }
+.lm-tour.tour-print .tour-scene { padding: 10mm 10mm 0; gap: 10px; }
+.lm-tour.tour-print .tour-cover { margin: 10mm; min-height: 160mm; }
+.lm-tour.tour-print .tour-toc { padding: 10mm; }
+.lm-tour.tour-print .tour-scene-head h2 { font-size: 26px; }
+.lm-tour.tour-print .tour-shot img { max-height: 120mm; width: auto; max-width: 100%; }
+.lm-tour.tour-print .tour-layout { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); }
+.lm-tour.tour-print .tour-copy { font-size: 13px; }
+.lm-tour.tour-print .tour-table { font-size: 11px; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.lm-tour.tour-print .tour-cover .tour-actions { display: none !important; }
