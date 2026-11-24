@@ -100,15 +100,31 @@
     const bars = (obj, n) => { const tot = Object.values(obj).reduce((a, b) => a + b, 0) || 1; return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `<div class="row"><span class="small" style="width:150px">${esc(k)}</span><div class="bar"><span style="width:${(v / tot) * 100}%"></span></div><span class="tiny" style="width:60px;text-align:right">${v} · ${Math.round((v / tot) * 100)}%</span></div>`).join(''); };
     page('dashboard', `
       <div class="between wrap"><div class="stack-sm"><h1>운영 현황</h1><p class="muted">${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월 ${new Date().getDate()}일 기준</p></div><a class="btn" href="#/admin/monitor">전체 대화 열기</a></div>
-      <div class="metrics six">
-        <a class="card stack-sm" href="#/admin/users"><span class="label">닉네임 회원</span><strong class="metric">${members}명</strong></a>
-        <a class="card stack-sm" href="#/admin/users?type=guest"><span class="label">게스트</span><strong class="metric">${guests}명</strong></a>
-        <a class="card stack-sm" href="#/admin/monitor"><span class="label">오늘 들어온 대화</span><strong class="metric">${todayMsgs.length}건</strong></a>
-        <div class="card stack-sm"><span class="label">관리 중인 상대 (전체)</span><strong class="metric">${totalContacts}명</strong></div>
-        <a class="card ${riskMsgs.length ? 'danger' : ''} stack-sm" href="#/admin/monitor?risk=1"><span class="small">위험 표시 대화</span><strong class="metric">${riskMsgs.length}건</strong></a>
-        <a class="card ${open.length ? 'notice' : ''} stack-sm" href="#/admin/reports"><span class="small">미처리 신고</span><strong class="metric">${open.length}건</strong></a>
-      </div>
-      ${(() => { const P = prices(); const rows = usageRows(); const mS = new Date(td.getFullYear(), td.getMonth(), 1).getTime(); const tdS = usageSummary(rows.filter((r) => r.x.ts >= td.getTime()), P); const mo = usageSummary(rows.filter((r) => r.x.ts >= mS), P); return `<a class="card stack-sm ai-tile" href="#/admin/ai"><div class="between wrap"><h2>AI 사용량·금액</h2><span class="link">자세히 →</span></div><div class="row wrap" style="gap:28px"><div><span class="label">오늘</span><br><strong class="metric">${krw(tdS.usd)}</strong> <span class="tiny muted">${tdS.calls}회</span></div><div><span class="label">이번 달</span><br><strong class="metric">${krw(mo.usd)}</strong> <span class="tiny muted">${mo.calls}회 · ${((mo.tin + mo.tout) / 1000).toFixed(1)}K 토큰</span></div><div><span class="label">무료 번역</span><br><strong class="metric">${mo.mt}회</strong></div></div></a>`; })()}
+      ${(() => {
+        const DAY = 86400000; const d7 = [];
+        for (let i = 6; i >= 0; i--) { const st = td.getTime() - i * DAY; d7.push({ st, n: allMsgs.filter((x) => x.m.ts >= st && x.m.ts < st + DAY).length, nu: us.filter((u) => u.createdAt >= st && u.createdAt < st + DAY).length }); }
+        const mx = Math.max(1, ...d7.map((d) => d.n));
+        const P = prices(); const mS = new Date(td.getFullYear(), td.getMonth(), 1).getTime(); const mo = usageSummary(usageRows().filter((r) => r.x.ts >= mS), P);
+        const todo = [
+          [open.length, '미처리 신고', '#/admin/reports', 'coral'],
+          [riskMsgs.length, '위험 표시 대화 확인', '#/admin/monitor?risk=1', 'coral'],
+          [silent, '7일 이상 대화가 끊긴 회원', '#/admin/users', 'lavender'],
+          [Store.db.quality.filter((q) => q.status === 'open').length, '개선 메모 처리', '#/admin/quality', 'sky'],
+        ];
+        return `<div class="adm-dashboard">
+          <div class="metrics">
+            <a class="card stack-sm" href="#/admin/users"><span class="label">회원 (닉네임 · 게스트)</span><strong class="metric">${members + guests}명</strong><span class="tiny muted">닉네임 ${members} · 게스트 ${guests} · 관리 상대 ${totalContacts}명</span></a>
+            <a class="card stack-sm" href="#/admin/monitor"><span class="label">오늘 들어온 대화</span><strong class="metric">${todayMsgs.length}건</strong><span class="tiny muted">어제 ${d7[5].n}건</span></a>
+            <a class="card stack-sm" href="#/admin/ai"><span class="label">이번 달 AI 예상 금액</span><strong class="metric">${krw(mo.usd)}</strong><span class="tiny muted">${mo.calls}회 · ${((mo.tin + mo.tout) / 1000).toFixed(1)}K 토큰</span></a>
+          </div>
+          <div class="adm-work">
+            <section class="card adm-today" aria-label="오늘 할 일"><h2>오늘 할 일 <span class="tiny muted">${todo.filter((x) => x[0]).length}건 대기</span></h2>
+              <ul>${todo.map(([n, l, h, tone]) => `<li><a class="adm-task ${n ? 'is-' + tone : 'is-done'}" href="${h}"><span>${l}</span><strong>${n ? n + '건 →' : '완료'}</strong></a></li>`).join('')}</ul></section>
+            <section class="card adm-trend" aria-label="최근 7일 추이"><h2>최근 7일 들어온 대화</h2>
+              <div class="spark">${d7.map((d) => { const dt = new Date(d.st); return `<div class="spark-col" title="${dt.getMonth() + 1}/${dt.getDate()} · 대화 ${d.n}건 · 가입 ${d.nu}명"><span style="height:${Math.max(3, (d.n / mx) * 100)}%"></span><em>${dt.getMonth() + 1}/${dt.getDate()} · ${d.n}</em></div>`; }).join('')}</div></section>
+          </div>
+        </div>`;
+      })()}
       <div class="admin-grid">
         <div class="card stack"><div class="between wrap"><h2>최근 위험 표시</h2><a class="link" href="#/admin/monitor?risk=1">대화에서 확인</a></div>
           ${riskMsgs.length ? `<div class="table-wrap"><table><thead><tr><th>시각</th><th>회원</th><th>앱 / 상대</th><th>분류</th><th>원문</th></tr></thead><tbody>${riskMsgs.sort((a, b) => b.m.ts - a.m.ts).slice(0, 8).map(({ m, u }) => { const c = u.contacts.find((x) => x.id === m.contactId); return `<tr class="clickable" data-open="${u.id}|${m.contactId || ''}"><td>${fmt(m.ts)}</td><td>${esc(u.nickname)} / ${esc(u.id)}</td><td>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '미지정'}</td><td>${m.risk.map((r) => `<span class="badge alert">${r === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}</td><td class="wrap-cell">${esc(m.text.slice(0, 70))}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="small muted">위험 표시가 없습니다.</p>'}

@@ -632,3 +632,17 @@ body.is-wide .ws-rail { display: flex; flex-direction: column; }
 .brand-img { height: 24px; width: auto; flex: none; }
 .rail-logo { display: grid; place-items: center; width: 60px; height: 40px; margin: 2px auto 12px; background: #fff; border-radius: 10px; }
 .rail-logo img { width: 50px; height: auto; }
+/* 관리자 오늘 할 일·7일 추이 (기본 스타일, 테마가 덮어씀) */
+.adm-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+.adm-today ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.adm-todo a { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.adm-todo-n { font-size: 20px; font-weight: 800; text-align: center; }
+.adm-todo.is-done { opacity: .55; }
+.adm-todo-go { font-size: 12.5px; font-weight: 700; color: var(--primary); }
+.adm-bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; height: 170px; align-items: end; margin-top: 12px; padding-bottom: 22px; }
+.adm-bar { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.adm-bar-v { width: 100%; max-width: 34px; border-radius: 6px 6px 2px 2px; background: var(--primary); }
+.adm-bar em { position: absolute; bottom: -20px; font-style: normal; font-size: 11px; color: var(--muted); }
+.adm-bar b { font-size: 11px; color: var(--ink); margin-bottom: 2px; order: -1; }
+.adm-bar-new { position: absolute; top: -2px; font-style: normal; font-size: 10px; font-weight: 700; color: var(--primary); }
+@media (max-width: 860px) { .adm-top { grid-template-columns: minmax(0, 1fr); } }

@@ -249,7 +249,7 @@
   ];
 
   function extractWhen(text, now) {
-    now = now || new Date();
+    now = now ? (now instanceof Date ? now : new Date(now)) : new Date();
     const s = String(text);
     let date = null, time = null, found = false;
     const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
