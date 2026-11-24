@@ -326,3 +326,18 @@ img { -webkit-user-drag: none; }
 .ws-pop2:hover { background: var(--primary); color: #fff; }
 .pop-btn { height: 44px; padding: 0 16px; font-size: 14.5px; }
 .seg.seg-wrap { flex-wrap: wrap; } .seg.seg-wrap button { flex: 1 1 auto; min-width: 88px; }
+.ws-hits { display: grid; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ws-hits .ws-h { padding: 0 8px 4px; font-size: 12.5px; }
+.ws-hit { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; border: 0; border-radius: 9px; background: transparent; text-align: start; color: inherit; cursor: pointer; }
+.ws-hit:hover { background: var(--mint); }
+.ws-hit mark, .ws-hits mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; }
+.hit-flash { animation: hitflash 2.6s ease; border-radius: 12px; }
+@keyframes hitflash { 0%, 60% { box-shadow: 0 0 0 3px #f0b35b; background: #fff7e8; } 100% { box-shadow: none; background: transparent; } }
+/* 정보창 접었을 때도 항상 보이게 */
+.ws-side { display: flex; flex-direction: column; overflow: hidden !important; }
+.ws-side-in { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ws-side-in .ws-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.ws-side-in .side-info { flex: none; }
+.side-info:not(.open) .ws-toggle { position: relative; background: var(--primary) !important; color: #fff !important; font-weight: 700; font-size: 14px !important; padding: 14px 16px !important; }
+.side-info:not(.open) .ws-toggle .ws-toggle-act { background: #fff; color: var(--primary); border-radius: 8px; padding: 3px 10px; }
+.side-info.open .side-info-body { overflow-y: auto; }

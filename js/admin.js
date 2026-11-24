@@ -146,11 +146,12 @@
     const cur = today && today.sessions[today.sessions.length - 1];
     const on = !!(today && today.lastBeat && now - today.lastBeat < 3 * 60000 && cur && !cur[2]);
     const lastAct = Math.max((today && today.lastBeat) || 0, ...u.messages.map((m) => m.ts), 0);
-    const waiting = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id); const l = ms.reduce((a, m) => (!a || m.ts > a.ts ? m : a), null); return l && l.dir === 'in' ? l.ts : null; }).filter(Boolean);
+    const wl = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id); const l = ms.reduce((a, m) => (!a || m.ts > a.ts ? m : a), null); return l && l.dir === 'in' ? { ts: l.ts, cid: c.id, mid: l.id } : null; }).filter(Boolean).sort((a, b) => a.ts - b.ts);
+    const waiting = wl.map((x) => x.ts);
     const overdue = waiting.filter((ts) => now - ts > th * 60000).length;
     const idle = on && now - lastAct > th * 60000;
     const state = on ? (idle ? 'idle' : 'on') : today && today.logoutAt ? 'out' : today ? 'away' : 'off';
-    return { state, online: today ? today.online : 0, first: today ? today.first : null, waiting: waiting.length, overdue, idle };
+    return { wfirst: wl[0] || null, state, online: today ? today.online : 0, first: today ? today.first : null, waiting: waiting.length, overdue, idle };
   }
   function mobileOps(r) {
     const rl = role(); const us = users(); const th = Number(r.q.th || 30);
@@ -173,7 +174,7 @@
         ${tile(unreadR, '미확인 답장', unreadR ? 'warn' : '', '#/admin/notices?f=waiting')}${tile(openRep, '미처리 신고', openRep ? 'warn' : '', '#/admin/reports')}${tile(todayMsgs, '오늘 메시지', '', '#/admin/monitor')}
       </div>
       ${staffMode ? `<div class="mo-filter">${[['all', '전체', list.length], ['on', '접속 중', C('on') + C('idle')], ['alert', '확인 필요', list.filter((x) => x.idle || x.overdue).length], ['away', '자리 비움', C('away')], ['off', '미접속', C('off') + C('out')]].map(([k, l, n]) => `<a href="#/admin/dashboard?f=${k}" class="${fl === k ? 'on' : ''}">${l} ${n}</a>`).join('')}</div>
-      <ul class="mo-staff">${shown.map((x) => `<li><a href="#/admin/notices?u=${x.u.id}"><i class="dot ${ST[x.state][1]}"></i><span class="grow"><b>${esc(x.u.nickname)}</b> <em>${ST[x.state][0]}</em><br><small>${esc(x.team ? x.team.name : '')}${x.first ? ' · 첫 접속 ' + hm(x.first) : ''}${x.online ? ' · ' + Math.floor(x.online / 60) + '시간 ' + (x.online % 60) + '분' : ''}</small></span>${x.overdue ? `<span class="mo-badge warn">지연 ${x.overdue}</span>` : x.waiting ? `<span class="mo-badge">대기 ${x.waiting}</span>` : ''}</a></li>`).join('') || '<li class="mo-empty">해당 상담원이 없습니다.</li>'}</ul>` : ''}
+      <ul class="mo-staff">${shown.map((x) => `<li><a href="${(x.overdue || x.waiting) && x.wfirst ? `#/admin/monitor?u=${x.u.id}&c=${x.wfirst.cid}&m=${x.wfirst.mid}&full=1` : '#/admin/notices?u=' + x.u.id}"><i class="dot ${ST[x.state][1]}"></i><span class="grow"><b>${esc(x.u.nickname)}</b> <em>${ST[x.state][0]}</em><br><small>${esc(x.team ? x.team.name : '')}${x.first ? ' · 첫 접속 ' + hm(x.first) : ''}${x.online ? ' · ' + Math.floor(x.online / 60) + '시간 ' + (x.online % 60) + '분' : ''}</small></span>${x.overdue ? `<span class="mo-badge warn">지연 ${x.overdue}</span>` : x.waiting ? `<span class="mo-badge">대기 ${x.waiting}</span>` : ''}</a></li>`).join('') || '<li class="mo-empty">해당 상담원이 없습니다.</li>'}</ul>` : ''}
       <nav class="mo-actions">${staffMode ? '<a href="#/admin/attendance">근태</a>' : '<a href="#/admin/users">회원</a>'}<a href="#/admin/notices">메시지</a><a href="#/admin/monitor">대화</a><a href="#/admin/dashboard?full=1">PC 화면</a></nav>
     </div>`;
   }
@@ -330,7 +331,7 @@
       })() : ''}
       <section class="ops-panel" aria-label="신고·위험 검토 큐"><header class="ops-panel-head"><h2>신고·위험 검토 큐 <span class="ops-muted">${rq.length}건</span></h2><a class="link" href="#/admin/reports">신고 전체 보기</a></header>
         ${rq.length ? `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">유형</th><th scope="col">회원</th><th scope="col">상대</th><th scope="col">메신저</th><th scope="col">감지 시각</th><th scope="col">상태</th><th scope="col"></th></tr></thead><tbody>
-          ${rq.slice(0, 10).map((x) => `<tr class="clickable" data-open="${x.u.id}|${x.c ? x.c.id : ''}"><td><span class="ops-tag" data-tone="${x.tone}">${esc(x.kind)}</span></td><td>${esc(x.u.nickname)} <span class="ops-muted">${esc(x.u.id)}</span></td><td>${x.c ? esc(x.c.nickname) : '—'}</td><td>${x.c ? esc(APPN(x.c.app)) : '—'}</td><td class="ops-num">${fmt(x.ts)} <span class="ops-muted">${ago(x.ts)}</span></td><td>${x.st}</td><td><a class="link" href="#/admin/monitor?u=${x.u.id}&c=${x.c ? x.c.id : ''}">상세</a></td></tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">검토할 신고·위험 대화가 없습니다.</p>'}</section>
+          ${rq.slice(0, 10).map((x) => `<tr class="clickable" data-open="${x.u.id}|${x.c ? x.c.id : ''}|${x.mid || ''}"><td><span class="ops-tag" data-tone="${x.tone}">${esc(x.kind)}</span></td><td>${esc(x.u.nickname)} <span class="ops-muted">${esc(x.u.id)}</span></td><td>${x.c ? esc(x.c.nickname) : '—'}</td><td>${x.c ? esc(APPN(x.c.app)) : '—'}</td><td class="ops-num">${fmt(x.ts)} <span class="ops-muted">${ago(x.ts)}</span></td><td>${x.st}</td><td><a class="link" href="#/admin/monitor?u=${x.u.id}&c=${x.c ? x.c.id : ''}${x.mid ? '&m=' + x.mid : ''}">대화 열기</a></td></tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">검토할 신고·위험 대화가 없습니다.</p>'}</section>
       <div class="ops-split">
         <section class="ops-panel" aria-label="AI 비용과 무료 번역"><header class="ops-panel-head"><h2>AI 비용 · 이번 달</h2><span class="ops-tag" data-tone="info">월말 예상 ${won((mo.usd / dEl) * dim * fx)}</span></header>
           <strong class="ops-value">${won(mo.usd * fx)} <span class="ops-muted">${usd(mo.usd)}</span></strong>
@@ -362,7 +363,7 @@
     </section>`);
     bindOpen();
   }
-  function bindOpen() { $app.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', () => { const [u, c] = tr.dataset.open.split('|'); location.hash = `#/admin/monitor?u=${u}&c=${c}`; })); }
+  function bindOpen() { $app.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', (e) => { if (e.target.closest('a')) return; const [u, c, m] = tr.dataset.open.split('|'); location.hash = `#/admin/monitor?u=${u}&c=${c || ''}${m ? '&m=' + m : ''}`; })); }
 
   /* ---------- 회원 CRM ---------- */
   function crm(r) {
@@ -493,6 +494,8 @@
     });
     bindConvo(u, c, ms);
     bindBan();
+    const jm = r.q.m || (r.q.risk === '1' && ms.slice().reverse().find((m) => m.risk && m.risk.length) || {}).id;
+    if (jm) setTimeout(() => { const el = $app.querySelector(`tr[data-mid="${jm}"]`); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('hit-flash'); } }, 80);
   }
 
   function convoHtml(u, c, ms) {
@@ -500,7 +503,7 @@
     return `<div class="row wrap"><span class="badge">열람 사유: ${esc(viewGrants[u.id + '|' + (c ? c.id : 'none')])}</span><a class="link" href="#/admin/audit?q=${u.id}">이 회원의 열람 로그</a></div>
       ${c ? `<div class="metrics"><div class="card stack-xs"><span class="label">진행 기간</span><strong>${pf.firstTs ? Math.round((pf.lastTs - pf.firstTs) / 86400000) + '일' : '—'}</strong></div><div class="card stack-xs"><span class="label">단절 일수</span><strong>${pf.silentDays ?? '—'}일</strong></div><div class="card stack-xs"><span class="label">깊이 점수</span><strong>${pf.depth} / 100</strong></div><div class="card stack-xs"><span class="label">상대 분위기</span><strong>${pf.inCount ? { good: '좋음', low: '가라앉음', neutral: '보통' }[pf.mood] : '—'}</strong></div></div>` : ''}
       <div class="table-wrap"><table style="min-width:760px"><caption>원문 · 사용자 표시 번역 · AI 답장 제안 비교</caption><thead><tr><th style="width:80px">시각</th><th style="width:60px">방향</th><th>원문</th><th>번역</th><th>AI 답장 제안 / 사용자가 고른 답장</th><th style="width:90px">입력 방식</th><th style="width:70px"></th></tr></thead>
-      <tbody>${ms.map((m) => `<tr${m.risk && m.risk.length ? ' style="background:var(--danger-bg)"' : ''}><td class="tiny">${fmt(m.ts)}</td><td>${m.dir === 'in' ? '<span class="badge gray">받음</span>' : '<span class="badge">보냄</span>'}</td><td class="wrap-cell" lang="${esc(m.lang)}">${esc(m.text)}${m.risk && m.risk.length ? `<br>${m.risk.map((x) => `<span class="badge alert">${x === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}` : ''}</td><td class="wrap-cell" lang="${esc(m.trLang)}">${esc(m.translation || '—')}</td><td class="wrap-cell small">${m.suggestions && m.suggestions.length ? m.suggestions.map((s) => `<div class="${m.chosen === s ? 'strong' : 'muted'}">${m.chosen === s ? '✓ ' : '· '}${esc(s)}</div>`).join('') : (m.chosen ? '✓ ' + esc(m.chosen) : '—')}${m.nuance ? `<div class="tiny muted" style="margin-top:4px">뉘앙스: ${esc(m.nuance.slice(0, 120))}</div>` : ''}</td><td class="tiny">${esc({ paste: '붙여넣기', ocr: '스크린샷', home: '홈 번역', reply: '답장 복사', write: '직접 작성', coach: '코칭 예문', gift: '축하 문구', sample: '샘플' }[m.source] || m.source || '')}${m.provider === 'ai' ? '<br><span class="badge">AI</span>' : ''}</td><td><button class="btn sm secondary" type="button" data-note="${m.id}">메모</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대화가 없습니다.</td></tr>'}</tbody></table></div>
+      <tbody>${ms.map((m) => `<tr data-mid="${m.id}"${m.risk && m.risk.length ? ' style="background:var(--danger-bg)"' : ''}><td class="tiny">${fmt(m.ts)}</td><td>${m.dir === 'in' ? '<span class="badge gray">받음</span>' : '<span class="badge">보냄</span>'}</td><td class="wrap-cell" lang="${esc(m.lang)}">${esc(m.text)}${m.risk && m.risk.length ? `<br>${m.risk.map((x) => `<span class="badge alert">${x === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}` : ''}</td><td class="wrap-cell" lang="${esc(m.trLang)}">${esc(m.translation || '—')}</td><td class="wrap-cell small">${m.suggestions && m.suggestions.length ? m.suggestions.map((s) => `<div class="${m.chosen === s ? 'strong' : 'muted'}">${m.chosen === s ? '✓ ' : '· '}${esc(s)}</div>`).join('') : (m.chosen ? '✓ ' + esc(m.chosen) : '—')}${m.nuance ? `<div class="tiny muted" style="margin-top:4px">뉘앙스: ${esc(m.nuance.slice(0, 120))}</div>` : ''}</td><td class="tiny">${esc({ paste: '붙여넣기', ocr: '스크린샷', home: '홈 번역', reply: '답장 복사', write: '직접 작성', coach: '코칭 예문', gift: '축하 문구', sample: '샘플' }[m.source] || m.source || '')}${m.provider === 'ai' ? '<br><span class="badge">AI</span>' : ''}</td><td><button class="btn sm secondary" type="button" data-note="${m.id}">메모</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">대화가 없습니다.</td></tr>'}</tbody></table></div>
       <div class="card soft stack" id="note-box"><h3>개선 메모</h3>
         <label class="stack-xs"><span class="label">개선 항목</span><select class="field" id="nt-cat"><option>번역·뉘앙스</option><option>답장 제안</option><option>지난 대화 연결</option><option>약속 추출</option><option>관계 코칭</option><option>문화 가이드</option><option>위험 감지</option></select></label>
         <label class="stack-xs"><span class="label">관찰 내용</span><textarea class="field" id="nt-body" rows="3" placeholder="예: '볼까요?'의 부드러운 제안 톤이 번역에서 사라짐"></textarea></label>
@@ -871,11 +874,13 @@
       const onNow = !!(lastBeat && now - lastBeat < 3 * 60000 && curS && !curS[2]);
       const lastAct = Math.max(lastBeat || 0, ...u.messages.map((m) => m.ts), 0);
       // 답장 대기: 상대가 보낸 마지막 메시지 이후 내 메시지가 없는 대화
-      const waiting = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id).sort((a, b) => a.ts - b.ts); const l = ms[ms.length - 1]; return l && l.dir === 'in' ? l.ts : null; }).filter(Boolean);
+      const wl = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id).sort((a, b) => a.ts - b.ts); const l = ms[ms.length - 1]; return l && l.dir === 'in' ? { ts: l.ts, cid: c.id, mid: l.id } : null; }).filter(Boolean).sort((a, b) => a.ts - b.ts);
+      const waiting = wl.map((x) => x.ts);
       const overdue = waiting.filter((ts) => now - ts > th * 60000).length;
+      const wfirst = wl[0] || null;
       const idle = onNow && lastAct && now - lastAct > th * 60000;
       const state = onNow ? (idle ? 'idle' : 'on') : (today && today.logoutAt ? 'out' : today ? 'away' : 'off');
-      return { u, recs, first: recs.length ? Math.min(...recs.map((x) => x.first)) : null, last: recs.length ? Math.max(...recs.map((x) => x.last)) : null, logout: today && today.logoutAt, online, active, talkMin, msgCount: msgs.length, waiting: waiting.length, overdue, state, idle, onNow, sessions: range === 'week' ? [] : (recs[0] ? recs[0].sessions : []), team: Store.teamOf(u.id) };
+      return { u, wfirst, recs, first: recs.length ? Math.min(...recs.map((x) => x.first)) : null, last: recs.length ? Math.max(...recs.map((x) => x.last)) : null, logout: today && today.logoutAt, online, active, talkMin, msgCount: msgs.length, waiting: waiting.length, overdue, state, idle, onNow, sessions: range === 'week' ? [] : (recs[0] ? recs[0].sessions : []), team: Store.teamOf(u.id) };
     }).sort((a, b) => ({ idle: 0, on: 1, away: 2, out: 3, off: 4 }[a.state] - { idle: 0, on: 1, away: 2, out: 3, off: 4 }[b.state]) || b.overdue - a.overdue);
     const ST = { on: ['접속 중', 'good'], idle: ['접속·무응답', 'attention'], away: ['자리 비움', 'neutral'], out: ['로그아웃', 'neutral'], off: ['미접속', 'neutral'] };
     const cntS = (k) => rows.filter((x) => x.state === k).length;
@@ -893,7 +898,7 @@
         <div class="ops-kpi"><h2>평균 접속 시간</h2><strong class="ops-value">${dur(Math.round(rows.filter((x) => x.online).reduce((a, x) => a + x.online, 0) / Math.max(1, rows.filter((x) => x.online).length)))}</strong><p class="ops-muted">${range === 'week' ? '7일 합계 기준' : '접속한 사람 기준'}</p></div>
         <div class="ops-kpi"><h2>미접속</h2><strong class="ops-value">${cntS('off')}명</strong><p class="ops-muted">로그아웃 ${cntS('out')} · 자리 비움 ${cntS('away')}</p></div>
       </div>
-      ${alerts.length ? `<section class="ops-panel"><header class="ops-panel-head"><h2>⚠ 확인이 필요한 상담원</h2><span class="ops-tag" data-tone="attention">${alerts.length}명</span></header><ul class="ops-queue">${alerts.map((x) => `<li><a class="ops-task" href="#/admin/notices?u=${x.u.id}"><span><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.team ? x.team.name : '')}</span><br><span class="ops-muted">${x.idle ? `접속 중인데 ${th}분 넘게 활동 없음 · ` : ''}${x.overdue ? `답장 ${th}분 넘게 대기 ${x.overdue}건` : ''}</span></span><span class="ops-tag" data-tone="attention">메시지 보내기 →</span></a></li>`).join('')}</ul></section>` : ''}
+      ${alerts.length ? `<section class="ops-panel"><header class="ops-panel-head"><h2>⚠ 확인이 필요한 상담원</h2><span class="ops-tag" data-tone="attention">${alerts.length}명</span></header><ul class="ops-queue">${alerts.map((x) => `<li><a class="ops-task" href="${x.overdue && x.wfirst ? `#/admin/monitor?u=${x.u.id}&c=${x.wfirst.cid}&m=${x.wfirst.mid}` : '#/admin/notices?u=' + x.u.id}"><span><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.team ? x.team.name : '')}</span><br><span class="ops-muted">${x.idle ? `접속 중인데 ${th}분 넘게 활동 없음 · ` : ''}${x.overdue ? `답장 ${th}분 넘게 대기 ${x.overdue}건` : ''}</span></span><span class="ops-tag" data-tone="attention">${x.overdue && x.wfirst ? '대화 열기 →' : '메시지 보내기 →'}</span></a></li>`).join('')}</ul></section>` : ''}
       <section class="ops-panel"><header class="ops-panel-head"><h2>상담원별 근태 <span class="ops-muted">${range === 'today' ? '오늘' : range === 'yesterday' ? '어제' : '최근 7일'}</span></h2></header>
         <div class="ops-table-wrap"><table class="ops-table att-table"><thead><tr><th scope="col">상담원</th><th scope="col">상태</th><th scope="col">첫 접속</th><th scope="col">마지막 활동</th><th scope="col">로그아웃</th><th scope="col" class="ops-num">접속 시간</th><th scope="col" class="ops-num">실제 활동</th><th scope="col" class="ops-num">대화 시간</th><th scope="col" class="ops-num">처리 메시지</th><th scope="col" class="ops-num">답장 대기</th>${range === 'week' ? '' : '<th scope="col" style="min-width:220px">접속 타임라인 (0~24시)</th>'}</tr></thead><tbody>
         ${rows.map((x) => `<tr class="clickable" data-open="${x.u.id}|"><td><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.u.id)}${x.team ? ' · ' + esc(x.team.name) : ''}</span></td><td><span class="ops-tag" data-tone="${ST[x.state][1]}">${ST[x.state][0]}</span></td><td>${hm(x.first)}</td><td>${hm(x.last)}</td><td>${x.logout ? hm(x.logout) : '—'}</td><td class="ops-num">${x.online ? dur(x.online) : '—'}</td><td class="ops-num">${x.active ? dur(x.active) + ` <span class="ops-muted">(${Math.round(x.active / Math.max(1, x.online) * 100)}%)</span>` : '—'}</td><td class="ops-num">${x.talkMin ? dur(x.talkMin) : '—'}</td><td class="ops-num">${x.msgCount}</td><td class="ops-num">${x.waiting ? `<span class="ops-tag" data-tone="${x.overdue ? 'attention' : 'neutral'}">${x.waiting}${x.overdue ? ` (${x.overdue} 지연)` : ''}</span>` : 0}</td>${range === 'week' ? '' : `<td>${bar(x.sessions, days[0])}</td>`}</tr>`).join('') || '<tr><td colspan="11" class="ops-muted">대상이 없습니다.</td></tr>'}
