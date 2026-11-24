@@ -281,3 +281,4 @@ body.pop .chat-bar .back-btn { display: none; }
 .lp-row .lp-arrow { padding: 0; color: var(--primary); font-weight: 700; }
 .lp-note { flex: 1 1 220px; }
 @media (max-width: 480px) { .lp-note { display: none; } .lp-f select { min-width: 0; } }
+@media (max-width: 1099px) { .lp-row:not(.open) { display: none; } }

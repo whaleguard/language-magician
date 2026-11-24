@@ -1290,7 +1290,7 @@
     dsel.addEventListener('change', () => { chatState.dirOverride = dsel.value || null; refreshDet(); });
     document.querySelectorAll('.mode-btn').forEach((b) => b.addEventListener('click', () => { dsel.value = b.dataset.mode; chatState.dirOverride = b.dataset.mode || null; refreshDet(); input.focus(); }));
     const lpb = document.getElementById('ch-lang'), lpp = document.getElementById('lp-pop');
-    if (lpb && lpp) lpb.addEventListener('click', () => { lpp.classList.add('flash'); document.getElementById('lp-my').focus(); setTimeout(() => lpp.classList.remove('flash'), 900); });
+    if (lpb && lpp) lpb.addEventListener('click', () => { lpp.classList.toggle('open'); lpp.classList.add('flash'); document.getElementById('lp-my').focus(); setTimeout(() => lpp.classList.remove('flash'), 900); });
     const lpSave = () => { const th = document.getElementById('lp-their').value, my = document.getElementById('lp-my').value; Store.updateContact(c.id, { lang: th, myLang: '' }); const u0 = Store.me(); if (my !== uiLang && UI_LANGS.includes(my)) { uiLang = my; u0.lang = my; Store.save(); } else if (my !== uiLang) { Store.updateContact(c.id, { myLang: my }); } toast(t('lp_saved', { a: langUi(my), b: langUi(th) })); render(); setTimeout(() => { try { runDigests(); } catch (x) {} }, 300); };
     ['lp-my', 'lp-their'].forEach((k) => { const el = document.getElementById(k); if (el) el.addEventListener('change', lpSave); });
     const tsel = document.getElementById('ch-tone'), esel = document.getElementById('ch-emoji');
