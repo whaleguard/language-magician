@@ -7,7 +7,7 @@
   const icon = (n, c) => `<svg class="icon ${c || ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const APPN = (id) => (DATA.APPS.find((a) => a.id === id) || { name: id || '기타' }).name;
   const LN = (l) => ({ ko: '한국어', zh: '중국어', 'zh-TW': '중국어(번체)', ja: '일본어', vi: '베트남어', en: '영어', th: '태국어', id: '인도네시아어', es: '스페인어', ru: '러시아어', mn: '몽골어', uz: '우즈베크어', ne: '네팔어', tl: '필리핀어', hi: '힌디어', ar: '아랍어', fr: '프랑스어', de: '독일어', pt: '포르투갈어' }[l] || l);
-  const REL = { romance: '연인 목표', friend: '친구', business: '비즈니스' };
+  const REL = { romance: '연인 목표', friend: '친구', business: '비즈니스', family: '가족·친척', colleague: '직장 동료', customer: '고객 상담', exchange: '언어 교환', acquaint: '이웃·지인' };
   const STAGE_KO = I18N.STAGE_NAMES.ko;
   const REASON = { money: '금전 요구·투자 권유', harass: '괴롭힘·혐오', sexual: '음란·성적 요구', fake: '사칭·거짓 정보', other: '기타' };
   const fmt = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
