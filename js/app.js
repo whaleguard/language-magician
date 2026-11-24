@@ -146,6 +146,7 @@
         <div class="row wrap" style="gap:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${c.metAt ? `<span class="badge gray">${esc(t('c_days_met', { n: daysBetween(c.metAt, td) + 1 }))}</span>` : ''}</div>
         ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
       </div>
+      ${(() => { const rf = recentFacts(c.id, 5); return rf.length ? `<div class="ws-card"><span class="ws-h">↺ ${t('mem_recent')}</span><div class="facts">${rf.map((f) => `<div class="fact-row"><span class="tiny muted">${esc(fmtDate(f.day))}</span>${factChip(f)}</div>`).join('')}</div></div>` : ''; })()}
       ${pf.count >= 3 ? `<div class="ws-card"><span class="ws-h">${t('c_analysis')}</span>
         <div class="ws-kv"><span>${t('st_formal')}</span><b>${t(pf.formality === 'polite' ? 'formal_polite' : 'formal_casual')}</b></div>
         <div class="ws-kv"><span>${t('st_reply')}</span><b>${dur(pf.replyMinutes)}</b></div>
@@ -962,6 +963,8 @@
   Object.keys(GD_T).forEach((l) => Object.assign(T[l], GD_T[l]));
   const LR_T = {"ko": {"new_chat": "새 대화", "f_all": "전체", "sort_by": "정렬", "sort_recent": "최근 대화순", "sort_name": "이름순", "cal_today": "오늘", "cal_anniv": "기념일", "today_h": "오늘 할 일", "c_more": "더 아는 정보 (선택)", "c_more_hint": "몰라도 됩니다. 대화에 나오면 자동으로 채워져요.", "c_job": "직업", "c_city": "사는 곳", "learned_toast": "대화에서 알아냈어요", "learned_badge": "대화에서", "learned_hint": "상대가 보낸 메시지에서 자동으로 채운 정보예요. 직접 고치면 그 값이 우선합니다.", "learned_title": "대화로 알게 된 정보", "learned_none": "아직 없어요. 대화에서 나이·생일·혈액형·MBTI·직업·사는 곳이 나오면 자동으로 채워집니다."}, "zh": {"new_chat": "新对话", "f_all": "全部", "sort_by": "排序", "sort_recent": "最近", "sort_name": "按名字", "cal_today": "今天", "cal_anniv": "纪念日", "today_h": "今天的事", "c_more": "更多信息（可选）", "c_more_hint": "不知道也没关系，对话中出现时会自动填写。", "c_job": "职业", "c_city": "居住地", "learned_toast": "从对话中得知", "learned_badge": "来自对话", "learned_hint": "根据对方发来的消息自动填写。手动修改后以你的值为准。", "learned_title": "从对话中得知的信息", "learned_none": "暂时没有。对话中出现年龄、生日、血型、MBTI、职业、居住地时会自动填写。"}, "ja": {"new_chat": "新しい会話", "f_all": "すべて", "sort_by": "並び替え", "sort_recent": "最近", "sort_name": "名前順", "cal_today": "今日", "cal_anniv": "記念日", "today_h": "今日やること", "c_more": "分かっている情報（任意）", "c_more_hint": "分からなくてOK。会話に出てきたら自動で入ります。", "c_job": "職業", "c_city": "住んでいる所", "learned_toast": "会話から分かりました", "learned_badge": "会話から", "learned_hint": "相手のメッセージから自動で入力した情報です。手動で直すとその値が優先されます。", "learned_title": "会話で分かった情報", "learned_none": "まだありません。会話に年齢・誕生日・血液型・MBTI・職業・住んでいる所が出ると自動で入ります。"}, "vi": {"new_chat": "Trò chuyện mới", "f_all": "Tất cả", "sort_by": "Sắp xếp", "sort_recent": "Gần đây", "sort_name": "Theo tên", "cal_today": "Hôm nay", "cal_anniv": "Kỷ niệm", "today_h": "Việc hôm nay", "c_more": "Thông tin thêm (tùy chọn)", "c_more_hint": "Không biết cũng được. Sẽ tự điền khi xuất hiện trong trò chuyện.", "c_job": "Nghề nghiệp", "c_city": "Nơi sống", "learned_toast": "Biết được từ cuộc trò chuyện", "learned_badge": "Từ trò chuyện", "learned_hint": "Tự điền từ tin nhắn người ấy gửi. Nếu bạn sửa tay, giá trị của bạn được ưu tiên.", "learned_title": "Thông tin biết được từ trò chuyện", "learned_none": "Chưa có. Khi tuổi, sinh nhật, nhóm máu, MBTI, nghề, nơi sống xuất hiện trong trò chuyện, sẽ tự điền."}, "en": {"new_chat": "New chat", "f_all": "All", "sort_by": "Sort", "sort_recent": "Recent", "sort_name": "Name", "cal_today": "Today", "cal_anniv": "Anniversary", "today_h": "Today", "c_more": "More details (optional)", "c_more_hint": "No need to know now — filled in automatically when they come up in chat.", "c_job": "Job", "c_city": "Lives in", "learned_toast": "Learned from the chat", "learned_badge": "From chat", "learned_hint": "Filled in automatically from their messages. If you edit it, your value wins.", "learned_title": "Learned from chats", "learned_none": "Nothing yet. Age, birthday, blood type, MBTI, job and city are filled in automatically when they come up."}};
   Object.keys(LR_T).forEach((l) => Object.assign(T[l], LR_T[l]));
+  const MEM_T = {"ko": {"mem_day": "이 날 기억", "mem_title": "날짜별 대화 기억", "mem_none": "아직 기억할 대화가 없어요. 대화를 붙여넣으면 하루 단위로 정리됩니다.", "mem_recent": "지난 대화 기억", "mem_ai": "AI 요약", "mem_basic": "기본 분석", "mem_sum": "대화 {n}개 (받은 말 {i} · 보낸 말 {o})", "mem_topics": "주제", "mem_q": "질문 {n}개", "ft_profile": "상대 정보", "ft_plan_date": "약속·날짜", "ft_like": "좋아함", "ft_dislike": "싫어함", "ft_worry": "고민·컨디션", "ft_family": "가족", "ft_pet": "반려동물", "ft_work": "일·학교", "ft_plan": "계획", "ft_other": "기타", "mem_refresh": "다시 분석"}, "zh": {"mem_day": "当天记忆", "mem_title": "按日期的对话记忆", "mem_none": "还没有可记住的对话。粘贴对话后会按天整理。", "mem_recent": "以前的对话记忆", "mem_ai": "AI 总结", "mem_basic": "基础分析", "mem_sum": "对话 {n} 条（收到 {i} · 发出 {o}）", "mem_topics": "话题", "mem_q": "提问 {n} 个", "ft_profile": "对方信息", "ft_plan_date": "约定·日期", "ft_like": "喜欢", "ft_dislike": "不喜欢", "ft_worry": "烦恼·状态", "ft_family": "家人", "ft_pet": "宠物", "ft_work": "工作·学校", "ft_plan": "计划", "ft_other": "其他", "mem_refresh": "重新分析"}, "ja": {"mem_day": "この日の記憶", "mem_title": "日付ごとの会話の記憶", "mem_none": "まだ覚えておく会話がありません。会話を貼り付けると1日ごとに整理します。", "mem_recent": "前の会話の記憶", "mem_ai": "AI要約", "mem_basic": "基本分析", "mem_sum": "会話 {n}件（届いた {i} · 送った {o}）", "mem_topics": "話題", "mem_q": "質問 {n}件", "ft_profile": "相手の情報", "ft_plan_date": "約束・日付", "ft_like": "好き", "ft_dislike": "苦手", "ft_worry": "悩み・体調", "ft_family": "家族", "ft_pet": "ペット", "ft_work": "仕事・学校", "ft_plan": "予定", "ft_other": "その他", "mem_refresh": "再分析"}, "vi": {"mem_day": "Ghi nhớ ngày này", "mem_title": "Ghi nhớ trò chuyện theo ngày", "mem_none": "Chưa có gì để ghi nhớ. Dán cuộc trò chuyện vào, ứng dụng sẽ sắp xếp theo ngày.", "mem_recent": "Ghi nhớ trò chuyện trước", "mem_ai": "AI tóm tắt", "mem_basic": "Phân tích cơ bản", "mem_sum": "{n} tin nhắn (nhận {i} · gửi {o})", "mem_topics": "Chủ đề", "mem_q": "{n} câu hỏi", "ft_profile": "Thông tin", "ft_plan_date": "Hẹn·ngày", "ft_like": "Thích", "ft_dislike": "Không thích", "ft_worry": "Lo lắng·sức khỏe", "ft_family": "Gia đình", "ft_pet": "Thú cưng", "ft_work": "Công việc·học", "ft_plan": "Kế hoạch", "ft_other": "Khác", "mem_refresh": "Phân tích lại"}, "en": {"mem_day": "Remembered from this day", "mem_title": "Chat memory by day", "mem_none": "Nothing to remember yet. Paste chats and they are organized day by day.", "mem_recent": "From past chats", "mem_ai": "AI summary", "mem_basic": "Basic analysis", "mem_sum": "{n} messages ({i} received · {o} sent)", "mem_topics": "Topics", "mem_q": "{n} questions", "ft_profile": "About them", "ft_plan_date": "Plan·date", "ft_like": "Likes", "ft_dislike": "Dislikes", "ft_worry": "Worries·health", "ft_family": "Family", "ft_pet": "Pets", "ft_work": "Work·school", "ft_plan": "Plans", "ft_other": "Other", "mem_refresh": "Re-analyze"}};
+  Object.keys(MEM_T).forEach((l) => Object.assign(T[l], MEM_T[l]));
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {} };
 
   function renderChat(r) {
@@ -984,7 +987,7 @@
     const ai = !!Engine.aiConfig().key;
     const st = c ? convStatus(ms) : null;
     let lastDay = '';
-    const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>`; } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
+    const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; const dg = c ? digestsOf(c.id)[Engine.ymd(d)] : null; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>` + (dg && ((dg.facts && dg.facts.length) || dg.summary) ? `<details class="day-mem"><summary>📌 ${t('mem_day')} ${dg.facts ? dg.facts.length : ''} <span class="muted">· ${dg.by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></summary><p class="small">${esc(digestLine(dg))}</p><div class="facts">${(dg.facts || []).map(factChip).join('')}</div></details>` : ''); } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
         ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
         <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn" type="button" data-go="#/contact/${c.id}" aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}">${icon('person')}</button>` : ''}</div></header>
@@ -1182,6 +1185,63 @@
       </div>`, 'chat');
   }
 
+
+  /* ================= 하루 단위 대화 기억 =================
+     상대별로 날짜마다 대화를 정리해 u.digests[contactId][YYYY-MM-DD]에 저장합니다.
+     기본 분석은 바로, AI 키가 있으면 AI 요약을 뒤에서 순서대로 채웁니다. */
+  const FT_ICON = { profile: '👤', plan_date: '📅', like: '♥', dislike: '✕', worry: '💬', family: '👪', pet: '🐾', work: '💼', plan: '✈', other: '•' };
+  function dayKey(ts) { return Engine.ymd(new Date(ts)); }
+  function digestsOf(cid, u) { u = u || Store.me(); u.digests = u.digests || {}; return u.digests[cid] || {}; }
+  let aiDigestBusy = false; const aiDigestQueue = [];
+  function runDigests(onlyCid) {
+    const u = Store.me(); if (!u) return;
+    u.digests = u.digests || {};
+    let changed = false;
+    u.contacts.filter((c) => !onlyCid || c.id === onlyCid).forEach((c) => {
+      const ms = Store.messagesOf(c.id, u); if (!ms.length) return;
+      const byDay = {}; ms.forEach((m) => { const k = dayKey(m.ts); (byDay[k] = byDay[k] || []).push(m); });
+      const D = u.digests[c.id] = u.digests[c.id] || {};
+      Object.keys(byDay).forEach((k) => {
+        const list = byDay[k];
+        const cur = D[k];
+        if (cur && cur.n === list.length) return;
+        const mem = Engine.dayMemory(list);
+        D[k] = Object.assign({}, mem, { by: 'basic', at: Date.now(), summary: '' });
+        changed = true;
+        if (Engine.aiConfig().key && !aiDigestQueue.some((q) => q.cid === c.id && q.day === k)) aiDigestQueue.push({ cid: c.id, day: k });
+      });
+    });
+    if (changed) Store.save();
+    pumpAiDigests();
+  }
+  async function pumpAiDigests() {
+    if (aiDigestBusy || !aiDigestQueue.length || !Engine.aiConfig().key) return;
+    aiDigestBusy = true;
+    const job = aiDigestQueue.shift();
+    try {
+      const u = Store.me(); const c = u.contacts.find((x) => x.id === job.cid);
+      const list = c ? Store.messagesOf(c.id, u).filter((m) => dayKey(m.ts) === job.day) : [];
+      if (c && list.length) {
+        const r = await Engine.aiDayMemory(list, c, uiLang);
+        const D = u.digests[c.id] = u.digests[c.id] || {};
+        D[job.day] = Object.assign({}, D[job.day] || {}, { summary: r.summary, facts: r.facts.length ? r.facts : (D[job.day] || {}).facts || [], by: 'ai', at: Date.now(), n: list.length });
+        Store.save();
+      }
+    } catch (e) { /* AI 실패 시 기본 분석 유지 */ }
+    aiDigestBusy = false;
+    if (aiDigestQueue.length) setTimeout(pumpAiDigests, 400);
+  }
+  function digestLine(d) {
+    if (!d) return '';
+    return d.summary || [t('mem_sum', { n: d.n, i: d.inN, o: d.outN }), d.topics && d.topics.length ? t('mem_topics') + ': ' + d.topics.join(', ') : '', d.questions ? t('mem_q', { n: d.questions }) : ''].filter(Boolean).join(' · ');
+  }
+  function factChip(f) { return `<span class="fact ft-${esc(f.type)}" title="${esc(f.orig || '')}"><b>${FT_ICON[f.type] || '•'} ${esc(t('ft_' + f.type) || f.type)}</b> ${esc(f.text)}</span>`; }
+  function recentFacts(cid, n) {
+    const D = digestsOf(cid); const out = [];
+    Object.keys(D).sort().reverse().forEach((k) => (D[k].facts || []).forEach((f) => { if (out.length < n) out.push(Object.assign({ day: k }, f)); }));
+    return out;
+  }
+
   /* ================= 사용법 ================= */
   function renderGuide() {
     const u = Store.me();
@@ -1226,6 +1286,10 @@
           <div class="row">${avatar(c, 'lg')}<div class="grow"><h1 lang="${esc(c.lang)}">${esc(c.nickname)}</h1><p class="small muted">${esc(appName(c.app))} / ${esc(c.nickname)} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</p>
             <div class="row wrap" style="gap:6px;margin-top:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${daysMet ? `<span class="badge gray">${esc(t('c_days_met', { n: daysMet }))}</span>` : ''}</div></div></div>
           <div class="two"><button class="btn" type="button" data-go="#/chat/${c.id}">${t('c_import')}</button><button class="btn secondary" type="button" data-go="#/coach/${c.id}">${t('coach_link')}</button></div>
+        </div>
+        <div class="card stack-sm">
+          <div class="between"><h2>${t('mem_title')}</h2><button class="link" type="button" id="mem-refresh" style="font-size:13px">${t('mem_refresh')}</button></div>
+          ${(() => { const D = digestsOf(c.id); const ks = Object.keys(D).sort().reverse(); return ks.length ? `<ol class="mem-tl">${ks.slice(0, 30).map((k) => `<li><div class="mem-d"><b>${esc(fmtDateW(k))}</b> <span class="tiny muted">${D[k].by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></div><p class="small">${esc(digestLine(D[k]))}</p>${(D[k].facts || []).length ? `<div class="facts">${D[k].facts.map(factChip).join('')}</div>` : ''}</li>`).join('')}</ol>` : `<p class="small muted">${t('mem_none')}</p>`; })()}
         </div>
         <div class="card stack-sm">
           <div class="between"><h2>${t('learned_title')}</h2><span class="badge lilac">💬 ${t('learned_badge')}</span></div>
@@ -1282,6 +1346,7 @@
         <div class="three"><button class="btn secondary" type="button" data-go="#/gift/${c.id}">🎁 ${t('gift_title').split(' ')[0]}</button><button class="btn secondary" type="button" data-go="#/culture?c=${c.id}">🌏 ${t('culture_title').split(' ')[0]}</button><button class="btn secondary" type="button" data-go="#/saju/${c.id}">☯ ${t('compat_saju')}</button></div>
         <div class="two"><button class="btn secondary" type="button" id="c-report">${t('c_report')}</button><button class="btn secondary" type="button" id="c-del" style="color:var(--danger)">${t('c_delete')}</button></div>
       </div>`, 'contacts');
+    const mr = document.getElementById('mem-refresh'); if (mr) mr.addEventListener('click', () => { const D = digestsOf(c.id); Object.keys(D).forEach((k) => { D[k].n = -1; }); runDigests(c.id); setTimeout(() => renderContact(r), 300); toast(t('mem_refresh')); });
     document.getElementById('c-note-save').addEventListener('click', () => { Store.updateContact(c.id, { note: document.getElementById('c-note').value }); toast(t('saved')); });
     document.getElementById('c-del').addEventListener('click', () => { if (confirm(t('c_delete_confirm'))) { Store.removeContact(c.id); go('#/contacts'); } });
     document.getElementById('c-report').addEventListener('click', () => openReport(c, null));
@@ -1797,7 +1862,11 @@
   window.LM = { t, esc, icon, toast, sheet, closeSheet, go, render, fmtTs, fmtDate, appName, langName, avatar, who, whoText };
   Store.onChange(() => {});
   render();
+  window.LM_ON_AI_USAGE = (x) => { const u = Store.me(); if (!u) return; u.aiUsage = u.aiUsage || []; u.aiUsage.push(x); if (u.aiUsage.length > 5000) u.aiUsage.splice(0, u.aiUsage.length - 5000); Store.save(); };
+  window.LM_ON_MESSAGE = (m) => { if (m.contactId) setTimeout(() => { try { runDigests(m.contactId); } catch (e) {} }, 30); };
+  setTimeout(() => { try { runDigests(); } catch (e) { console.warn(e); } }, 600);
   setInterval(checkReminders, 30000);
+  setInterval(() => { try { runDigests(); } catch (e) {} }, 10 * 60000);
   setTimeout(checkReminders, 2500);
   // 서버 연결 시 내 계정 제한 여부 확인
   if (Store.Sync.enabled() && Store.me()) {

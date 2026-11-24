@@ -49,7 +49,7 @@
   }
 
   function nav(active) {
-    const items = [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['settings', '운영 설정']];
+    const items = [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
     return `<header class="top between wrap">
       <a class="brand" href="#/admin/dashboard"><span class="mark">${icon('brand')}</span>언어의 마술사 운영</a>
       <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a></nav>
@@ -63,21 +63,21 @@
   function login() {
     $app.innerHTML = `<div class="screen admin" lang="ko"><div class="content stack-lg" style="max-width:420px;margin:8vh auto">
       <span class="brand"><span class="mark">${icon('brand')}</span>언어의 마술사 운영</span>
-      <form class="card stack" id="al"><h1>관리자 로그인</h1><p class="small muted">운영자 ID와 PIN을 입력하세요. 모든 대화 열람은 감사로그에 기록됩니다.</p>
-        <label class="stack-xs"><span class="label">운영자 ID</span><input class="field" name="op" value="${esc(Store.db.admin.operator)}"></label>
-        <label class="stack-xs"><span class="label">PIN</span><input class="field" name="pin" type="password" inputmode="numeric" autocomplete="off"></label>
+      <form class="card stack" id="al"><h1>관리자 로그인</h1><p class="small muted">아이디와 비밀번호를 입력하세요. 모든 대화 열람은 감사로그에 기록됩니다.</p>
+        <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
+        <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
-        <p class="tiny muted">초기 PIN은 0000입니다. 로그인 후 운영 설정에서 꼭 바꾸세요.</p>
+        <p class="tiny muted">테스트 버전 · 아이디 admin / 비밀번호 1234</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
     document.getElementById('al').addEventListener('submit', (e) => {
       e.preventDefault(); const f = new FormData(e.target);
-      if (String(f.get('pin')) === String(Store.db.admin.pin)) {
-        Store.db.admin.operator = String(f.get('op') || 'OP-01').trim() || 'OP-01'; Store.persist();
+      if (String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase() && String(f.get('pin')) === String(Store.db.admin.pin)) {
+        Store.db.admin.operator = 'admin'; Store.persist();
         authed = true; sessionStorage.setItem('lm_admin_ok', '1');
         Store.ensureDemoMembers();
         Store.audit({ action: 'login', target: '-', reason: '관리자 로그인' });
         location.hash = '#/admin/dashboard';
-      } else { LM.toast('PIN이 맞지 않습니다'); }
+      } else { LM.toast('아이디 또는 비밀번호가 맞지 않습니다'); }
     });
   }
 
@@ -108,6 +108,7 @@
         <a class="card ${riskMsgs.length ? 'danger' : ''} stack-sm" href="#/admin/monitor?risk=1"><span class="small">위험 표시 대화</span><strong class="metric">${riskMsgs.length}건</strong></a>
         <a class="card ${open.length ? 'notice' : ''} stack-sm" href="#/admin/reports"><span class="small">미처리 신고</span><strong class="metric">${open.length}건</strong></a>
       </div>
+      ${(() => { const P = prices(); const rows = usageRows(); const mS = new Date(td.getFullYear(), td.getMonth(), 1).getTime(); const tdS = usageSummary(rows.filter((r) => r.x.ts >= td.getTime()), P); const mo = usageSummary(rows.filter((r) => r.x.ts >= mS), P); return `<a class="card stack-sm ai-tile" href="#/admin/ai"><div class="between wrap"><h2>AI 사용량·금액</h2><span class="link">자세히 →</span></div><div class="row wrap" style="gap:28px"><div><span class="label">오늘</span><br><strong class="metric">${krw(tdS.usd)}</strong> <span class="tiny muted">${tdS.calls}회</span></div><div><span class="label">이번 달</span><br><strong class="metric">${krw(mo.usd)}</strong> <span class="tiny muted">${mo.calls}회 · ${((mo.tin + mo.tout) / 1000).toFixed(1)}K 토큰</span></div><div><span class="label">무료 번역</span><br><strong class="metric">${mo.mt}회</strong></div></div></a>`; })()}
       <div class="admin-grid">
         <div class="card stack"><div class="between wrap"><h2>최근 위험 표시</h2><a class="link" href="#/admin/monitor?risk=1">대화에서 확인</a></div>
           ${riskMsgs.length ? `<div class="table-wrap"><table><thead><tr><th>시각</th><th>회원</th><th>앱 / 상대</th><th>분류</th><th>원문</th></tr></thead><tbody>${riskMsgs.sort((a, b) => b.m.ts - a.m.ts).slice(0, 8).map(({ m, u }) => { const c = u.contacts.find((x) => x.id === m.contactId); return `<tr class="clickable" data-open="${u.id}|${m.contactId || ''}"><td>${fmt(m.ts)}</td><td>${esc(u.nickname)} / ${esc(u.id)}</td><td>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '미지정'}</td><td>${m.risk.map((r) => `<span class="badge alert">${r === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}</td><td class="wrap-cell">${esc(m.text.slice(0, 70))}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="small muted">위험 표시가 없습니다.</p>'}
@@ -365,7 +366,7 @@
         <div class="stack">
           <form class="card stack" id="pin"><h2>관리자 계정</h2>
             <label class="stack-xs"><span class="label">운영자 ID</span><input class="field" name="op" value="${esc(Store.db.admin.operator)}"></label>
-            <label class="stack-xs"><span class="label">새 PIN (4자리 이상)</span><input class="field" name="pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
+            <label class="stack-xs"><span class="label">새 비밀번호 (4자리 이상)</span><input class="field" name="pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
             <button class="btn secondary" type="submit">저장</button></form>
           <div class="card stack-sm"><h2>데모 데이터</h2><p class="small muted">서버를 연결하기 전 CRM·모니터링 화면 확인용 데모 회원 8명입니다.</p>
             <div class="two"><button class="btn secondary" type="button" id="demo-on">데모 회원 넣기</button><button class="btn secondary" type="button" id="demo-off">데모 회원 지우기</button></div></div>
@@ -374,7 +375,7 @@
       </div>`);
     document.getElementById('sv').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); localStorage.setItem('lm_sync', JSON.stringify({ url: String(f.get('url')).trim(), key: String(f.get('key')).trim() })); Store.audit({ action: 'settings', target: '-', reason: '서버 연결 설정 변경' }); LM.toast('저장했습니다'); });
     document.getElementById('sv-pull').addEventListener('click', pull);
-    document.getElementById('pin').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); const p = String(f.get('pin') || ''); if (p && p.length < 4) { LM.toast('PIN은 4자리 이상'); return; } if (p) Store.db.admin.pin = p; Store.db.admin.operator = String(f.get('op') || 'OP-01'); Store.persist(); Store.audit({ action: 'settings', target: '-', reason: '관리자 계정 변경' }); LM.toast('저장했습니다'); });
+    document.getElementById('pin').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); const p = String(f.get('pin') || ''); if (p && p.length < 4) { LM.toast('비밀번호는 4자리 이상'); return; } if (p) Store.db.admin.pin = p; Store.db.admin.operator = String(f.get('op') || 'OP-01'); Store.persist(); Store.audit({ action: 'settings', target: '-', reason: '관리자 계정 변경' }); LM.toast('저장했습니다'); });
     document.getElementById('demo-on').addEventListener('click', () => { Store.ensureDemoMembers(); LM.toast('데모 회원을 넣었습니다'); });
     document.getElementById('demo-off').addEventListener('click', () => { Store.clearDemo(); LM.toast('데모 회원을 지웠습니다'); });
     document.getElementById('logout').addEventListener('click', () => { authed = false; sessionStorage.removeItem('lm_admin_ok'); location.hash = '#/home'; });
@@ -395,11 +396,71 @@
     } catch (e) { if (msg) msg.textContent = '불러오기 실패: ' + e.message; }
   }
 
+  /* ---------- AI 사용량·금액 ---------- */
+  const PRICE_DEFAULT = { 'gpt-4o-mini': [0.15, 0.6], 'gpt-4o': [2.5, 10], 'claude-haiku-5-5': [1, 5], 'claude-sonnet-5-5': [3, 15], 'free-mt': [0, 0] };
+  function prices() { try { return Object.assign({}, PRICE_DEFAULT, JSON.parse(localStorage.getItem('lm_ai_prices') || '{}')); } catch (e) { return PRICE_DEFAULT; } }
+  function fxRate() { return Number(localStorage.getItem('lm_fx') || 1400); }
+  function usageCost(x, P) { const p = P[x.model] || (x.provider === 'mymemory' ? [0, 0] : [2.5, 10]); return ((x.in || 0) * p[0] + (x.out || 0) * p[1]) / 1e6; }
+  function usageRows() { return users().flatMap((u) => (u.aiUsage || []).map((x) => ({ x, u }))); }
+  function usageSummary(rows, P) {
+    const ai = rows.filter((r) => r.x.provider !== 'mymemory');
+    return { calls: ai.length, tin: ai.reduce((a, r) => a + (r.x.in || 0), 0), tout: ai.reduce((a, r) => a + (r.x.out || 0), 0), usd: ai.reduce((a, r) => a + usageCost(r.x, P), 0), mt: rows.length - ai.length, mtChars: rows.filter((r) => r.x.provider === 'mymemory').reduce((a, r) => a + (r.x.in || 0), 0) };
+  }
+  const usd = (v) => '$' + v.toFixed(v < 1 ? 4 : 2);
+  const krw = (v) => '₩' + Math.round(v * fxRate()).toLocaleString('ko-KR');
+  function aiUsagePage(r) {
+    const P = prices();
+    const rows = usageRows();
+    const now = Date.now(); const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const mStart = new Date(d0.getFullYear(), d0.getMonth(), 1).getTime();
+    const today = usageSummary(rows.filter((r) => r.x.ts >= d0.getTime()), P);
+    const month = usageSummary(rows.filter((r) => r.x.ts >= mStart), P);
+    const all = usageSummary(rows, P);
+    // 일별 30일
+    const days = []; for (let i = 29; i >= 0; i--) { const s = d0.getTime() - i * 86400000; days.push({ s, e: s + 86400000 }); }
+    const daily = days.map((d) => usageSummary(rows.filter((r) => r.x.ts >= d.s && r.x.ts < d.e), P));
+    const maxUsd = Math.max(0.0001, ...daily.map((d) => d.usd));
+    // 회원별
+    const byUser = users().map((u) => ({ u, s: usageSummary((u.aiUsage || []).filter((x) => x.ts >= mStart).map((x) => ({ x, u })), P) })).filter((x) => x.s.calls || x.s.mt).sort((a, b) => b.s.usd - a.s.usd);
+    // 모델별
+    const byModel = {}; rows.filter((r) => r.x.ts >= mStart).forEach(({ x }) => { const k = x.provider + ' · ' + x.model; byModel[k] = byModel[k] || { calls: 0, tin: 0, tout: 0, usd: 0 }; byModel[k].calls++; byModel[k].tin += x.in || 0; byModel[k].tout += x.out || 0; byModel[k].usd += usageCost(x, P); });
+    page('ai', `
+      <div class="between wrap"><div class="stack-sm"><h1>AI 사용량·금액</h1><p class="muted">회원 기기에서 보고된 호출 기준 예상 금액입니다. 실제 청구액은 OpenAI·Anthropic 콘솔에서 확인하세요.</p></div>
+        <div class="row wrap"><a class="btn secondary" href="https://platform.openai.com/usage" target="_blank" rel="noopener">OpenAI 사용량 ↗</a><a class="btn secondary" href="https://console.anthropic.com/settings/usage" target="_blank" rel="noopener">Anthropic 사용량 ↗</a></div></div>
+      <div class="metrics six">
+        <div class="card stack-sm"><span class="label">오늘 예상 금액</span><strong class="metric">${krw(today.usd)}</strong><span class="tiny muted">${usd(today.usd)} · ${today.calls}회</span></div>
+        <div class="card stack-sm"><span class="label">이번 달 예상 금액</span><strong class="metric">${krw(month.usd)}</strong><span class="tiny muted">${usd(month.usd)} · ${month.calls}회</span></div>
+        <div class="card stack-sm"><span class="label">이번 달 토큰</span><strong class="metric">${((month.tin + month.tout) / 1000).toFixed(1)}K</strong><span class="tiny muted">입력 ${(month.tin / 1000).toFixed(1)}K · 출력 ${(month.tout / 1000).toFixed(1)}K</span></div>
+        <div class="card stack-sm"><span class="label">무료 번역(기본)</span><strong class="metric">${month.mt}회</strong><span class="tiny muted">${month.mtChars.toLocaleString()}자 · 비용 없음</span></div>
+        <div class="card stack-sm"><span class="label">AI 사용 회원(이번 달)</span><strong class="metric">${byUser.filter((x) => x.s.calls).length}명</strong></div>
+        <div class="card stack-sm"><span class="label">누적 예상 금액</span><strong class="metric">${krw(all.usd)}</strong><span class="tiny muted">${usd(all.usd)} · ${all.calls}회</span></div>
+      </div>
+      <div class="card stack"><h2>최근 30일 일별 예상 금액</h2>
+        <div class="spark">${daily.map((d, i) => `<div class="spark-col" title="${new Date(days[i].s).getMonth() + 1}/${new Date(days[i].s).getDate()} · ${krw(d.usd)} · ${d.calls}회"><span style="height:${Math.max(2, (d.usd / maxUsd) * 100)}%"></span><em>${i % 5 === 4 || i === 29 ? (new Date(days[i].s).getMonth() + 1) + '/' + new Date(days[i].s).getDate() : ''}</em></div>`).join('')}</div>
+      </div>
+      <div class="admin-grid">
+        <div class="card stack"><h2>회원별 (이번 달)</h2>
+          ${byUser.length ? `<div class="table-wrap"><table><thead><tr><th>회원</th><th>AI 호출</th><th>토큰</th><th>예상 금액</th><th>무료 번역</th></tr></thead><tbody>${byUser.map(({ u, s }) => `<tr class="clickable" data-crm="${esc(u.id)}"><td>${esc(u.nickname || '게스트')} / ${esc(u.id)}</td><td>${s.calls}</td><td>${((s.tin + s.tout) / 1000).toFixed(1)}K</td><td><b>${krw(s.usd)}</b> <span class="tiny muted">${usd(s.usd)}</span></td><td>${s.mt}</td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">이번 달 사용 기록이 없습니다.</p>'}
+        </div>
+        <div class="card stack"><h2>모델별 (이번 달)</h2>
+          ${Object.keys(byModel).length ? `<div class="table-wrap"><table><thead><tr><th>모델</th><th>호출</th><th>입력/출력</th><th>예상 금액</th></tr></thead><tbody>${Object.entries(byModel).sort((a, b) => b[1].usd - a[1].usd).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v.calls}</td><td>${(v.tin / 1000).toFixed(1)}K / ${(v.tout / 1000).toFixed(1)}K</td><td>${krw(v.usd)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">기록 없음</p>'}
+          <details><summary class="small">단가 설정 (USD / 1M 토큰) · 환율</summary>
+            <form id="price-form" class="stack-sm" style="margin-top:8px">${Object.entries(P).filter(([k]) => k !== 'free-mt').map(([k, v]) => `<div class="row"><span class="small" style="width:150px">${esc(k)}</span><input class="field" style="width:90px" name="${esc(k)}|in" value="${v[0]}"><input class="field" style="width:90px" name="${esc(k)}|out" value="${v[1]}"></div>`).join('')}
+              <div class="row"><span class="small" style="width:150px">환율 (₩/$)</span><input class="field" style="width:90px" name="fx" value="${fxRate()}"></div>
+              <button class="btn sm" type="submit">저장</button></form>
+          </details>
+        </div>
+      </div>`);
+    const f = document.getElementById('price-form');
+    if (f) f.addEventListener('submit', (e) => { e.preventDefault(); const fd = new FormData(f); const out = {}; for (const [k, v] of fd.entries()) { if (k === 'fx') { localStorage.setItem('lm_fx', String(Number(v) || 1400)); continue; } const [m, io] = k.split('|'); out[m] = out[m] || [0, 0]; out[m][io === 'in' ? 0 : 1] = Number(v) || 0; } localStorage.setItem('lm_ai_prices', JSON.stringify(out)); aiUsagePage(r); });
+    document.querySelectorAll('[data-crm]').forEach((tr) => tr.addEventListener('click', () => { location.hash = '#/admin/users?u=' + encodeURIComponent(tr.dataset.crm); }));
+  }
+
   window.Admin = {
     render(r) {
       if (!authed) return login();
       const p = r.id || 'dashboard';
-      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings }[p] || dashboard)(r);
+      ({ dashboard, users: crm, monitor, reports: reportsPage, quality, audit: auditPage, settings, ai: aiUsagePage }[p] || dashboard)(r);
       window.scrollTo(0, 0);
     },
   };

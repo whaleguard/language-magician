@@ -105,6 +105,9 @@
     try { return JSON.parse(localStorage.getItem('lm_ai') || '{}'); } catch (e) { return {}; }
   }
 
+  function reportUsage(provider, model, tin, tout) {
+    try { if (typeof window !== 'undefined' && window.LM_ON_AI_USAGE) window.LM_ON_AI_USAGE({ provider, model, in: tin || 0, out: tout || 0, ts: Date.now() }); } catch (e) { /* 무시 */ }
+  }
   async function callLLM(system, user, wantJson) {
     const cfg = aiConfig();
     if (!cfg.key) throw new Error('no-key');
@@ -121,6 +124,7 @@
       });
       if (!r.ok) throw new Error('llm-' + r.status);
       const j = await r.json();
+      reportUsage('openai', cfg.model || 'gpt-4o-mini', j.usage && j.usage.prompt_tokens, j.usage && j.usage.completion_tokens);
       return j.choices[0].message.content;
     }
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -140,6 +144,7 @@
     });
     if (!r.ok) throw new Error('llm-' + r.status);
     const j = await r.json();
+    reportUsage('anthropic', cfg.model || 'claude-haiku-5-5', j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens);
     return (j.content || []).map((c) => c.text || '').join('');
   }
 
@@ -215,6 +220,7 @@
     if (!out) {
       out = await mymemory(text, from, to);
       provider = 'mt';
+      reportUsage('mymemory', 'free-mt', text.length, 0);
     }
     cache[key] = out;
     saveCache();
@@ -547,8 +553,44 @@
     return extractJson(txt);
   }
 
+  /* ---------- 하루 단위 대화 기억 ----------
+     하루치 대화에서 요약과 기억할 것(생일·약속·좋아하는 것·고민·가족·일 등)을 뽑습니다. */
+  const MEM_RX = {
+    like: /(좋아해|좋아하는|좋아요\s*[^?]|최애|喜欢|爱吃|最爱|好き|大好き|thích|yêu thích|\bI (?:really )?(?:love|like|enjoy)\b|\bmy fav(?:ou?rite)?\b)/i,
+    dislike: /(싫어해|싫어요|못 먹|不喜欢|讨厌|不能吃|嫌い|苦手|không thích|ghét|\bI (?:hate|don'?t like|can'?t eat)\b|allergic)/i,
+    worry: /(힘들|걱정|아파|피곤|우울|스트레스|속상|累|难过|担心|生病|压力|不舒服|伤心|疲れ|心配|具合|しんどい|悲し|ストレス|mệt|buồn|lo lắng|ốm|căng thẳng|\b(?:tired|sad|worried|sick|stressed|upset|exhausted)\b)/i,
+    family: /(엄마|아빠|부모님|동생|언니|오빠|누나|형|할머니|할아버지|妈妈|爸爸|父母|弟弟|妹妹|哥哥|姐姐|奶奶|爷爷|母|父|両親|弟|妹|兄|姉|祖母|mẹ|bố|ba mẹ|em trai|em gái|anh trai|chị|\b(?:mom|mum|dad|parents|brother|sister|grandma|grandpa)\b)/i,
+    pet: /(강아지|고양이|반려|狗|猫|宠物|犬|猫|ペット|chó|mèo|thú cưng|\b(?:dog|cat|puppy|kitten|pet)\b)/i,
+    work: /(회사|일이|출근|퇴근|야근|시험|학교|수업|面试|上班|下班|加班|考试|学校|上课|工作|会社|仕事|出勤|残業|試験|学校|授業|công ty|đi làm|tan làm|thi|trường|lớp|\b(?:work|office|shift|exam|school|class|interview|job)\b)/i,
+    plan: /(여행|이사|생일 파티|결혼|旅行|搬家|结婚|生日派对|旅行|引っ越し|結婚|du lịch|chuyển nhà|kết hôn|\b(?:trip|travel|moving|wedding|vacation|holiday)\b)/i,
+  };
+  function dayMemory(msgs) {
+    const ins = msgs.filter((m) => m.dir === 'in');
+    const facts = [];
+    const seen = new Set();
+    const add = (type, m) => { const txt = (m.translation && m.dir === 'in' ? m.translation : m.text).trim(); const key = type + '|' + txt; if (!txt || seen.has(key)) return; seen.add(key); facts.push({ type, text: txt.length > 90 ? txt.slice(0, 88) + '…' : txt, orig: m.text.slice(0, 90), msgId: m.id, dir: m.dir }); };
+    msgs.forEach((m) => {
+      const src = m.text + ' ' + (m.translation || '');
+      const pf = m.dir === 'in' ? extractProfile(m.text) : {};
+      if (Object.keys(pf).length) add('profile', m);
+      if (extractWhen(m.text, m.ts) || extractWhen(m.translation || '', m.ts)) add('plan_date', m);
+      ['like', 'dislike', 'worry', 'family', 'pet', 'work', 'plan'].forEach((k) => { if (m.dir === 'in' && MEM_RX[k].test(src)) add(k, m); });
+    });
+    const qs = ins.filter((m) => RX.question.test(m.text));
+    const p = profile(msgs);
+    return { n: msgs.length, inN: ins.length, outN: msgs.length - ins.length, topics: p.topics.slice(0, 4), mood: p.mood, questions: qs.length, facts: facts.slice(0, 8) };
+  }
+  async function aiDayMemory(msgs, contact, uiLang) {
+    const sys = 'You summarize one day of chat between the user (ME) and a contact (THEM) so the user remembers it later. Only use facts stated in the messages. Respond in strict JSON.';
+    const lines = msgs.map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ' ' + new Date(m.ts).toTimeString().slice(0, 5) + ': ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
+    const user = 'Write in ' + LANGS[uiLang].llm + '. Contact: ' + contact.nickname + '.\nChat:\n' + lines + '\n\nReturn JSON {"summary":"2 short sentences of what happened today","facts":[{"type":"profile|plan_date|like|dislike|worry|family|pet|work|plan|other","text":"one thing worth remembering about THEM or a promise, short"}]} with at most 6 facts.';
+    const out = await callLLM(sys, user, true);
+    const j = typeof out === 'string' ? extractJson(out) : out;
+    return { summary: String(j.summary || ''), facts: (j.facts || []).slice(0, 6).map((f) => ({ type: f.type || 'other', text: String(f.text || '') })) };
+  }
+
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, aiAnalyze,
-    extractWhen, extractPlace, extractProfile, intents, formality, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, intents, formality, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

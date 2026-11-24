@@ -607,3 +607,25 @@ body.is-wide .ws-rail { display: flex; flex-direction: column; }
 .st-pill.st-copied { background: #eef0f0; color: #59625f; }
 .st-pill.st-done { background: transparent; color: var(--muted); font-weight: 600; }
 @media (max-width: 720px) { .chip-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; } .chip-row::-webkit-scrollbar { display: none; } .chip.sm { flex: none; } }
+/* 하루 단위 대화 기억 */
+.facts { display: flex; flex-wrap: wrap; gap: 5px; }
+.fact { display: inline-block; max-width: 100%; padding: 3px 8px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.fact b { font-weight: 700; margin-right: 2px; }
+.ft-profile { background: #ece8fb; border-color: #dcd5f5; } .ft-plan_date { background: #e9f0fb; border-color: #d3e0f5; } .ft-like { background: #fdebf0; border-color: #f6d3dd; } .ft-dislike { background: #f3f3f3; } .ft-worry { background: #fff1db; border-color: #f2dfbd; } .ft-family, .ft-pet { background: #eaf6f0; border-color: #d2ebde; } .ft-work, .ft-plan { background: #eef2f6; }
+.fact-row { display: grid; gap: 2px; }
+.ws-card .facts { flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+.day-mem { margin: -6px auto 14px; max-width: 640px; border: 1px dashed var(--line); border-radius: 10px; padding: 6px 10px; background: var(--surface); }
+.day-mem summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.day-mem p { margin: 6px 0; }
+.mem-tl { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 14px; }
+.mem-tl li { position: relative; display: grid; gap: 5px; }
+.mem-tl li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); }
+.mem-tl p { margin: 0; }
+.learned-line { margin-top: 4px; font-size: 12.5px; padding: 4px 10px; border-radius: 8px; background: #ece8fb; color: #3f3482; }
+/* 관리자 AI 사용량 */
+.spark { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; align-items: end; height: 160px; padding-top: 10px; }
+.spark-col { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.spark-col span { display: block; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; }
+.spark-col em { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.spark { margin-bottom: 20px; }
+.ai-tile:hover { border-color: var(--primary); }

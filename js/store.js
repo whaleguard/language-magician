@@ -15,13 +15,15 @@
   function uid(p) { return (p || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   function blank() {
-    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '0000', operator: 'OP-01' } };
+    return { version: 1, currentUserId: null, users: {}, reports: [], audit: [], quality: [], seq: { U: 0, G: 0, R: 0, C: 0 }, admin: { pin: '1234', loginId: 'admin', operator: 'admin' } };
   }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const d = Object.assign(blank(), JSON.parse(raw));
+        // 테스트 버전 관리자 비밀번호 1234로 통일
+        if (d.admin && (d.admin.pin === '0000' || !d.admin.pin)) d.admin.pin = '1234';
         // 샘플 연락처 이름 변경(우재 → 서준) 반영
         Object.values(d.users || {}).forEach((u) => (u.contacts || []).forEach((c) => { if (c.sample && (c.nickname === '우재' || c.nickname === '宇宰')) c.nickname = '서준'; }));
         return d;
@@ -121,6 +123,7 @@
     u.lastActive = Date.now();
     save();
     msg._learned = learnFromMessage(msg);
+    if (typeof window !== 'undefined' && window.LM_ON_MESSAGE) { try { window.LM_ON_MESSAGE(msg); } catch (e) { /* 무시 */ } }
     return msg;
   }
 
@@ -239,7 +242,11 @@
 
   /* ---------- 관리자 데모 회원 (서버 미연결 시 CRM 화면 확인용) ---------- */
   function ensureDemoMembers() {
-    if (Object.values(db.users).some((u) => u.demo)) return;
+    if (Object.values(db.users).some((u) => u.demo)) {
+      // 예전 데모 회원에 AI 사용 기록이 없으면 채움
+      Object.values(db.users).filter((u) => u.demo && !u.aiUsage).forEach((u, i) => { u.aiUsage = []; const model = i % 2 ? 'claude-haiku-5-5' : 'gpt-4o-mini'; if (u.type === 'member') for (let dday = 0; dday < 30; dday++) for (let k = 0; k < (i * 7 + dday * 3) % 9; k++) u.aiUsage.push({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 700 + ((k * 131 + i * 17) % 900), out: 180 + ((k * 71) % 400), ts: Date.now() - dday * 86400000 - k * 1800000 }); });
+      persist(); return;
+    }
     const defs = [
       ['Lin', 'zh', 'member', ['woojae', 'haruka', 'minh'], 15],
       ['はると', 'ja', 'member', ['woojae', 'lin', 'alex'], 30],
@@ -267,6 +274,13 @@
         consentAt: Date.now() - ageDays * 86400000, consentVer: CONSENT_VERSION, status: 'active', banReason: '',
         me: {}, contacts: [], messages: [], promises: [], anniversaries: [], settings: { notif: {}, remind: 30 }, device: 'demo',
       };
+      // 데모: AI 사용 기록 (회원 일부만 AI 키 사용)
+      u.aiUsage = [];
+      if (type === 'member' && i % 3 !== 2) {
+        const model = i % 2 ? 'claude-haiku-5-5' : 'gpt-4o-mini';
+        for (let dday = 0; dday < 30; dday++) { const n = (i * 7 + dday * 3) % 9; for (let k = 0; k < n; k++) u.aiUsage.push({ provider: model.startsWith('gpt') ? 'openai' : 'anthropic', model, in: 700 + ((k * 131 + i * 17) % 900), out: 180 + ((k * 71) % 400), ts: Date.now() - dday * 86400000 - k * 1800000 }); }
+      }
+      for (let dday = 0; dday < 14; dday++) for (let k = 0; k < (i + dday) % 5; k++) u.aiUsage.push({ provider: 'mymemory', model: 'free-mt', in: 30 + k * 7, out: 0, ts: Date.now() - dday * 86400000 - k * 2400000 });
       keys.forEach((k) => {
         const s = pool.find((p) => p.key === k);
         if (!s || s.lang === lang) return;
