@@ -1,0 +1,84 @@
+/* Language Magician tour — GPT 명세 lm-demo-tour.css (v2 팔레트) */
+.lm-tour {
+  --tour-navy: #10243e; --tour-sky: #036da3; --tour-ink: #17263b; --tour-muted: #536477;
+  --tour-bg: #f6f8fc; --tour-line: #dce4ee; --tour-tint: #e8f5ff; --tour-white: #fff; --tour-radius: 12px;
+  min-height: 100dvh; display: flex; flex-direction: column; background: var(--tour-bg); color: var(--tour-ink);
+  font: 400 16px/1.6 Pretendard, 'Noto Sans KR', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; overflow-wrap: anywhere;
+}
+.lm-tour:lang(zh) { font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+.lm-tour *, .lm-tour *::before, .lm-tour *::after { box-sizing: border-box; }
+.lm-tour [hidden] { display: none !important; }
+.lm-tour :is(h1, h2, h3, p, figure, dl, dd) { margin: 0; }
+.lm-tour :is(button, select) { font: inherit; }
+.lm-tour :focus-visible { outline: 2px solid var(--tour-sky); outline-offset: 3px; }
+.lm-tour .tour-wrap { width: min(1440px, calc(100% - 48px)); margin-inline: auto; }
+.lm-tour :is(.tour-top, .tour-footer) { background: var(--tour-white); }
+.lm-tour .tour-top { border-bottom: 1px solid var(--tour-line); position: sticky; top: 0; z-index: 10; }
+.lm-tour .tour-footer { margin-top: auto; border-top: 1px solid var(--tour-line); position: sticky; bottom: 0; z-index: 10; }
+.lm-tour :is(.tour-top-inner, .tour-footer-inner, .tour-actions, .tour-langs, .tour-progress-label) { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.lm-tour :is(.tour-top-inner, .tour-footer-inner, .tour-progress-label) { justify-content: space-between; }
+.lm-tour :is(.tour-top-inner, .tour-footer-inner) { padding-block: 10px; }
+.lm-tour .tour-brand { color: var(--tour-navy); font-weight: 800; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+.lm-tour .tour-brand img { height: 24px; }
+.lm-tour .tour-main { padding-block: clamp(20px, 4vw, 56px); }
+.lm-tour .tour-cover { display: grid; align-content: center; justify-items: start; min-height: clamp(340px, 56vh, 620px); gap: 18px; padding: clamp(24px, 7vw, 96px); background: var(--tour-navy); color: var(--tour-white); border-radius: var(--tour-radius); }
+.lm-tour .tour-cover h1, .lm-tour .tour-toc h2 { font-size: clamp(30px, 5vw, 60px); line-height: 1.12; letter-spacing: -.035em; }
+.lm-tour .tour-cover p { max-width: 46ch; color: #dbe8f6; font-size: clamp(16px, 2vw, 21px); }
+.lm-tour .tour-cover .tour-kicker { color: #bcdef6; }
+.lm-tour .tour-kicker { color: var(--tour-sky); font-size: 13px; font-weight: 750; }
+.lm-tour .tour-toc { display: grid; gap: 20px; }
+.lm-tour .tour-toc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lm-tour .tour-chapter { display: grid; gap: 8px; padding: 16px; min-width: 0; background: var(--tour-white); border: 1px solid var(--tour-line); border-radius: var(--tour-radius); }
+.lm-tour .tour-chapter ol { display: grid; gap: 2px; padding-inline-start: 1.5em; margin: 0; }
+.lm-tour .tour-chapter a { display: block; padding-block: 4px; color: var(--tour-sky); text-underline-offset: 3px; }
+.lm-tour .tour-chapter a[aria-current="step"] { font-weight: 800; }
+.lm-tour .tour-scene { display: grid; gap: 18px; min-width: 0; }
+.lm-tour .tour-scene-head { display: grid; gap: 5px; }
+.lm-tour .tour-scene-head h2 { font-size: clamp(24px, 4vw, 42px); line-height: 1.18; letter-spacing: -.028em; }
+.lm-tour .tour-layout { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(250px, 1fr); align-items: start; gap: 16px; }
+.lm-tour .tour-visual { display: grid; gap: 8px; min-width: 0; }
+.lm-tour .tour-shots { display: grid; gap: 10px; min-width: 0; }
+.lm-tour .tour-shots[data-layout="pair"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lm-tour .tour-shot { display: grid; min-width: 0; place-items: center; overflow: hidden; border: 1px solid var(--tour-line); border-radius: var(--tour-radius); background: var(--tour-white); }
+.lm-tour .tour-shot img { display: block; width: 100%; height: auto; object-fit: contain; }
+.lm-tour .tour-shot[data-format="phone"] { max-width: 340px; width: 100%; margin-inline: auto; }
+.lm-tour .tour-caption, .lm-tour .tour-muted { color: var(--tour-muted); font-size: 13px; }
+.lm-tour .tour-copy { display: grid; gap: 12px; min-width: 0; padding: 16px; background: var(--tour-white); border: 1px solid var(--tour-line); border-radius: var(--tour-radius); }
+.lm-tour .tour-copy h3 { font-size: 17px; }
+.lm-tour .tour-points { display: grid; gap: 6px; margin: 0; padding-inline-start: 1.25em; }
+.lm-tour .tour-try { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--tour-line); }
+.lm-tour .tour-credentials { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; font-size: 13px; }
+.lm-tour .tour-credentials dt { color: var(--tour-muted); }
+.lm-tour .tour-credentials dd { font-weight: 650; user-select: text; }
+.lm-tour .tour-btn { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 44px; padding: 7px 13px; border: 1px solid var(--tour-line); border-radius: 8px; background: var(--tour-white); color: var(--tour-navy); font-weight: 700; text-decoration: none; cursor: pointer; }
+.lm-tour .tour-btn:hover, .lm-tour .tour-btn[aria-current="true"] { background: var(--tour-tint); border-color: #afd4ea; }
+.lm-tour .tour-btn--primary { background: var(--tour-sky); border-color: var(--tour-sky); color: var(--tour-white); }
+.lm-tour .tour-btn--primary:hover { background: var(--tour-navy); border-color: var(--tour-navy); }
+.lm-tour .tour-btn:disabled { opacity: .5; cursor: default; }
+.lm-tour .tour-progress { display: grid; gap: 4px; flex: 1 1 180px; max-width: 500px; min-width: 0; }
+.lm-tour .tour-progress progress { display: block; width: 100%; height: 6px; appearance: none; border: 0; background: var(--tour-line); border-radius: 6px; overflow: hidden; }
+.lm-tour .tour-progress progress::-webkit-progress-bar { background: var(--tour-line); }
+.lm-tour .tour-progress progress::-webkit-progress-value { background: var(--tour-sky); }
+.lm-tour .tour-progress progress::-moz-progress-bar { background: var(--tour-sky); }
+.lm-tour .tour-footer-inner { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+.lm-tour[data-mode="present"] .tour-main { padding-block: 16px; }
+.lm-tour[data-mode="present"] .tour-shot img { max-height: max(240px, calc(100dvh - 230px)); }
+.lm-tour .tour-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 820px) { .lm-tour .tour-wrap { width: calc(100% - 28px); } .lm-tour .tour-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 540px) {
+  .lm-tour :is(.tour-toc-grid, .tour-shots[data-layout="pair"]) { grid-template-columns: minmax(0, 1fr); }
+  .lm-tour .tour-progress { order: -1; flex-basis: 100%; max-width: none; }
+  .lm-tour .tour-footer-inner > .tour-actions { width: 100%; justify-content: space-between; }
+  .lm-tour .tour-cover { min-height: 360px; }
+}
+/* 보완(Claude): 표지 통계, 이미지 확대, 권한표 */
+.lm-tour .tour-cover-stats { display: flex; flex-wrap: wrap; gap: 10px 22px; color: #bcdef6; font-size: 14px; }
+.lm-tour .tour-cover-stats b { color: #fff; font-size: 20px; margin-right: 4px; }
+.lm-tour .tour-shot img { cursor: zoom-in; }
+.lm-tour .tour-zoom { position: fixed; inset: 0; z-index: 50; background: rgba(10,20,35,.88); display: grid; place-items: center; padding: 20px; cursor: zoom-out; }
+.lm-tour .tour-zoom img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+.lm-tour .tour-table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--tour-white); border: 1px solid var(--tour-line); border-radius: var(--tour-radius); overflow: hidden; }
+.lm-tour .tour-table :is(th, td) { padding: 9px 10px; border-bottom: 1px solid var(--tour-line); text-align: center; }
+.lm-tour .tour-table th:first-child, .lm-tour .tour-table td:first-child { text-align: start; }
+.lm-tour .tour-table thead th { background: var(--tour-tint); color: var(--tour-navy); }
+.lm-tour .tour-table-wrap { overflow-x: auto; }

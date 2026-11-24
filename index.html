@@ -173,6 +173,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
           <p class="lead">카톡·위챗에서 받은 말을 붙여넣으세요. 번역과 말의 뉘앙스를 확인하고, 지난 대화를 이어가는 답장을 만들어 원래 메신저에서 보내세요.</p>
           <div class="row">
             <a class="cta lg" href="app.html" data-app>바로 써보기 (가입 없이)</a>
+            <a class="cta lg ghost" href="demo-tour.html" data-tour>▶ 데모 투어 보기</a>
             <a class="cta lg ghost" href="#how">어떻게 쓰나요?</a>
           </div>
           <p class="hero-note">게스트로 바로 시작 · 실명 가입 없음 · PC 2모니터와 모바일 모두 지원</p>
@@ -307,7 +308,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
         <article class="card"><h3>답장도 서로의 언어로</h3><p>상담원이 자기 언어로 답하면 팀장에게는 한국어로 보입니다.</p></article>
         <article class="card"><h3>팀 현황 대시보드</h3><p>팀 상담량, 안 읽은 지시, 확인 안 한 답장, 위험 대화와 열람 기록을 한 화면에서 봅니다.</p></article>
       </div>
-      <div class="biz-cta"><a class="cta" href="app.html#/admin">팀장 콘솔 체험 (leader1 / 1234)</a></div>
+      <div class="biz-cta"><a class="cta" href="demo-tour.html#org-roles" data-tour="org-roles">▶ 기업용 데모 투어</a><a class="cta ghost" href="app.html#/admin">팀장 콘솔 체험 (leader1 / 1234)</a></div>
     </div>
   </section>
 
@@ -372,6 +373,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
       document.documentElement.lang = l === 'zh' ? 'zh-Hans' : l;
       document.title = titles[l] || titles.ko;
       document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + l; });
+      document.querySelectorAll('[data-tour]').forEach(function (a) { a.href = (l === 'zh' ? 'demo-tour-zh.html' : 'demo-tour.html') + (a.getAttribute('data-tour') ? '#' + a.getAttribute('data-tour') : ''); });
       try { localStorage.setItem('lm_land_lang', l); } catch (e) {}
     }
     var saved = null; try { saved = localStorage.getItem('lm_land_lang'); } catch (e) {}
