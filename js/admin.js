@@ -140,7 +140,7 @@
         location.hash = '#/admin/dashboard';
       } else {
         const who = Store.whoHasId(f.get('id'));
-        LM.toast(who === 'agent' ? '상담원 계정입니다 · 앱 첫 화면의 「상담원 로그인」에서 로그인하세요' : who ? '비밀번호가 맞지 않습니다' : (Store.Sync.enabled() ? '없는 아이디입니다 (공용 서버에도 없음)' : '이 브라우저에 없는 아이디입니다'), 5000);
+        LM.toast(who === 'agent' ? '상담원 계정입니다 · 앱 첫 화면의 「계정 로그인」에서 로그인하세요' : who ? '비밀번호가 맞지 않습니다' : (Store.Sync.enabled() ? '없는 아이디입니다 (공용 서버에도 없음)' : '이 브라우저에 없는 아이디입니다'), 5000);
       }
     });
   }
@@ -379,7 +379,7 @@
             <div class="row wrap" style="gap:6px"><input class="field" name="nickname" placeholder="상담원 이름" required style="max-width:160px"><select class="field" name="lang" style="max-width:150px">${['ko', 'zh', 'ja', 'vi', 'en', 'th', 'id', 'es', 'ru', 'mn', 'uz', 'ne', 'tl', 'hi', 'ar', 'fr', 'de', 'pt'].map((l) => `<option value="${l}">${esc(LN(l))}</option>`).join('')}</select><input class="field" name="loginId" placeholder="상담원 아이디 (영문)" required style="max-width:170px"><input class="field" name="pin" value="1234" placeholder="비밀번호" required style="max-width:110px"><button class="btn" type="submit">상담원 추가</button></div>
             ${(() => { const ag = (sel.members || []).map((id) => Store.db.users[id]).filter((u) => u && u.loginId); return ag.length ? `<div class="tm-agents">${ag.map((u) => `<span class="tm-agent-chip"><b>${esc(u.nickname)}</b> ${esc(u.loginId)} / ${esc(u.pin)} · ${esc(LN(u.lang || 'ko'))} · ${u.lastActive ? '접속 ' + new Date(u.lastActive).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span class="ops-muted">미접속</span>'}${(() => { const b = Store.bindOf(u.id); return b && b.dev ? ` · 🔒 자리 ${esc(b.label || '')} (${new Date(b.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}) <button class="btn sm secondary" type="button" data-seat-reset="${u.id}">자리 초기화</button>` : ' · <span class="ops-muted">자리 미등록 (첫 로그인 PC로 고정)</span>'; })()}</span>`).join('')}</div>` : ''; })()}
             <p class="ops-muted">🔒 상담원 계정은 처음 로그인한 PC(브라우저) 한 자리에서만 열립니다. 자리를 옮기면 「자리 초기화」 후 새 PC에서 로그인 · 초기화하면 기존 자리는 바로 로그아웃됩니다.</p>
-            <p class="ops-muted">상담원은 앱 주소의 첫 화면 → 「상담원 로그인」에서 이 아이디·비밀번호로 들어옵니다 · ${Store.Sync.enabled() ? '공용 서버 연결됨 · 다른 PC에서도 로그인됩니다' : '서버 미연결 · 같은 브라우저에서만'}</p></form>`; }
+            <p class="ops-muted">상담원은 앱 주소의 첫 화면 → 「계정 로그인」에서 이 아이디·비밀번호로 들어옵니다 · ${Store.Sync.enabled() ? '공용 서버 연결됨 · 다른 PC에서도 로그인됩니다' : '서버 미연결 · 같은 브라우저에서만'}</p></form>`; }
   function bindAgentForm(sel, rerender) {
     const fm = document.getElementById('tm-agent'); if (!fm) return;
     fm.addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('상담원 아이디는 영문·숫자로 2자 이상'); return; } if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const u = Store.createAgent({ nickname: String(f.get('nickname')).trim(), lang: f.get('lang'), loginId: lid, pin: f.get('pin'), teamId: sel.id }); Store.audit({ action: 'settings', target: u.id, reason: '상담원 계정 생성 · ' + u.nickname + ' (' + lid + ') · ' + sel.name }); LM.toast('상담원 로그인: ' + lid + ' / ' + u.pin, 6000); rerender(); });
