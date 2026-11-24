@@ -94,3 +94,11 @@
 .tm-member { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
 .tm-member:hover { background: var(--bg); }
 @media (max-width: 760px) { .lm-msg-layout { grid-template-columns: minmax(0, 1fr); } .lm-msg { max-width: 94%; } }
+.nt-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.nt-filter a { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); text-decoration: none; }
+.nt-filter a.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.nt-filter a b { font-weight: 700; }
+.lm-msg-row .ops-tag { flex: 0 0 auto; }
+.lm-inbox .inbox-pending { border-color: #cdbff0; background: #faf8ff; }
+.lm-inbox .inbox-pending h2 { font-size: 15px; }
+.lm-inbox .inbox-msg.pending .inbox-bubble { box-shadow: 0 0 0 2px #cdbff0; }

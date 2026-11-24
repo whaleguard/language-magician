@@ -636,7 +636,11 @@
     const rows = us.map((u) => { const ns = Store.noticesOf(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => n.from === 'member' && !n.readAt).length, unreadM: ns.filter((n) => n.from !== 'member' && !n.readAt).length }; })
       .sort((a, b) => (b.unreadR - a.unreadR) || ((b.last ? b.last.ts : 0) - (a.last ? a.last.ts : 0)) || a.u.nickname.localeCompare(b.u.nickname));
     const q = (r.q.q || '').toLowerCase();
-    const list = rows.filter((x) => !q || (x.u.nickname + ' ' + x.u.id).toLowerCase().includes(q));
+    rows.forEach((x) => { const pend = Store.pendingReply(x.u.id); x.st = x.unreadM ? 'unread' : pend.length ? 'waiting' : x.ns.some((n) => n.from === 'member') ? 'done' : x.ns.length ? 'read' : 'none'; x.pend = pend; });
+    const fl = r.q.f || 'all';
+    const cnt = (k) => rows.filter((x) => x.st === k).length;
+    const list = rows.filter((x) => (!q || (x.u.nickname + ' ' + x.u.id).toLowerCase().includes(q)) && (fl === 'all' || x.st === fl));
+    const STL = { unread: ['미열람', 'attention'], waiting: ['읽음·답장 대기', 'info'], done: ['답장 완료', 'good'], read: ['읽음', 'neutral'], none: ['', 'neutral'] };
     const sel = r.q.u ? findUser(r.q.u) : null;
     const rl = role();
     let thread = '<p class="ops-empty">왼쪽에서 받을 사람을 고르세요. 한국어로 쓰면 받는 사람이 앱에서 고른 언어로 번역돼 도착합니다.</p>';
@@ -650,18 +654,19 @@
           const k = KIND[n.kind] || KIND.instruction;
           if (mine) {
             const trT = n.tr && n.tr[L];
-            return `<div class="lm-msg out"><div class="lm-msg-meta"><span class="ops-tag" data-tone="${k[1]}">${k[0]}</span> ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble ${n.kind === 'warning' ? 'warn' : ''}"><p>${esc(n.text)}</p>${L !== n.lang ? `<p class="lm-msg-tr" lang="${esc(L)}">→ ${esc(LN(L))}: ${trT ? esc(trT) : '<span class="ops-muted">번역 중…</span>'}</p>` : ''}</div><div class="lm-msg-read">${n.readAt ? `✓✓ 읽음 ${fmt(n.readAt)}` : '✓ 전달됨 · 아직 안 읽음'}</div></div>`;
+            return `<div class="lm-msg out"><div class="lm-msg-meta"><span class="ops-tag" data-tone="${k[1]}">${k[0]}</span>${n.needReply ? ' <span class="ops-tag" data-tone="info">답장 필요</span>' : ''}${n.due ? ` <span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span>` : ''} ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble ${n.kind === 'warning' ? 'warn' : ''}"><p>${esc(n.text)}</p>${L !== n.lang ? `<p class="lm-msg-tr" lang="${esc(L)}">→ ${esc(LN(L))}: ${trT ? esc(trT) : n.trFail ? '<span class="ops-tag" data-tone="attention">번역 실패 · 원문(한국어)으로 전달됨</span>' : '<span class="ops-muted">번역 중…</span>'}</p>` : ''}</div><div class="lm-msg-read">${n.readAt ? `✓✓ 읽음 ${fmt(n.readAt)}` : '✓ 전달됨 · 아직 안 읽음'}</div></div>`;
           }
           return `<div class="lm-msg in"><div class="lm-msg-meta"><span class="ops-tag" data-tone="good">답장</span> ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc((n.tr && n.tr.ko) || n.text)}</p>${n.lang !== 'ko' ? `<p class="lm-msg-tr" lang="${esc(n.lang)}">원문(${esc(LN(n.lang))}): ${esc(n.text)}</p>` : ''}</div></div>`;
         }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
-        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
+        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:4px"><input type="checkbox" id="nt-need"> 답장 필요</label><label class="small row" style="gap:4px">마감 <input class="field sel-sm" type="datetime-local" id="nt-due"></label><span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
           <textarea class="field" id="nt-text" rows="3" placeholder="예: 오늘 오후 문의는 환불 규정을 먼저 안내해 주세요." required></textarea>
           <div class="between wrap"><label class="small row" style="gap:6px"><input type="checkbox" id="nt-all"> ${rl.type === 'leader' ? '팀원 전체' : rl.type === 'org' ? '회사 상담원 전체' : '목록의 전체 회원'}에게 보내기 (각자 언어로)</label><button class="btn" type="submit">보내기</button></div></form>`;
     }
     page('notices', `<div class="stack-sm"><h1>메시지 <span class="ops-muted" style="font-size:14px">지시·공지·경고</span></h1><p class="muted">${rl.type === 'leader' ? '팀원' : '회원·상담원'}에게 한국어로 보내면 받는 사람이 고른 언어로 번역돼 앱에 도착합니다. 읽음 여부와 답장(한국어 번역)이 여기 표시됩니다.</p></div>
       <div class="lm-msg-layout">
         <aside class="card lm-msg-list"><form id="nt-q" role="search"><input class="field" name="q" type="search" placeholder="닉네임·ID 검색" value="${esc(r.q.q || '')}"></form>
-          <ul>${list.map((x) => `<li><a class="lm-msg-row ${sel && sel.id === x.u.id ? 'on' : ''}" href="#/admin/notices?u=${x.u.id}"><span class="grow"><strong>${esc(x.u.nickname)}</strong> <span class="ops-muted">${esc(LN(x.u.lang || 'ko'))}</span><br><span class="ops-muted ellipsis">${x.last ? esc(((x.last.from === 'member' ? '↩ ' : '') + ((x.last.from === 'member' && x.last.tr && x.last.tr.ko) || x.last.text)).slice(0, 40)) : '메시지 없음'}</span></span>${x.unreadR ? `<span class="nav-dot">${x.unreadR}</span>` : x.unreadM ? '<span class="ops-muted tiny">안 읽음</span>' : ''}</a></li>`).join('') || '<li class="ops-muted" style="padding:8px">대상이 없습니다.</li>'}</ul></aside>
+          <div class="nt-filter">${[['all', '전체', rows.length], ['unread', '미열람', cnt('unread')], ['waiting', '답장 대기', cnt('waiting')], ['done', '답장 완료', cnt('done')]].map(([k, l, n]) => `<a href="#/admin/notices?f=${k}${sel ? '&u=' + sel.id : ''}" class="${fl === k ? 'on' : ''}">${l} <b>${n}</b></a>`).join('')}</div>
+          <ul>${list.map((x) => `<li><a class="lm-msg-row ${sel && sel.id === x.u.id ? 'on' : ''}" href="#/admin/notices?u=${x.u.id}"><span class="grow"><strong>${esc(x.u.nickname)}</strong> <span class="ops-muted">${esc(LN(x.u.lang || 'ko'))}</span><br><span class="ops-muted ellipsis">${x.last ? esc(((x.last.from === 'member' ? '↩ ' : '') + ((x.last.from === 'member' && x.last.tr && x.last.tr.ko) || x.last.text)).slice(0, 40)) : '메시지 없음'}</span></span>${x.unreadR ? `<span class="nav-dot">${x.unreadR}</span>` : ''}${STL[x.st][0] ? `<span class="ops-tag" data-tone="${STL[x.st][1]}">${STL[x.st][0]}</span>` : ''}</a></li>`).join('') || '<li class="ops-muted" style="padding:8px">대상이 없습니다.</li>'}</ul></aside>
         <section class="card lm-msg-main">${thread}</section>
       </div>`);
     const qf = document.getElementById('nt-q'); if (qf) qf.addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/notices?q=' + encodeURIComponent(new FormData(qf).get('q') || ''); });
@@ -677,9 +682,10 @@
       const trCache = {};
       for (const u of targets) {
         const L = u.lang || 'ko'; let tr = {};
-        if (L !== 'ko') { if (!trCache[L]) { try { trCache[L] = (await Engine.translate(text, L, 'ko')).text; } catch (x) { trCache[L] = ''; } } if (trCache[L]) tr[L] = trCache[L]; }
+        let fail = false;
+        if (L !== 'ko') { if (trCache[L] === undefined) { try { trCache[L] = (await Engine.translate(text, L, 'ko')).text; } catch (x) { trCache[L] = ''; } } if (trCache[L]) tr[L] = trCache[L]; else fail = true; }
         const t = Store.teamOf(u.id);
-        Store.sendNotice({ userId: u.id, kind, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
+        Store.sendNotice({ userId: u.id, kind, needReply: document.getElementById('nt-need').checked, due: document.getElementById('nt-due').value, trFail: fail, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
       }
       Store.audit({ action: 'notice', target: targets.map((u) => u.id).join(','), member: targets.length > 1 ? targets.length + '명' : targets[0].nickname, reason: (KIND[kind] || KIND.instruction)[0] + ' 메시지 발송' });
       LM.toast(targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');

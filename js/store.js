@@ -246,9 +246,11 @@
   // 운영자(관리자·팀장) → 회원 메시지. tr: { 언어: 번역문 }
   function sendNotice(o) {
     ensureTeamArrays();
-    const n = { id: uid('n_'), userId: o.userId, kind: o.kind || 'instruction', from: o.from || 'admin', fromName: o.fromName || '관리자', teamId: o.teamId || '', text: o.text, lang: o.lang || 'ko', tr: o.tr || {}, ts: Date.now(), readAt: null, demo: !!o.demo };
+    const n = { id: uid('n_'), userId: o.userId, needReply: !!o.needReply, due: o.due || '', trFail: !!o.trFail, kind: o.kind || 'instruction', from: o.from || 'admin', fromName: o.fromName || '관리자', teamId: o.teamId || '', text: o.text, lang: o.lang || 'ko', tr: o.tr || {}, ts: Date.now(), readAt: null, demo: !!o.demo };
     db.notices.push(n); persist(); Sync.pushShared(); return n;
   }
+  // 답장 필요한 지시 중 아직 답장이 없는 것
+  function pendingReply(userId) { const ns = noticesOf(userId); return ns.filter((n, i) => n.from !== 'member' && n.needReply && !ns.slice(i + 1).some((x) => x.from === 'member')); }
   function noticesOf(userId) { ensureTeamArrays(); return db.notices.filter((n) => n.userId === userId).sort((a, b) => a.ts - b.ts); }
   function unreadNotices(userId) { return noticesOf(userId).filter((n) => n.from !== 'member' && !n.readAt).length; }
   function markNoticesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from !== 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persistAny(); Sync.pushShared(); } return ch; }
@@ -504,7 +506,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
