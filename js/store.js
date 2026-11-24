@@ -35,11 +35,13 @@
     return blank();
   }
   function persist() {
+    if (viewAs) return; // 회원 화면 보기 중에는 저장하지 않음
     try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn('save failed', e); }
   }
   function save(opts) {
     persist();
     listeners.forEach((fn) => { try { fn(); } catch (e) { /* noop */ } });
+    if (viewAs) return;
     if (!(opts && opts.noSync)) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => { Sync.pushUser(me()); }, 1200);
@@ -47,7 +49,13 @@
   }
   function onChange(fn) { listeners.push(fn); }
 
-  function me() { return db.currentUserId ? db.users[db.currentUserId] : null; }
+  /* 관리자 '회원 화면으로 보기': 그 회원 데이터의 복사본을 보여줍니다 (저장 안 됨). */
+  let viewAs = null;
+  try { const va = sessionStorage.getItem('lm_view_as'); if (va && db.users[va]) viewAs = JSON.parse(JSON.stringify(db.users[va])); } catch (e) { viewAs = null; }
+  function me() { if (viewAs) return viewAs; return db.currentUserId ? db.users[db.currentUserId] : null; }
+  function startViewAs(id) { try { sessionStorage.setItem('lm_view_as', id); } catch (e) {} }
+  function stopViewAs() { try { sessionStorage.removeItem('lm_view_as'); } catch (e) {} viewAs = null; }
+  function viewingAs() { return viewAs; }
   function nextId(kind) { db.seq[kind] = (db.seq[kind] || 0) + 1; return kind + '-' + String(db.seq[kind]).padStart(4, '0'); }
 
   function createUser(opts) {
@@ -415,7 +423,7 @@
   global.Store = {
     get db() { return db; }, CONSENT_VERSION,
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
-    addContact, updateContact, removeContact, contact, messagesOf, addMessage, learnFromMessage, relearnAll,
+    addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };

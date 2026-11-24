@@ -239,3 +239,8 @@ tr.clickable:hover td, .sel-item:hover { background: var(--bg); }
   .spark-col:not(:first-child):not(:last-child) em { display: none; }
   .adm-trend .spark-col em { display: block; }
 }
+/* view-as bar */
+.viewas-bar { position: relative !important; min-height: 38px; box-sizing: border-box; }
+body.viewas .ws { height: calc(100dvh - 38px) !important; }
+body.viewas .ws > :is(.ws-rail, .ws-main, .ws-side) { height: calc(100dvh - 38px) !important; }
+@media (max-width: 700px) { .viewas-bar { position: sticky !important; top: 0; font-size: 11.5px; padding: 5px 8px; gap: 4px 6px; } }

@@ -174,7 +174,7 @@
     const totApps = Object.values(s.apps).reduce((a, b) => a + b, 0) || 1;
     return `<article class="card stack-lg" id="crm-detail">
       <div class="between wrap"><div class="row"><span class="avatar">${esc([...u.nickname][0] || '?')}</span><div><h2>${esc(u.nickname)} <span class="small muted">${esc(u.id)}</span></h2><p class="small muted">${u.type === 'member' ? '닉네임 회원' : '게스트'} · 표시 언어 ${LN(u.lang)} · 가입 ${fmtD(u.createdAt)}</p></div></div>
-        <a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div>
+        <div class="row wrap" style="gap:8px">${viewAsBtn(u)}<a class="btn" href="#/admin/monitor?u=${u.id}">${esc(u.nickname)} 대화 열기</a></div></div>
       <div class="metrics">
         <div class="card stack-sm"><span class="label">대화 상대</span><strong class="metric">${u.contacts.length}명</strong></div>
         <div class="card stack-sm"><span class="label">들어온 대화</span><strong class="metric">${s.msgCount}건</strong></div>
@@ -258,7 +258,7 @@
           ${noContactMsgs.length ? `<button class="sel-item" type="button" data-pick-c="" aria-selected="${!cid}"><span class="avatar sm">?</span><span class="grow"><strong>연락처 미지정</strong><br><span class="tiny muted">${noContactMsgs.length}건</span></span></button>` : ''}
           ${!contacts.length && !noContactMsgs.length ? '<p class="small muted">대화가 없습니다.</p>' : ''}</div></div>
         <div class="card stack-lg" style="min-width:0">
-          ${u ? `<div class="stack-xs"><h2>대화 기록</h2><p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
+          ${u ? `<div class="stack-xs"><div class="between wrap"><h2>대화 기록</h2>${viewAsBtn(u)}</div><p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
           ${granted ? convoHtml(u, c, ms) : `<div class="card stack-sm notice"><label class="label" for="mon-reason">열람 사유 (필수 · 감사로그에 기록됩니다)</label><select class="field" id="mon-reason"><option value="">사유 선택</option><option>번역·조언 품질 검토</option><option>신고 또는 위험 대화 조사</option><option>사용자 문의 대응</option><option>서비스 개선을 위한 대화 패턴 분석</option></select><button class="btn full" type="button" id="mon-grant">사유 기록 후 대화 열람</button></div>`}` : '<p class="muted">회원을 선택하세요.</p>'}
         </div>
       </div>`);
@@ -474,6 +474,8 @@
     document.querySelectorAll('[data-crm]').forEach((tr) => tr.addEventListener('click', () => { location.hash = '#/admin/users?u=' + encodeURIComponent(tr.dataset.crm); }));
   }
 
+  function viewAsBtn(u) { return `<button class="btn secondary sm" type="button" data-viewas="${esc(u.id)}">👁 이 회원 화면으로 보기</button>`; }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-viewas]'); if (!b) return; const id = b.dataset.viewas; const u = Store.db.users[id]; Store.audit({ action: 'view', target: id, member: u ? u.nickname : id, contact: '회원 화면 전체', convId: '-', reason: '회원 화면으로 보기' }); Store.startViewAs(id); location.href = 'app.html#/chat'; location.reload(); });
   window.Admin = {
     render(r) {
       if (!authed) return login();

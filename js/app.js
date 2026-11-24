@@ -106,6 +106,11 @@
 
   const WIDE = window.matchMedia('(min-width: 1100px)');
   WIDE.addEventListener('change', () => render());
+  function viewAsBanner() {
+    const v = Store.viewingAs(); if (!v) return '';
+    return `<div class="viewas-bar">👁 <b>${esc(v.nickname)}</b> <span>(${esc(v.id)})</span> 회원 화면 보기 중 · 읽기 전용, 변경 내용은 저장되지 않아요 <button type="button" id="viewas-exit">관리자로 돌아가기</button></div>`;
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('#viewas-exit')) { const v = Store.viewingAs(); Store.stopViewAs(); location.href = 'app.html#/admin/users?u=' + (v ? v.id : ''); location.reload(); } });
   function shell(inner, active, opts) {
     const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
     const navW = nav.slice(0, 3).concat([['anniv', 'cake', 'nav_anniv'], ['coach', 'heart', 'nav_coach'], ['saju', 'yin', 'nav_saju'], ['gift', 'gift', 'nav_gift'], ['culture', 'globe', 'nav_culture'], nav[3], ['guide', 'help', 'nav_guide']]);
@@ -120,10 +125,12 @@
         <main class="ws-main"><div class="screen">${inner}</div></main>
         <aside class="ws-side">${sideHtml()}</aside>
       </div>`;
+      if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
       return;
     }
     document.body.classList.remove('is-wide');
     $app.innerHTML = `<div class="screen">${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${navM.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
+    if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
   }
 
   /* 데스크탑 오른쪽 패널: 대화 중인 상대 목록 + 선택한 상대 정보 */

@@ -688,3 +688,7 @@ body.is-wide .ws-rail button { min-height: 50px; padding: 6px 0; }
 .side-info:not(.open) .ws-toggle { background: var(--mint); color: var(--primary); font-size: 13px; padding: 12px 14px; border-top: 1px solid var(--line); }
 .ws-toggle-act { font-size: 12px; font-weight: 800; color: var(--primary); }
 .icon-btn.on { background: var(--mint); color: var(--primary); border-color: var(--primary); }
+/* 관리자: 회원 화면으로 보기 */
+.viewas-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 7px 12px; background: #fff3de; color: #764b14; font-size: 13px; border-bottom: 1px solid #f0d9b0; }
+.viewas-bar button { border: 0; border-radius: 7px; padding: 4px 10px; background: #10243e; color: #fff; font-weight: 700; font-size: 12.5px; }
+
