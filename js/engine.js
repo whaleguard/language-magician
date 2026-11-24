@@ -60,6 +60,47 @@
     } catch (e) { /* 저장 공간 부족 시 무시 */ }
   }
 
+  /* ---------- 대화에서 상대 정보 자동 추출 ----------
+     상대가 보낸 메시지에서 본인 소개(나이·생일·혈액형·MBTI·성별·직업·사는 곳)를 찾습니다. */
+  const MONTHS_EN = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  function extractProfile(text) {
+    const s = String(text || '');
+    const out = {};
+    const nowY = new Date().getFullYear();
+    const num = (v) => parseInt(v, 10);
+    let m;
+    // 나이
+    if ((m = s.match(/(?:나이는?|저는|전|난|나는)?\s*(\d{2})\s*(?:살|세)(?:이에요|예요|이야|야|입니다|이고|인데|요)?/)) && num(m[1]) >= 15 && num(m[1]) <= 80) out.age = num(m[1]);
+    else if ((m = s.match(/(\d{2})\s*岁/)) && num(m[1]) >= 15 && num(m[1]) <= 80) out.age = num(m[1]);
+    else if ((m = s.match(/(\d{2})\s*(?:歳|才)/)) && num(m[1]) >= 15 && num(m[1]) <= 80) out.age = num(m[1]);
+    else if ((m = s.match(/(\d{2})\s*tuổi/i)) && num(m[1]) >= 15 && num(m[1]) <= 80) out.age = num(m[1]);
+    else if ((m = s.match(/\b(?:I'?m|I am|age(?:d)?)\s*(\d{2})\b(?!\s*(?:min|hour|%|km|kg|cm))/i) || s.match(/\b(\d{2})\s*(?:years? old|yo)\b/i)) && num(m[1]) >= 15 && num(m[1]) <= 80) out.age = num(m[1]);
+    // 출생 연도 (XX년생 / 1998年出生 / born in 1998 / 98年生まれ)
+    if ((m = s.match(/((?:19|20)?\d{2})\s*년생/) || s.match(/((?:19|20)\d{2})\s*年(?:出生|生まれ|生)/) || s.match(/born in\s*((?:19|20)\d{2})/i) || s.match(/sinh năm\s*((?:19|20)\d{2})/i))) {
+      let y = num(m[1]); if (y < 100) y += y > (nowY % 100) ? 1900 : 2000;
+      if (y > 1940 && y <= nowY - 14) { out.birthYear = y; if (!out.age) out.age = nowY - y; }
+    }
+    // 생일
+    const md = (mo, d) => { mo = num(mo); d = num(d); return mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0') : null; };
+    if ((m = s.match(/생일(?:은|이|이에요|는)?\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/)) || (m = s.match(/生日(?:是|在)?\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号號]/)) || (m = s.match(/誕生日(?:は)?\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/)) || (m = s.match(/sinh nhật[^\d]{0,20}(?:ngày\s*)?(\d{1,2})\s*(?:\/|tháng)\s*(\d{1,2})/i))) {
+      const v = /sinh nhật/i.test(m[0]) ? md(m[2], m[1]) : md(m[1], m[2]); if (v) out.birthMD = v;
+    } else if ((m = s.match(/birthday(?: is)?(?: on)?\s*([A-Za-z]{3,9})\s*(\d{1,2})/i)) && MONTHS_EN[m[1].slice(0, 3).toLowerCase()]) out.birthMD = md(MONTHS_EN[m[1].slice(0, 3).toLowerCase()], m[2]);
+    else if ((m = s.match(/birthday(?: is)?(?: on)?(?: the)?\s*(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s*)?([A-Za-z]{3,9})/i)) && MONTHS_EN[m[2].slice(0, 3).toLowerCase()]) out.birthMD = md(MONTHS_EN[m[2].slice(0, 3).toLowerCase()], m[1]);
+    // 혈액형
+    if ((m = s.match(/(AB|A|B|O)\s*형(?!태|식)/) || s.match(/(AB|A|B|O)\s*型/) || s.match(/nhóm máu\s*(AB|A|B|O)\b/i) || s.match(/blood(?: type)?(?: is)?\s*(AB|A|B|O)\b/i) || s.match(/\btype\s*(AB|A|B|O)\s*blood/i))) out.blood = m[1].toUpperCase();
+    // MBTI (대문자 4글자 또는 'mbti' 언급과 함께)
+    if ((m = s.match(/\b([EI][NS][TF][JP])\b/)) || (m = s.match(/mbti[^a-z]{0,8}([ei][ns][tf][jp])/i))) out.mbti = m[1].toUpperCase();
+    // 성별 (본인 소개일 때만)
+    if (/(?:저는|전|난|나는)\s*(?:여자|여성)|我是(?:女生|女孩|女的)|私は女|(?:I'?m|I am) a (?:girl|woman|female)|mình là (?:con gái|nữ)/i.test(s)) out.gender = 'f';
+    else if (/(?:저는|전|난|나는)\s*(?:남자|남성)|我是(?:男生|男孩|男的)|私は男|(?:I'?m|I am) a (?:guy|boy|man|male)|mình là (?:con trai|nam)/i.test(s)) out.gender = 'm';
+    // 직업
+    const JOB = '(학생|대학생|대학원생|회사원|직장인|간호사|의사|선생님|교사|디자이너|개발자|프로그래머|엔지니어|요리사|모델|공무원|자영업|사업가|유학생|老师|学生|大学生|研究生|护士|医生|设计师|程序员|工程师|上班族|公务员|厨师|模特|留学生|学生です|会社員|看護師|医者|先生|教師|デザイナー|エンジニア|公務員|大学生|留学生|sinh viên|giáo viên|y tá|bác sĩ|kỹ sư|nhà thiết kế|lập trình viên|nhân viên văn phòng|du học sinh|student|teacher|nurse|doctor|designer|developer|engineer|programmer|chef|model)';
+    if ((m = s.match(new RegExp('(?:저는|전|직업은|직업이)\\s*' + JOB)) || s.match(new RegExp('(?:我|，|,|^)\\s*是(?:一[名个位])?' + JOB)) || s.match(new RegExp(JOB + '(?:로|으로)\\s*일')) || s.match(new RegExp('(?:私は|仕事は)\\s*' + JOB)) || s.match(new RegExp('(?:mình là|tôi là|em là|anh là|, là|^là)\\s*' + JOB, 'i')) || s.match(new RegExp("(?:I'?m an?|I am an?|I work as an?)\\s*" + JOB, 'i')))) out.job = m[1].replace(/です$/, '');
+    // 사는 곳
+    if ((m = s.match(/([가-힣A-Za-z]{2,10})(?:에|에서)\s*살(?:아요|고 있어요|고 있|아|고요|아요\.|아\.)/)) || (m = s.match(/我(?:住在|在)([一-龥]{2,8}?)(?:住|生活|工作|上学|呢|，|。|$)/)) || (m = s.match(/([一-鿿゠-ヿA-Za-z]{2,10})に住んで/)) || (m = s.match(/(?:sống ở|ở)\s+([A-ZĐ][\wÀ-ỹ]+(?:\s[A-ZĐ][\wÀ-ỹ]+)?)/)) || (m = s.match(/\bI live in\s+([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/))) out.city = m[1];
+    return out;
+  }
+
   function aiConfig() {
     try { return JSON.parse(localStorage.getItem('lm_ai') || '{}'); } catch (e) { return {}; }
   }
@@ -508,6 +549,6 @@
 
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, aiAnalyze,
-    extractWhen, extractPlace, intents, formality, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, intents, formality, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

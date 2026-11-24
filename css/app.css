@@ -546,3 +546,64 @@ body.is-wide .ws-rail .mark { color: #d6efdf; }
 .ai-steps { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
 .ai-steps ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
 body.is-wide .ws-rail { display: flex; flex-direction: column; }
+/* 월간 달력 */
+.cal { padding: 14px; display: grid; gap: 10px; }
+.cal-head { display: flex; align-items: center; gap: 8px; }
+.cal-head h2 { margin: 0 auto 0 4px; font-size: 18px; order: -1; }
+.cal-head .icon-btn { width: 34px; height: 34px; font-size: 20px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.cal-dow { padding: 6px 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-align: center; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg); }
+.cal-cell { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-height: 92px; padding: 4px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); text-align: start; color: inherit; min-width: 0; overflow: hidden; }
+.cal-cell.empty { background: var(--bg); }
+.cal-cell:hover { background: #f6f8f7; }
+.cal-cell.sel { box-shadow: inset 0 0 0 2px var(--primary); }
+.cal-d { font-size: 12.5px; font-weight: 700; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; }
+.cal-cell.today .cal-d { background: var(--primary); color: #fff; }
+.sun .cal-d, .cal-dow.sun { color: #c0392b; }
+.sat .cal-d, .cal-dow.sat { color: #2f5fb3; }
+.cal-cell.today .cal-d { color: #fff; }
+.cal-ev { display: flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.35; padding: 1px 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--muted); }
+.k-promise { background: #e9f0fb; color: #23457a; }
+.k-done { background: #eef0f0; color: #7a8582; text-decoration: line-through; }
+.k-birthday { background: #fdebea; color: #9b2c24; }
+.k-anniv { background: var(--warm); color: var(--warm-ink); }
+.cal-more { font-size: 11px; color: var(--muted); padding-left: 5px; }
+.cal-legend { display: flex; gap: 14px; flex-wrap: wrap; }
+.cal-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.cal-day { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.dot.c-mint { background: #2f9e74; } .dot.c-lilac { background: #7b68c9; } .dot.c-amber { background: #d6913a; } .dot.c-sky { background: #3d7bd6; } .dot.c-rose { background: #d6667a; } .dot.c-sand { background: #a8916b; } .dot.c-teal { background: #1f8a8a; } .dot.c-coral { background: #e06a4f; }
+@media (max-width: 720px) {
+  .cal { padding: 10px; }
+  .cal-cell { min-height: 58px; padding: 2px; }
+  .cal-ev { font-size: 0; padding: 0; height: 6px; border-radius: 3px; margin: 1px 2px; }
+  .cal-ev .dot { display: none; }
+  .cal-more { font-size: 10px; }
+}
+/* 오른쪽 대화 목록 — 30~40명 대응 */
+.ws { grid-template-columns: 76px minmax(0, 1fr) 380px; }
+.ws-side { overflow: hidden; display: flex; flex-direction: column; }
+.ws-side-in { display: flex; flex-direction: column; gap: 0; padding: 0; height: 100%; min-height: 0; }
+.side-top { display: grid; gap: 8px; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.side-top .ws-search { width: 100%; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip.sm { min-height: 28px; padding: 3px 9px; font-size: 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+.chip.sm .app-badge { font-size: 10.5px; padding: 0 5px; }
+.sel-xs { width: auto; min-height: 26px; padding: 1px 24px 1px 8px; font-size: 12px; border-radius: 7px; }
+.ws-side .ws-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; padding: 6px 8px; gap: 1px; align-content: start; }
+.ws-item { padding: 8px; }
+.ws-item .avatar.sm { width: 34px; height: 34px; }
+.app-badge { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10.5px; font-weight: 800; line-height: 17px; vertical-align: 1px; letter-spacing: 0; }
+.side-info { flex: none; border-top: 1px solid var(--line); background: var(--surface); max-height: 55%; display: flex; flex-direction: column; }
+.side-info .ws-toggle { border-top: 0; padding: 11px 14px; }
+.side-info-body { overflow-y: auto; padding: 0 14px 14px; display: grid; gap: 10px; }
+.chat-bar .app-name-badge { margin-right: 6px; }
+.chat-bar h1 .app-badge { font-size: 12px; line-height: 20px; padding: 0 7px; vertical-align: 3px; }
+.ws-item { gap: 10px; padding: 7px 8px; align-items: center; }
+.ws-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+.st-pill { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.st-pill.st-need { background: #fff1db; color: #8a5a12; }
+.st-pill.st-new { background: #ece8fb; color: #4b3d8f; }
+.st-pill.st-copied { background: #eef0f0; color: #59625f; }
+.st-pill.st-done { background: transparent; color: var(--muted); font-weight: 600; }
+@media (max-width: 720px) { .chip-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; } .chip-row::-webkit-scrollbar { display: none; } .chip.sm { flex: none; } }

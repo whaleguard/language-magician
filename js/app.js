@@ -165,23 +165,40 @@
       ${c.note ? `<div class="ws-card"><span class="ws-h">${t('c_note')}</span><p class="small" style="white-space:pre-wrap">${esc(c.note)}</p></div>` : ''}`;
     }
     return `<div class="ws-side-in">
-      <div class="between"><span class="ws-h" style="font-size:13px">${t('all_chat')}</span><button class="link" type="button" data-go="#/contact-edit/new" style="min-height:28px;font-size:13px">+ ${t('add_contact')}</button></div>
-      <div class="row" style="gap:6px"><input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}"><button type="button" class="chip ${chatState.needOnly ? 'on' : ''}" id="ws-need" aria-pressed="${chatState.needOnly}">${t('filter_need')}</button></div>
-      <div class="ws-list ${chatState.infoClosed || !c ? 'tall' : ''}" id="ws-list">${wsRows(u, curId)}</div>
-      ${c ? `<button type="button" class="ws-toggle" id="ws-info-toggle" aria-expanded="${!chatState.infoClosed}"><span>${t('c_info')}</span><span>${chatState.infoClosed ? '▴' : '▾'}</span></button>${chatState.infoClosed ? '' : info}` : ''}
+      ${filtersHtml(u)}
+      <div class="ws-list" id="ws-list">${wsRows(u, curId)}</div>
+      ${c ? `<div class="side-info ${chatState.infoOpen ? 'open' : ''}"><button type="button" class="ws-toggle" id="ws-info-toggle" aria-expanded="${!!chatState.infoOpen}"><span>${t('c_info')} · <b lang="${esc(c.lang)}">${esc(c.nickname)}</b></span><span>${chatState.infoOpen ? '▾' : '▴'}</span></button>${chatState.infoOpen ? `<div class="side-info-body">${info}</div>` : ''}</div>` : ''}
     </div>`;
+  }
+  function filtersHtml(u) {
+    const apps = Array.from(new Set(u.contacts.map((x) => x.app)));
+    const cnt = (ap) => u.contacts.filter((x) => x.app === ap).length;
+    const needN = u.contacts.filter((x) => { const st = convStatus(Store.messagesOf(x.id, u)); return st === 'need' || st === 'new'; }).length;
+    return `<div class="side-top">
+        <div class="between"><span class="ws-h" style="font-size:13px">${t('all_chat')} <span class="muted">${u.contacts.length}</span></span><button class="btn sm" type="button" data-go="#/contact-edit/new">+ ${t('new_chat')}</button></div>
+        <input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}">
+        <div class="chip-row" id="ws-filters">
+          <button type="button" class="chip sm ${!chatState.app && !chatState.needOnly ? 'on' : ''}" data-fapp="">${t('f_all')}</button>
+          <button type="button" class="chip sm ${chatState.needOnly ? 'on' : ''}" id="ws-need">${t('st_need')}${needN ? ' ' + needN : ''}</button>
+          ${apps.map((ap) => `<button type="button" class="chip sm ${chatState.app === ap ? 'on' : ''}" data-fapp="${esc(ap)}">${appBadge(ap, true)} ${cnt(ap)}</button>`).join('')}
+        </div>
+        <div class="between tiny muted"><span>${t('sort_by')}</span><select class="field sel-xs" id="ws-sort"><option value="recent" ${chatState.sort !== 'need' && chatState.sort !== 'name' ? 'selected' : ''}>${t('sort_recent')}</option><option value="need" ${chatState.sort === 'need' ? 'selected' : ''}>${t('st_need')}</option><option value="name" ${chatState.sort === 'name' ? 'selected' : ''}>${t('sort_name')}</option></select></div>
+      </div>`;
   }
   function wsRows(u, curId) {
     const q = (chatState.q || '').trim().toLowerCase();
     const rows = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); const last = ms[ms.length - 1]; return { c, last, st: convStatus(ms), ts: last ? last.ts : c.createdAt }; })
-      .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app)).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new'))
-      .sort((a, b) => b.ts - a.ts);
-    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''}" data-go="#/chat/${x.id}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><span class="row between" style="gap:6px"><strong class="ellipsis" lang="${esc(x.lang)}">${esc(x.nickname)}</strong><span class="tiny muted" style="flex:0 0 auto">${last ? esc(shortTs(last.ts)) : ''}</span></span><span class="tiny muted ellipsis" style="display:block"><b class="ws-app">${esc(appName(x.app))}</b> · ${last ? esc(last.dir === 'in' ? (last.translation || last.text) : last.text) : ''}</span>${st ? `<span class="ws-st">${statusBadge(st)}</span>` : ''}</span>${st === 'need' || st === 'new' ? '<span class="ws-dot" aria-hidden="true"></span>' : ''}</button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
+      .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app) + ' ' + (r.c.note || '')).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new') && (!chatState.app || r.c.app === chatState.app))
+      .sort((a, b) => chatState.sort === 'name' ? a.c.nickname.localeCompare(b.c.nickname) : chatState.sort === 'need' ? ((b.st === 'need' || b.st === 'new') - (a.st === 'need' || a.st === 'new')) || b.ts - a.ts : b.ts - a.ts);
+    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''}" data-go="#/chat/${x.id}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><strong class="ellipsis" lang="${esc(x.lang)}" style="display:block">${esc(x.nickname)}</strong><span class="tiny muted ellipsis" style="display:block">${appBadge(x.app)} ${last ? esc(last.dir === 'in' ? (last.translation || last.text) : last.text) : ''}</span></span><span class="ws-right"><span class="tiny muted">${last ? esc(shortTs(last.ts)) : ''}</span>${st ? `<span class="st-pill st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>` : ''}</span></button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
   }
+  document.addEventListener('change', (e) => { if (e.target.id === 'ws-sort') { chatState.sort = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
   document.addEventListener('input', (e) => { if (e.target.id === 'ws-search') { chatState.q = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
   document.addEventListener('click', (e) => {
-    if (e.target.closest('#ws-need')) { chatState.needOnly = !chatState.needOnly; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); }
-    if (e.target.closest('#ws-info-toggle')) { chatState.infoClosed = !chatState.infoClosed; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); }
+    const resd = () => { const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); else if (/^#\/chat\/?$/.test(location.hash)) renderChatPicker(); };
+    if (e.target.closest('#ws-need')) { chatState.needOnly = !chatState.needOnly; if (chatState.needOnly) chatState.app = ''; resd(); }
+    const fa = e.target.closest('[data-fapp]'); if (fa) { chatState.app = fa.dataset.fapp; if (!fa.dataset.fapp) chatState.needOnly = false; resd(); }
+    if (e.target.closest('#ws-info-toggle')) { chatState.infoOpen = !chatState.infoOpen; resd(); }
   });
 
   function topBar(title, back, right) {
@@ -744,6 +761,8 @@
     let msg;
     if (opts && opts.existing) { msg = opts.existing; Object.assign(msg, fields, { source: msg.source || fields.source, translation: msg.translation || fields.translation }); Store.save(); }
     else msg = Store.addMessage(fields);
+    if (opts && opts.existing) msg._learned = Store.learnFromMessage(msg);
+    noteLearned(c, msg);
     helperState.msgId = msg.id;
     helperState.source = null;
     res.msgId = msg.id;
@@ -920,6 +939,17 @@
   const ST_T = {"ko": {"search_ph": "이름·앱 검색", "no_result": "결과 없음", "c_info": "상대 정보", "st_new": "새로 가져옴", "st_need": "답장 필요", "st_copied": "복사함", "st_done": "답장 완료", "mark_sent": "보냈어요", "filter_need": "답장 필요만"}, "zh": {"search_ph": "搜索名字或应用", "no_result": "没有结果", "c_info": "对方信息", "st_new": "新导入", "st_need": "需要回复", "st_copied": "已复制", "st_done": "已回复", "mark_sent": "已发送", "filter_need": "只看需回复"}, "ja": {"search_ph": "名前・アプリで検索", "no_result": "見つかりません", "c_info": "相手の情報", "st_new": "新着", "st_need": "返信が必要", "st_copied": "コピー済み", "st_done": "返信済み", "mark_sent": "送信済みにする", "filter_need": "返信待ちのみ"}, "vi": {"search_ph": "Tìm tên hoặc ứng dụng", "no_result": "Không có kết quả", "c_info": "Thông tin người này", "st_new": "Mới nhập", "st_need": "Cần trả lời", "st_copied": "Đã sao chép", "st_done": "Đã trả lời", "mark_sent": "Đã gửi", "filter_need": "Chỉ cần trả lời"}, "en": {"search_ph": "Search name or app", "no_result": "No results", "c_info": "Contact info", "st_new": "New", "st_need": "Needs reply", "st_copied": "Copied", "st_done": "Replied", "mark_sent": "Mark sent", "filter_need": "Needs reply only"}};
   Object.keys(ST_T).forEach((l) => Object.assign(T[l], ST_T[l]));
   /* 상대별 대화 상태: 새로 가져옴 / 답장 필요 / 복사함 / 답장 완료 */
+  function learnedText(c, fields) {
+    const lab = { age: t('c_age'), gender: t('c_gender'), blood: t('c_blood'), mbti: 'MBTI', job: t('c_job'), city: t('c_city'), birthday: t('c_birthday') };
+    return fields.map((f) => lab[f] + ' ' + learnedVal(c, f)).join(' · ');
+  }
+  function learnedVal(c, f) { return f === 'gender' ? t('gender_' + c.gender) : f === 'birthday' ? (c.birthdayNoYear ? fmtDate(c.birthday).replace(/^\d{4}[.\-년年/\s]*/, '') : fmtDate(c.birthday)) : String(c[f] || ''); }
+  function noteLearned(c, msg) {
+    const f = msg && msg._learned; if (msg) delete msg._learned;
+    if (c && f && f.length) { toast('🔍 ' + t('learned_toast') + ': ' + learnedText(c, f)); msg.learnedNote = learnedText(c, f); Store.save(); }
+  }
+  const APP_STYLE = { kakaotalk: ['#FEE500', '#191919', 'K'], wechat: ['#07C160', '#fff', 'W'], line: ['#06C755', '#fff', 'L'], whatsapp: ['#25D366', '#fff', 'W'], instagram: ['#E1306C', '#fff', 'IG'], telegram: ['#229ED9', '#fff', 'T'], zalo: ['#0068FF', '#fff', 'Z'], messenger: ['#0866FF', '#fff', 'M'], other: ['#6b7280', '#fff', '·'] };
+  function appBadge(ap, short) { const st = APP_STYLE[ap] || APP_STYLE.other; return `<span class="app-badge" style="background:${st[0]};color:${st[1]}">${esc(short ? appName(ap).replace(/ DM$/, '') : appName(ap))}</span>`; }
   function convStatus(ms) {
     const last = ms[ms.length - 1]; if (!last) return null;
     if (last.dir === 'in') return (Date.now() - last.ts < 30 * 60000 && !last.analysis) ? 'new' : 'need';
@@ -930,6 +960,8 @@
   Object.keys(CH_T).forEach((l) => Object.assign(T[l], CH_T[l]));
   const GD_T = {"ko": {"nav_guide": "사용법", "g_title": "이렇게 쓰세요", "g_lead": "언어의 마술사는 카톡·위챗 같은 메신저에 접속하지 않고, 대화를 자동으로 가져오지 않습니다. 받은 메시지를 복사해 붙여넣으면 번역·분석·답장 추천을 해드립니다.", "g1t": "대화 상대 등록", "g1": "상대마다 한 번만 등록하세요. 닉네임, 쓰는 메신저(카톡·위챗·LINE…), 상대 언어만 넣으면 됩니다. 생일·혈액형은 나중에 넣어도 돼요.", "g2t": "받은 메시지 붙여넣기", "g2": "메신저에서 상대 메시지를 길게 눌러 복사 → 이 앱 대화방 입력창에 붙여넣기. 스크린샷을 올려도 글자를 읽어요. 번역·말투·지난 대화·약속이 바로 정리됩니다.", "g3t": "내 말로 답장 쓰기", "g3": "한국어로 쓰거나 추천 답장을 고르세요. 상대 언어로 번역돼 자동 복사됩니다. 메신저로 돌아가 붙여넣고 보내세요.", "g4t": "PC에서는 2모니터로", "g4": "한쪽 화면에 카톡·위챗, 다른 쪽에 이 앱을 띄우세요. 오른쪽 목록에서 상대를 바꿔도 쓰던 초안이 남아요.", "g_ai_t": "번역을 더 자연스럽게 (선택)", "g_ai": "기본 번역은 무료입니다. OpenAI나 Claude 키를 넣으면 말투·뉘앙스 분석과 답장 추천이 훨씬 좋아집니다.", "g_add": "첫 상대 등록하기", "g_try": "샘플 대화로 먼저 보기", "g_ai_btn": "AI 키 넣기", "g_open_chat": "대화방 열기", "g_note": "대화 내용은 이 기기에 저장되고, 가입 시 동의한 범위에서 운영자가 관리 목적으로 볼 수 있습니다.", "ai_steps_t": "키 받는 방법", "ai_s1": "아래 버튼으로 키 발급 페이지를 엽니다 (로그인 필요).", "ai_s2": "‘Create new secret key’(새 키 만들기)를 누르고 생성된 키를 복사합니다.", "ai_s3": "아래 ‘API 키’ 칸에 붙여넣고 저장 → 연결 테스트를 누르세요.", "ai_s4": "OpenAI는 결제 수단 등록(소액 충전)이 필요합니다. 쓴 만큼만 과금돼요.", "ai_s4c": "Claude는 콘솔에서 크레딧 충전이 필요합니다. 쓴 만큼만 과금돼요.", "ai_get_openai": "OpenAI 키 발급 페이지 열기", "ai_get_claude": "Claude 키 발급 페이지 열기"}, "zh": {"nav_guide": "使用方法", "g_title": "这样使用", "g_lead": "语言魔术师不会登录微信、KakaoTalk 等聊天软件，也不会自动读取聊天。把收到的消息复制粘贴进来，就能获得翻译、分析和回复建议。", "g1t": "添加聊天对象", "g1": "每个人只需添加一次：昵称、使用的聊天软件、对方语言即可。生日、血型可以以后再填。", "g2t": "粘贴收到的消息", "g2": "在聊天软件里长按复制对方的消息 → 粘贴到本应用的输入框。也可以上传截图。翻译、语气、以前的对话和约定会立即整理好。", "g3t": "用自己的语言回复", "g3": "用中文写或选择推荐回复，会翻译成对方语言并自动复制。回到聊天软件粘贴发送。", "g4t": "电脑上用双屏", "g4": "一个屏幕开微信，另一个屏幕开本应用。在右侧列表切换对象时，草稿会保留。", "g_ai_t": "让翻译更自然（可选）", "g_ai": "基础翻译免费。填入 OpenAI 或 Claude 密钥后，语气分析和回复建议会好很多。", "g_add": "添加第一个对象", "g_try": "先看示例对话", "g_ai_btn": "填写 AI 密钥", "g_open_chat": "打开对话", "g_note": "对话保存在本设备，运营方可在注册时同意的范围内出于管理目的查看。", "ai_steps_t": "获取密钥的方法", "ai_s1": "点击下面的按钮打开密钥页面（需要登录）。", "ai_s2": "点击 “Create new secret key”，复制生成的密钥。", "ai_s3": "粘贴到下面的“API 密钥”栏并保存 → 点“测试连接”。", "ai_s4": "OpenAI 需要绑定付款方式（少量充值），按用量计费。", "ai_s4c": "Claude 需要在控制台充值额度，按用量计费。", "ai_get_openai": "打开 OpenAI 密钥页面", "ai_get_claude": "打开 Claude 密钥页面"}, "ja": {"nav_guide": "使い方", "g_title": "使い方", "g_lead": "言葉の魔法使いはLINEやカカオトークにログインせず、会話を自動で読み取りません。届いたメッセージをコピーして貼り付けると、翻訳・分析・返信案を出します。", "g1t": "相手を登録", "g1": "相手ごとに一度だけ。ニックネーム、使っているアプリ、相手の言語だけで大丈夫です。誕生日や血液型は後からでも。", "g2t": "届いたメッセージを貼り付け", "g2": "メッセンジャーで相手のメッセージを長押ししてコピー → このアプリの入力欄に貼り付け。スクショでもOK。翻訳・口調・前の会話・約束をすぐ整理します。", "g3t": "自分の言葉で返信", "g3": "日本語で書くか返信案を選ぶと、相手の言語に翻訳して自動コピーします。メッセンジャーに戻って貼り付けて送信。", "g4t": "PCではデュアルモニターで", "g4": "片方にLINE、もう片方にこのアプリ。右の一覧で相手を切り替えても下書きは残ります。", "g_ai_t": "翻訳をもっと自然に（任意）", "g_ai": "基本の翻訳は無料。OpenAIかClaudeのキーを入れると、ニュアンス分析と返信案がずっと良くなります。", "g_add": "最初の相手を登録", "g_try": "サンプルで見てみる", "g_ai_btn": "AIキーを入れる", "g_open_chat": "会話を開く", "g_note": "会話はこの端末に保存され、登録時に同意した範囲で運営者が管理目的で閲覧できます。", "ai_steps_t": "キーの取り方", "ai_s1": "下のボタンでキー発行ページを開きます（ログインが必要）。", "ai_s2": "「Create new secret key」を押して、作られたキーをコピー。", "ai_s3": "下の「APIキー」欄に貼り付けて保存 → 接続テスト。", "ai_s4": "OpenAIは支払い方法の登録（少額チャージ）が必要です。使った分だけ課金されます。", "ai_s4c": "Claudeはコンソールでクレジットのチャージが必要です。使った分だけ課金されます。", "ai_get_openai": "OpenAIキー発行ページを開く", "ai_get_claude": "Claudeキー発行ページを開く"}, "vi": {"nav_guide": "Hướng dẫn", "g_title": "Cách dùng", "g_lead": "Ứng dụng không đăng nhập vào Zalo, KakaoTalk… và không tự đọc tin nhắn. Bạn sao chép tin nhắn nhận được rồi dán vào đây để được dịch, phân tích và gợi ý trả lời.", "g1t": "Thêm người trò chuyện", "g1": "Mỗi người chỉ cần thêm một lần: biệt danh, ứng dụng nhắn tin, ngôn ngữ của họ. Ngày sinh, nhóm máu có thể điền sau.", "g2t": "Dán tin nhắn nhận được", "g2": "Nhấn giữ tin nhắn trong ứng dụng nhắn tin để sao chép → dán vào ô nhập của ứng dụng này. Có thể tải ảnh chụp màn hình. Bản dịch, giọng điệu, trò chuyện trước và lịch hẹn được sắp xếp ngay.", "g3t": "Trả lời bằng tiếng của bạn", "g3": "Viết bằng tiếng Việt hoặc chọn gợi ý; ứng dụng dịch sang ngôn ngữ của họ và tự sao chép. Quay lại ứng dụng nhắn tin, dán và gửi.", "g4t": "Trên PC dùng 2 màn hình", "g4": "Một màn hình mở Zalo, màn hình kia mở ứng dụng này. Đổi người ở danh sách bên phải, bản nháp vẫn được giữ.", "g_ai_t": "Dịch tự nhiên hơn (tùy chọn)", "g_ai": "Bản dịch cơ bản miễn phí. Thêm khóa OpenAI hoặc Claude để phân tích sắc thái và gợi ý trả lời tốt hơn nhiều.", "g_add": "Thêm người đầu tiên", "g_try": "Xem trò chuyện mẫu", "g_ai_btn": "Nhập khóa AI", "g_open_chat": "Mở trò chuyện", "g_note": "Cuộc trò chuyện được lưu trên thiết bị này; quản trị viên có thể xem trong phạm vi bạn đã đồng ý khi đăng ký.", "ai_steps_t": "Cách lấy khóa", "ai_s1": "Mở trang tạo khóa bằng nút bên dưới (cần đăng nhập).", "ai_s2": "Bấm “Create new secret key” và sao chép khóa.", "ai_s3": "Dán vào ô “Khóa API” bên dưới, lưu → bấm kiểm tra kết nối.", "ai_s4": "OpenAI cần thêm phương thức thanh toán (nạp ít tiền), tính phí theo mức dùng.", "ai_s4c": "Claude cần nạp tín dụng trong bảng điều khiển, tính phí theo mức dùng.", "ai_get_openai": "Mở trang khóa OpenAI", "ai_get_claude": "Mở trang khóa Claude"}, "en": {"nav_guide": "How to", "g_title": "How it works", "g_lead": "Language Magician never logs into KakaoTalk, WeChat or any messenger, and never reads your chats automatically. Copy a message you received, paste it here, and get a translation, analysis and reply ideas.", "g1t": "Add the person", "g1": "Once per person: nickname, which messenger, and their language. Birthday or blood type can come later.", "g2t": "Paste what they sent", "g2": "Long-press their message in your messenger to copy → paste it into this app’s chat box. Screenshots work too. Translation, tone, past chats and plans are sorted instantly.", "g3t": "Reply in your own words", "g3": "Write in English or pick a reply idea. It is translated into their language and copied. Go back to the messenger, paste and send.", "g4t": "On PC, use two screens", "g4": "Messenger on one screen, this app on the other. Switch people in the right-hand list; your drafts stay.", "g_ai_t": "More natural translation (optional)", "g_ai": "Basic translation is free. Add an OpenAI or Claude key for much better nuance analysis and reply ideas.", "g_add": "Add your first person", "g_try": "Try with sample chats", "g_ai_btn": "Add AI key", "g_open_chat": "Open chats", "g_note": "Chats are stored on this device; operators may view them for management within what you agreed to at sign-up.", "ai_steps_t": "How to get a key", "ai_s1": "Open the key page with the button below (sign-in required).", "ai_s2": "Click “Create new secret key” and copy the key.", "ai_s3": "Paste it into “API key” below, save, then press Test connection.", "ai_s4": "OpenAI needs a payment method (a small top-up); you pay only for what you use.", "ai_s4c": "Claude needs credits added in the console; you pay only for what you use.", "ai_get_openai": "Open OpenAI key page", "ai_get_claude": "Open Claude key page"}};
   Object.keys(GD_T).forEach((l) => Object.assign(T[l], GD_T[l]));
+  const LR_T = {"ko": {"new_chat": "새 대화", "f_all": "전체", "sort_by": "정렬", "sort_recent": "최근 대화순", "sort_name": "이름순", "cal_today": "오늘", "cal_anniv": "기념일", "today_h": "오늘 할 일", "c_more": "더 아는 정보 (선택)", "c_more_hint": "몰라도 됩니다. 대화에 나오면 자동으로 채워져요.", "c_job": "직업", "c_city": "사는 곳", "learned_toast": "대화에서 알아냈어요", "learned_badge": "대화에서", "learned_hint": "상대가 보낸 메시지에서 자동으로 채운 정보예요. 직접 고치면 그 값이 우선합니다.", "learned_title": "대화로 알게 된 정보", "learned_none": "아직 없어요. 대화에서 나이·생일·혈액형·MBTI·직업·사는 곳이 나오면 자동으로 채워집니다."}, "zh": {"new_chat": "新对话", "f_all": "全部", "sort_by": "排序", "sort_recent": "最近", "sort_name": "按名字", "cal_today": "今天", "cal_anniv": "纪念日", "today_h": "今天的事", "c_more": "更多信息（可选）", "c_more_hint": "不知道也没关系，对话中出现时会自动填写。", "c_job": "职业", "c_city": "居住地", "learned_toast": "从对话中得知", "learned_badge": "来自对话", "learned_hint": "根据对方发来的消息自动填写。手动修改后以你的值为准。", "learned_title": "从对话中得知的信息", "learned_none": "暂时没有。对话中出现年龄、生日、血型、MBTI、职业、居住地时会自动填写。"}, "ja": {"new_chat": "新しい会話", "f_all": "すべて", "sort_by": "並び替え", "sort_recent": "最近", "sort_name": "名前順", "cal_today": "今日", "cal_anniv": "記念日", "today_h": "今日やること", "c_more": "分かっている情報（任意）", "c_more_hint": "分からなくてOK。会話に出てきたら自動で入ります。", "c_job": "職業", "c_city": "住んでいる所", "learned_toast": "会話から分かりました", "learned_badge": "会話から", "learned_hint": "相手のメッセージから自動で入力した情報です。手動で直すとその値が優先されます。", "learned_title": "会話で分かった情報", "learned_none": "まだありません。会話に年齢・誕生日・血液型・MBTI・職業・住んでいる所が出ると自動で入ります。"}, "vi": {"new_chat": "Trò chuyện mới", "f_all": "Tất cả", "sort_by": "Sắp xếp", "sort_recent": "Gần đây", "sort_name": "Theo tên", "cal_today": "Hôm nay", "cal_anniv": "Kỷ niệm", "today_h": "Việc hôm nay", "c_more": "Thông tin thêm (tùy chọn)", "c_more_hint": "Không biết cũng được. Sẽ tự điền khi xuất hiện trong trò chuyện.", "c_job": "Nghề nghiệp", "c_city": "Nơi sống", "learned_toast": "Biết được từ cuộc trò chuyện", "learned_badge": "Từ trò chuyện", "learned_hint": "Tự điền từ tin nhắn người ấy gửi. Nếu bạn sửa tay, giá trị của bạn được ưu tiên.", "learned_title": "Thông tin biết được từ trò chuyện", "learned_none": "Chưa có. Khi tuổi, sinh nhật, nhóm máu, MBTI, nghề, nơi sống xuất hiện trong trò chuyện, sẽ tự điền."}, "en": {"new_chat": "New chat", "f_all": "All", "sort_by": "Sort", "sort_recent": "Recent", "sort_name": "Name", "cal_today": "Today", "cal_anniv": "Anniversary", "today_h": "Today", "c_more": "More details (optional)", "c_more_hint": "No need to know now — filled in automatically when they come up in chat.", "c_job": "Job", "c_city": "Lives in", "learned_toast": "Learned from the chat", "learned_badge": "From chat", "learned_hint": "Filled in automatically from their messages. If you edit it, your value wins.", "learned_title": "Learned from chats", "learned_none": "Nothing yet. Age, birthday, blood type, MBTI, job and city are filled in automatically when they come up."}};
+  Object.keys(LR_T).forEach((l) => Object.assign(T[l], LR_T[l]));
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {} };
 
   function renderChat(r) {
@@ -954,7 +986,7 @@
     let lastDay = '';
     const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>`; } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
-        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis"><span class="app-name">${esc(appName(c.app))}</span> / <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
+        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
         <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn" type="button" data-go="#/contact/${c.id}" aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}">${icon('person')}</button>` : ''}</div></header>
       <div class="content chat-scroll" style="padding-bottom:12px">
         ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
@@ -1011,6 +1043,7 @@
         ${m.translation ? `<p class="meaning" lang="${esc(m.trLang)}">${esc(m.translation)}</p>` : ''}
         ${open ? '' : `<div class="b-acts"><button class="link" type="button" data-analyze="${m.id}" style="min-height:28px;font-size:13px">💡 ${a ? t('show_sug') : t('analysis')}</button></div>`}
       </div>
+      ${m.learnedNote ? `<div class="learned-line">🔍 ${t('learned_toast')}: <b>${esc(m.learnedNote)}</b></div>` : ''}
       ${open ? (a ? analysisHtml(c, m) : `<div class="small muted" data-need="${m.id}"><span class="spinner" style="border-color:rgba(20,87,70,.2);border-top-color:var(--primary);display:inline-block;vertical-align:middle"></span> ${t('analyzing')}</div>`) : ''}
     </article>`;
   }
@@ -1140,14 +1173,13 @@
     const u = Store.me();
     const none = u.messages.filter((m) => !m.contactId);
     const items = agendaItems(u).filter((x) => x.kind !== 'upcoming').slice(0, 3);
-    shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button><button class="btn sm" type="button" data-go="#/contact-edit/new">+ ${t('add_contact')}</button></div>`)}
+    shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button></div>`)}
       <div class="content stack">
         ${items.length ? `<button type="button" class="today-strip" data-go="#/agenda"><span class="ws-h">${t('today')}</span>${items.map((x) => `<span class="small ellipsis">${itemText(x)}</span>`).join('')}</button>` : ''}
-        <div class="row" style="gap:6px"><input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}"><button type="button" class="chip ${chatState.needOnly ? 'on' : ''}" id="ws-need-m" aria-pressed="${chatState.needOnly}">${t('filter_need')}</button></div>
+        ${filtersHtml(u)}
         <div class="ws-list tall card" id="ws-list" style="padding:4px">${wsRows(u, '')}</div>
         <button class="list-row card" type="button" data-go="#/chat/none" style="padding:10px 12px"><span class="avatar">?</span><span class="grow"><strong>${t('chat_none')}</strong>${none.length ? `<br><span class="small muted">${esc(t('thread_count', { n: none.length }))}</span>` : ''}</span></button>
       </div>`, 'chat');
-    const nb = document.getElementById('ws-need-m'); if (nb) nb.addEventListener('click', () => { chatState.needOnly = !chatState.needOnly; renderChatPicker(); });
   }
 
   /* ================= 사용법 ================= */
@@ -1194,6 +1226,11 @@
           <div class="row">${avatar(c, 'lg')}<div class="grow"><h1 lang="${esc(c.lang)}">${esc(c.nickname)}</h1><p class="small muted">${esc(appName(c.app))} / ${esc(c.nickname)} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</p>
             <div class="row wrap" style="gap:6px;margin-top:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${daysMet ? `<span class="badge gray">${esc(t('c_days_met', { n: daysMet }))}</span>` : ''}</div></div></div>
           <div class="two"><button class="btn" type="button" data-go="#/chat/${c.id}">${t('c_import')}</button><button class="btn secondary" type="button" data-go="#/coach/${c.id}">${t('coach_link')}</button></div>
+        </div>
+        <div class="card stack-sm">
+          <div class="between"><h2>${t('learned_title')}</h2><span class="badge lilac">💬 ${t('learned_badge')}</span></div>
+          ${(() => { const L = c.learned || {}; const keys = ['age', 'gender', 'birthday', 'blood', 'mbti', 'job', 'city'].filter((k) => L[k]); return keys.length ? `<dl class="data-grid">${keys.map((k) => `<dt>${esc({ age: t('c_age'), gender: t('c_gender'), birthday: t('c_birthday'), blood: t('c_blood'), mbti: 'MBTI', job: t('c_job'), city: t('c_city') }[k])}</dt><dd><b>${esc(learnedVal(c, k))}</b><br><span class="tiny muted">“${esc(L[k].text || '')}” · ${esc(fmtDate(new Date(L[k].ts)))}</span></dd>`).join('')}</dl><p class="tiny muted">${t('learned_hint')}</p>` : `<p class="small muted">${t('learned_none')}</p>`; })()}
+          ${[c.job ? t('c_job') + ' ' + esc(c.job) : '', c.city ? t('c_city') + ' ' + esc(c.city) : ''].filter(Boolean).length && !(c.learned && (c.learned.job || c.learned.city)) ? `<p class="small">${[c.job ? t('c_job') + ' ' + esc(c.job) : '', c.city ? t('c_city') + ' ' + esc(c.city) : ''].filter(Boolean).join(' · ')}</p>` : ''}
         </div>
         <div class="card stack">
           <h2>${t('c_dates')}</h2>
@@ -1272,6 +1309,7 @@
           <label class="stack-xs"><span class="label">${t('coach_stage')}</span><select class="field" name="stage">${stages.map((s, i) => `<option value="${i}" ${Number(c.stage || 0) === i ? 'selected' : ''}>${esc(STAGE_NAMES[uiLang][s])}</option>`).join('')}</select></label>
         </div>
         <label class="stack-xs"><span class="label">${t('c_met')}</span><input class="field" type="date" name="metAt" value="${esc(c.metAt || '')}"></label>
+        <details class="card more-info" ${isNew ? '' : 'open'}><summary><b>${t('c_more')}</b> <span class="small muted">${t('c_more_hint')}</span></summary><div class="stack" style="margin-top:12px">
         <div class="two">
           <label class="stack-xs"><span class="label">${t('c_birthday')}</span><input class="field" type="date" name="birthday" value="${esc(c.birthday && c.birthday.length === 10 ? c.birthday : '')}"></label>
           <label class="stack-xs"><span class="label">${t('c_birth_time')}</span><input class="field" type="time" name="birthTime" value="${esc(c.birthTime || '')}"></label>
@@ -1283,6 +1321,11 @@
           <label class="stack-xs"><span class="label">${t('c_gender')}</span><select class="field" name="gender"><option value="">—</option>${sel('gender', [['f', t('gender_f')], ['m', t('gender_m')], ['x', t('gender_x')]])}</select></label>
         </div>
         <label class="stack-xs"><span class="label">${t('c_mbti')}</span><select class="field" name="mbti"><option value="">—</option>${sel('mbti', ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP'].map((x) => [x, x]))}</select></label>
+        <div class="two">
+          <label class="stack-xs"><span class="label">${t('c_job')}${c.learned && c.learned.job ? ` <span class="badge lilac">💬 ${t('learned_badge')}</span>` : ''}</span><input class="field" name="job" maxlength="40" value="${esc(c.job || '')}"></label>
+          <label class="stack-xs"><span class="label">${t('c_city')}${c.learned && c.learned.city ? ` <span class="badge lilac">💬 ${t('learned_badge')}</span>` : ''}</span><input class="field" name="city" maxlength="40" value="${esc(c.city || '')}"></label>
+        </div>
+        </div></details>
         <label class="stack-xs"><span class="label">${t('c_note')}</span><textarea class="field" name="note" rows="3" placeholder="${esc(t('c_note_ph'))}">${esc(c.note || '')}</textarea></label>
         <button class="btn full" type="submit">${t('save')}</button>
       </form>`, 'contacts');
@@ -1296,11 +1339,13 @@
       e.preventDefault();
       const f = new FormData(form);
       const data = {};
-      ['app', 'nickname', 'lang', 'country', 'color', 'relation', 'metAt', 'birthday', 'birthTime', 'age', 'blood', 'gender', 'mbti', 'note'].forEach((k) => { data[k] = (f.get(k) || '').toString().trim(); });
+      ['app', 'nickname', 'lang', 'country', 'color', 'relation', 'metAt', 'birthday', 'birthTime', 'age', 'blood', 'gender', 'mbti', 'job', 'city', 'note'].forEach((k) => { data[k] = (f.get(k) || '').toString().trim(); });
+      // 대화로 채운 값을 직접 바꾸면 직접 입력 값으로 취급
+      if (!isNew && c.learned) { const L = Object.assign({}, c.learned); Object.keys(L).forEach((k) => { if (String(data[k] || '') !== String(c[k] || '')) delete L[k]; }); data.learned = L; }
       data.stage = Number(f.get('stage') || 0);
       data.birthLunar = !!f.get('birthLunar');
       if (!data.nickname) return;
-      if (isNew) { const nc = Store.addContact(data); homeContact = nc.id; helperState.contactId = nc.id; go('#/contact/' + nc.id); }
+      if (isNew) { const nc = Store.addContact(data); homeContact = nc.id; helperState.contactId = nc.id; go('#/chat/' + nc.id); }
       else { Store.updateContact(c.id, data); toast(t('saved')); go('#/contact/' + c.id); }
     });
   }
@@ -1357,6 +1402,53 @@
   }
 
   /* ================= 일정 ================= */
+  /* ---------- 월간 달력 ---------- */
+  const calState = { ym: null, sel: null };
+  function calEvents(u, from, to) {
+    const ev = [];
+    u.promises.forEach((p) => { if (p.date >= from && p.date <= to) ev.push({ date: p.date, kind: p.done ? 'done' : 'promise', c: u.contacts.find((x) => x.id === p.contactId), title: (p.time ? p.time + ' ' : '') + p.title, p }); });
+    annivList(u).forEach((a) => { const d = Engine.ymd(a.date); if (d >= from && d <= to) ev.push({ date: d, kind: a.type === 'birthday' ? 'birthday' : 'anniv', c: a.c, title: a.label }); });
+    (u.anniversaries || []).forEach((a) => { if (!a.date) return; const md = a.date.slice(5); const y = from.slice(0, 4); const d = (a.repeat === false ? a.date : y + '-' + md); if (d >= from && d <= to && !ev.some((e) => e.date === d && e.title === a.title)) ev.push({ date: d, kind: 'anniv', c: u.contacts.find((x) => x.id === a.contactId), title: a.title || a.label || '' }); });
+    return ev;
+  }
+  function calendarHtml(u) {
+    const td = today();
+    const ym = calState.ym || td.slice(0, 7);
+    const [Y, M] = ym.split('-').map(Number);
+    const first = new Date(Y, M - 1, 1); const startDow = first.getDay(); const days = new Date(Y, M, 0).getDate();
+    const from = ym + '-01'; const to = ym + '-' + String(days).padStart(2, '0');
+    const ev = calEvents(u, from, to);
+    const dn = (d) => { try { return new Intl.DateTimeFormat(uiLang === 'zh' ? 'zh-CN' : uiLang, { weekday: 'short' }).format(new Date(2023, 0, 1 + d)); } catch (e) { return 'SMTWTFS'[d]; } };
+    const title = (() => { try { return new Intl.DateTimeFormat(uiLang === 'zh' ? 'zh-CN' : uiLang, { year: 'numeric', month: 'long' }).format(first); } catch (e) { return ym; } })();
+    let cells = '';
+    for (let k = 0; k < startDow; k++) cells += '<div class="cal-cell empty"></div>';
+    for (let d = 1; d <= days; d++) {
+      const ds = ym + '-' + String(d).padStart(2, '0');
+      const list = ev.filter((e) => e.date === ds);
+      const dow = (startDow + d - 1) % 7;
+      cells += `<button type="button" class="cal-cell ${ds === td ? 'today' : ''} ${ds === calState.sel ? 'sel' : ''} ${dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''}" data-cal="${ds}"><span class="cal-d">${d}</span>${list.slice(0, 3).map((e) => `<span class="cal-ev k-${e.kind}">${e.c ? `<i class="dot c-${e.c.color}"></i>` : ''}${esc((e.c ? e.c.nickname + ' · ' : '') + e.title)}</span>`).join('')}${list.length > 3 ? `<span class="cal-more">+${list.length - 3}</span>` : ''}</button>`;
+    }
+    const sel = calState.sel && calState.sel.slice(0, 7) === ym ? calState.sel : null;
+    const selList = sel ? ev.filter((e) => e.date === sel) : [];
+    return `<section class="card cal" aria-label="calendar">
+      <div class="cal-head"><button class="icon-btn" type="button" data-calnav="-1" aria-label="prev">‹</button><h2>${esc(title)}</h2><button class="icon-btn" type="button" data-calnav="1" aria-label="next">›</button><button class="btn sm secondary" type="button" data-calnav="0">${t('cal_today')}</button></div>
+      <div class="cal-grid">${[0, 1, 2, 3, 4, 5, 6].map((d) => `<div class="cal-dow ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${esc(dn(d))}</div>`).join('')}${cells}</div>
+      <div class="cal-legend tiny muted"><span><i class="lg k-promise"></i>${t('promise')}</span><span><i class="lg k-birthday"></i>${t('birthday')}</span><span><i class="lg k-anniv"></i>${t('cal_anniv')}</span></div>
+      ${sel ? `<div class="cal-day"><div class="between"><strong>${esc(fmtDateW(sel))}</strong><button class="btn sm" type="button" id="cal-add">+ ${t('add_promise')}</button></div>${selList.length ? `<ul class="list">${selList.map((e) => `<li class="list-row">${e.c ? avatar(e.c, 'sm') : `<span class="avatar sm">${icon('calendar')}</span>`}<span class="grow"><b>${esc(e.title)}</b>${e.c ? `<br><span class="tiny muted">${esc(whoText(e.c))}</span>` : ''}</span>${e.c ? `<button class="link" type="button" data-go="#/chat/${e.c.id}" style="font-size:13px">${t('g_open_chat')}</button>` : ''}</li>`).join('')}</ul>` : `<p class="small muted">${t('none')}</p>`}</div>` : ''}
+    </section>`;
+  }
+  function bindCalendar(u, rerender) {
+    $app.querySelectorAll('[data-cal]').forEach((b) => b.addEventListener('click', () => { calState.sel = b.dataset.cal; rerender(); }));
+    $app.querySelectorAll('[data-calnav]').forEach((b) => b.addEventListener('click', () => {
+      const n = Number(b.dataset.calnav);
+      if (!n) { calState.ym = today().slice(0, 7); calState.sel = today(); }
+      else { const [Y, M] = (calState.ym || today().slice(0, 7)).split('-').map(Number); const d = new Date(Y, M - 1 + n, 1); calState.ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+      rerender();
+    }));
+    const add = document.getElementById('cal-add');
+    if (add) add.addEventListener('click', () => { const f = document.getElementById('ag-form'); f.date.value = calState.sel; f.scrollIntoView({ block: 'start', behavior: 'smooth' }); f.title.focus(); });
+  }
+
   function renderAgenda(r) {
     const u = Store.me();
     const td = today();
@@ -1366,7 +1458,8 @@
     const notifState = typeof Notification === 'undefined' ? 'na' : Notification.permission;
     shell(`${topBar(t('agenda_title'), null)}
       <div class="content stack-lg">
-        <div class="stack-sm"><h1>${t('today')}</h1><p class="muted">${fmtDateW(td)}</p></div>
+        ${calendarHtml(u)}
+        <div class="stack-sm"><h2>${t('today_h')} · <span class="muted" style="font-weight:600">${fmtDateW(td)}</span></h2></div>
         ${items.filter((i) => i.kind !== 'upcoming').length ? `<ul class="list card" style="padding-block:4px">${items.filter((i) => i.kind !== 'upcoming').map(itemHtml).join('')}</ul>` : `<div class="empty small">${t('nothing_today')}</div>`}
         ${notifState !== 'granted' && notifState !== 'na' ? `<button class="btn subtle full" type="button" id="ag-notif">${icon('bell')} ${t('notif_enable')}</button>` : ''}
         <div class="stack-sm"><h2>${t('upcoming')}</h2>
@@ -1390,6 +1483,7 @@
         </form>
       </div>`, 'agenda');
     const nb = document.getElementById('ag-notif'); if (nb) nb.addEventListener('click', askNotify);
+    bindCalendar(u, () => renderAgenda(r));
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', () => { const p = u.promises.find((x) => x.id === b.dataset.done); Store.updatePromise(p.id, { done: !p.done }); renderAgenda(r); }));
     $app.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => { Store.removePromise(b.dataset.del); renderAgenda(r); }));
     $app.querySelectorAll('[data-ics]').forEach((b) => b.addEventListener('click', () => { const p = u.promises.find((x) => x.id === b.dataset.ics); downloadIcs(p, u.contacts.find((x) => x.id === p.contactId)); }));

@@ -120,7 +120,51 @@
     u.messages.push(msg);
     u.lastActive = Date.now();
     save();
+    msg._learned = learnFromMessage(msg);
     return msg;
+  }
+
+  /* ---------- 대화에서 상대 정보 배우기 ----------
+     상대가 보낸 메시지에서 나이·생일·혈액형 등을 찾아, 비어 있거나 전에 대화로 채운 칸만 채웁니다.
+     사용자가 직접 입력한 값은 덮어쓰지 않습니다. 새로 알게 된 항목 목록을 돌려줍니다. */
+  function learnFromMessage(msg) {
+    if (!msg || msg.dir !== 'in' || !msg.contactId || typeof Engine === 'undefined' || !Engine.extractProfile) return [];
+    const u = me(); const c = u.contacts.find((x) => x.id === msg.contactId); if (!c) return [];
+    const found = Engine.extractProfile(msg.text);
+    if (msg.translation && Object.keys(found).length === 0) Object.assign(found, Engine.extractProfile(msg.translation));
+    c.learned = c.learned || {};
+    const learnedNow = [];
+    const setF = (field, value) => {
+      if (value === undefined || value === null || value === '') return;
+      const manual = c[field] && !c.learned[field];
+      if (manual) return;
+      if (String(c[field] || '') === String(value)) { if (!c.learned[field]) return; c.learned[field].msgId = msg.id; return; }
+      c[field] = value;
+      c.learned[field] = { value, msgId: msg.id, ts: msg.ts, text: String(msg.text).slice(0, 80) };
+      learnedNow.push(field);
+    };
+    setF('age', found.age);
+    setF('gender', found.gender);
+    setF('blood', found.blood);
+    setF('mbti', found.mbti);
+    setF('job', found.job);
+    setF('city', found.city);
+    if (found.birthMD || found.birthYear) {
+      const prev = c.birthday || '';
+      const y = found.birthYear || (prev && !c.birthdayNoYear ? prev.slice(0, 4) : '') || (found.age ? String(new Date().getFullYear() - found.age) : '');
+      const mdv = found.birthMD || (prev ? prev.slice(5) : '');
+      if (mdv) {
+        const v = (y || '2000') + '-' + mdv;
+        if (!(prev && !c.learned.birthday)) { if (prev !== v) { c.birthday = v; c.birthdayNoYear = !y; c.learned.birthday = { value: v, msgId: msg.id, ts: msg.ts, text: String(msg.text).slice(0, 80) }; learnedNow.push('birthday'); } }
+      }
+    }
+    if (learnedNow.length) save();
+    return learnedNow;
+  }
+  function relearnAll(contactId) {
+    const u = me(); let all = [];
+    u.messages.filter((m) => m.contactId === contactId && m.dir === 'in').sort((a, b) => a.ts - b.ts).forEach((m) => { all = all.concat(learnFromMessage(m)); });
+    return Array.from(new Set(all));
   }
 
   /* ---------- 약속·기념일 ---------- */
@@ -308,7 +352,7 @@
   global.Store = {
     get db() { return db; }, CONSENT_VERSION,
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
-    addContact, updateContact, removeContact, contact, messagesOf, addMessage,
+    addContact, updateContact, removeContact, contact, messagesOf, addMessage, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
