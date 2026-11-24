@@ -1,0 +1,80 @@
+/* 관리자 운영 대시보드 — GPT 명세(lm-admin-ops). lm-theme-gpt-v2.css 다음에 로드 */
+.lm-ops {
+  --ops-radius: 10px;
+  --ops-coral: var(--coral-soft, #ffe9e6);
+  --ops-coral-ink: var(--coral-ink, #923b36);
+  --ops-violet: var(--lilac, #f0ebff);
+  --ops-violet-ink: var(--violet-ink, #58398b);
+  display: grid; gap: 16px; min-width: 0; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.lm-ops *, .lm-ops *::before, .lm-ops *::after { box-sizing: border-box; }
+.lm-ops :is(h1, h2, h3, p, figure) { margin: 0; }
+.lm-ops :is(a, button, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.lm-ops .ops-header, .lm-ops .ops-panel-head, .lm-ops .ops-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.lm-ops .ops-header h1 { font-size: clamp(24px, 3vw, 32px); line-height: 1.2; }
+.lm-ops .ops-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.lm-ops .ops-controls .field { width: auto; max-width: 100%; }
+.lm-ops .ops-muted { color: var(--muted); font-size: 12px; }
+.lm-ops .ops-kpis, .lm-ops .ops-split { display: grid; gap: 12px; align-items: stretch; min-width: 0; }
+.lm-ops .ops-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.lm-ops .ops-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lm-ops .ops-split--priority { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.lm-ops :is(.ops-panel, .ops-kpi) { display: grid; align-content: start; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--ops-radius); background: var(--surface); }
+.lm-ops .ops-kpi { gap: 6px; }
+.lm-ops .ops-kpi h2 { color: var(--muted); font-size: 13px; }
+.lm-ops .ops-value { font-size: clamp(20px, 2.5vw, 30px); line-height: 1.2; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.lm-ops .ops-panel h2 { font-size: 16px; line-height: 1.35; }
+.lm-ops .ops-delta, .lm-ops .ops-tag { display: inline-flex; align-items: center; width: fit-content; padding: 3px 7px; border-radius: 5px; background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.lm-ops :is(.ops-delta, .ops-tag)[data-tone="attention"] { background: var(--ops-coral); color: var(--ops-coral-ink); }
+.lm-ops :is(.ops-delta, .ops-tag)[data-tone="good"] { background: var(--mint); color: var(--primary); }
+.lm-ops .ops-tag[data-tone="info"] { background: var(--ops-violet); color: var(--ops-violet-ink); }
+.lm-ops .ops-queue, .lm-ops .ops-bars { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.lm-ops .ops-queue { gap: 0; }
+.lm-ops .ops-queue li + li { border-top: 1px solid var(--line); }
+.lm-ops .ops-task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; min-height: 48px; padding-block: 8px; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.lm-ops .ops-task:hover { color: var(--primary); }
+.lm-ops .ops-chart { display: grid; gap: 8px; min-width: 0; }
+.lm-ops .ops-plot { display: block; width: 100%; height: auto; overflow: visible; }
+.lm-ops .ops-gridline { stroke: var(--line); vector-effect: non-scaling-stroke; }
+.lm-ops .ops-line { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.lm-ops .ops-line--prev { stroke: var(--muted); stroke-dasharray: 4 4; }
+.lm-ops .ops-point { fill: var(--surface); stroke: var(--primary); stroke-width: 2; }
+.lm-ops .ops-axis { fill: var(--muted); font: 12px system-ui, sans-serif; }
+.lm-ops .ops-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; color: var(--muted); font-size: 12px; }
+.lm-ops .ops-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.lm-ops .ops-fill { display: block; width: clamp(0%, var(--p, 0%), 100%); height: 100%; background: var(--primary); border-radius: inherit; }
+.lm-ops .ops-fill--sky { background: #76bde7; }
+.lm-ops .ops-fill--violet { background: #9581c9; }
+.lm-ops .ops-bar { display: grid; gap: 5px; min-width: 0; }
+.lm-ops .ops-bar .ops-row { overflow-wrap: anywhere; }
+.lm-ops .ops-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.lm-ops .ops-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 13px; }
+.lm-ops .ops-table :is(th, td) { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: start; }
+.lm-ops .ops-table thead th { background: var(--bg); color: var(--muted); }
+.lm-ops .ops-table tbody tr:last-child > * { border-bottom: 0; }
+.lm-ops .ops-table .ops-num { text-align: end; white-space: nowrap; }
+.lm-ops .ops-heat td[data-level="0"] { background: var(--bg); }
+.lm-ops .ops-heat td[data-level="1"] { background: #ebf6ff; }
+.lm-ops .ops-heat td[data-level="2"] { background: #cce9fc; }
+.lm-ops .ops-heat td[data-level="3"] { background: #9bd3f3; }
+.lm-ops .ops-heat td[data-level="4"] { background: var(--primary); color: #fff; }
+.lm-ops .ops-empty { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
+/* 보완(Claude): 링크 KPI, 히트맵 칸, 표 클릭 행 */
+.lm-ops a.ops-kpi { color: inherit; text-decoration: none; transition: border-color .15s; }
+.lm-ops a.ops-kpi:hover { border-color: var(--primary); }
+.lm-ops .ops-heat { min-width: 560px; }
+.lm-ops .ops-heat :is(td, th) { text-align: center; padding: 7px 6px; font-size: 12px; }
+.lm-ops .ops-heat tbody th { text-align: start; white-space: nowrap; font-weight: 600; }
+.lm-ops .ops-table tr.clickable { cursor: pointer; }
+.lm-ops .ops-table tr.clickable:hover td { background: var(--mint); }
+.lm-ops .ops-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.lm-ops .ops-seg a { padding: 5px 10px; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.lm-ops .ops-seg a[aria-current="true"] { background: var(--primary); color: #fff; }
+@media (max-width: 1180px) { .lm-ops .ops-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .lm-ops .ops-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lm-ops .ops-split { grid-template-columns: minmax(0, 1fr); }
+  .lm-ops :is(.ops-panel, .ops-kpi) { padding: 12px; }
+  .lm-ops .ops-chart { overflow-x: auto; }
+  .lm-ops .ops-plot { min-width: 520px; }
+}

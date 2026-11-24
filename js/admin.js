@@ -82,67 +82,162 @@
   }
 
   /* ---------- 운영 현황 ---------- */
-  function dashboard() {
+  function dashboard(r) {
+    r = r || { q: {} };
     const us = users();
-    const td = new Date(); td.setHours(0, 0, 0, 0);
+    const DAY = 86400000; const now = Date.now();
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0); const td = d0.getTime();
+    const yS = td - DAY, yE = now - DAY;
     const allMsgs = us.flatMap((u) => u.messages.map((m) => ({ m, u })));
-    const todayMsgs = allMsgs.filter((x) => x.m.ts >= td.getTime());
-    const members = us.filter((u) => u.type === 'member').length;
-    const guests = us.filter((u) => u.type === 'guest').length;
-    const open = reports().filter((r) => r.status !== 'closed');
+    const P = prices();
+    const uRows = usageRows();
+    const inR = (ts, s, e) => ts >= s && ts < e;
+    const activeIn = (s, e) => { const set = new Set(); allMsgs.forEach(({ m, u }) => { if (inR(m.ts, s, e)) set.add(u.id); }); return set; };
+    const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+    const won = (n) => '₩' + Math.round(n).toLocaleString('ko-KR');
+    const num = (n) => Number(n).toLocaleString('ko-KR');
+    const delta = (cur, prev, upGood, unit) => {
+      unit = unit || '';
+      if (!prev && !cur) return '<span class="ops-delta" data-tone="neutral">어제와 같음 · 0' + unit + '</span>';
+      if (!prev) return `<span class="ops-delta" data-tone="${upGood ? 'good' : 'attention'}">+${num(cur)}${unit} · 어제 0</span>`;
+      const d = cur - prev; const p = Math.round((d / prev) * 100);
+      if (d === 0) return '<span class="ops-delta" data-tone="neutral">어제와 같음</span>';
+      const tone = d === 0 ? 'neutral' : (d > 0) === upGood ? 'good' : 'attention';
+      return `<span class="ops-delta" data-tone="${tone}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : ''}${num(d)}${unit} (${p > 0 ? '+' : ''}${p}%)</span>`;
+    };
+    // KPI
+    const actT = activeIn(td, now + 1), actY = activeIn(yS, yE);
+    const actTm = [...actT].filter((id) => (findUser(id) || {}).type === 'member').length;
+    const newT = us.filter((u) => inR(u.createdAt, td, now + 1)).length, newY = us.filter((u) => inR(u.createdAt, yS, yE)).length;
+    const msgT = allMsgs.filter((x) => inR(x.m.ts, td, now + 1)).length, msgY = allMsgs.filter((x) => inR(x.m.ts, yS, yE)).length;
+    const reps = reports(); const open = reps.filter((rp) => rp.status !== 'closed');
+    const repT = reps.filter((rp) => inR(rp.createdAt, td, now + 1)).length, repY = reps.filter((rp) => inR(rp.createdAt, yS, yE)).length;
+    const aiT = usageSummary(uRows.filter((x) => inR(x.x.ts, td, now + 1)), P), aiY = usageSummary(uRows.filter((x) => inR(x.x.ts, yS, yE)), P);
+    const fx = fxRate();
+    const members = us.filter((u) => u.type === 'member').length, guests = us.length - members;
+    // 오늘 처리할 일
+    const ago = (ts) => { const h = Math.floor((now - ts) / 3600000); return h >= 24 ? Math.floor(h / 24) + '일 전' : h >= 1 ? h + '시간 전' : '방금'; };
     const riskMsgs = allMsgs.filter((x) => x.m.risk && x.m.risk.length);
-    const pairs = {};
-    allMsgs.forEach(({ m }) => { if (m.lang && m.trLang) { const k = LN(m.lang) + ' → ' + LN(m.trLang); pairs[k] = (pairs[k] || 0) + 1; } });
-    const apps = {};
-    us.forEach((u) => u.contacts.forEach((c) => { apps[c.app] = (apps[c.app] || 0) + 1; }));
-    const silent = us.filter((u) => { const s = memberStats(u); return daysAgo(s.lastTs) >= 7; }).length;
-    const totalContacts = us.reduce((a, u) => a + u.contacts.length, 0);
-    const bars = (obj, n) => { const tot = Object.values(obj).reduce((a, b) => a + b, 0) || 1; return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `<div class="row"><span class="small" style="width:150px">${esc(k)}</span><div class="bar"><span style="width:${(v / tot) * 100}%"></span></div><span class="tiny" style="width:60px;text-align:right">${v} · ${Math.round((v / tot) * 100)}%</span></div>`).join(''); };
-    page('dashboard', `
-      <div class="between wrap"><div class="stack-sm"><h1>운영 현황</h1><p class="muted">${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월 ${new Date().getDate()}일 기준</p></div><a class="btn" href="#/admin/monitor">전체 대화 열기</a></div>
-      ${(() => {
-        const DAY = 86400000; const d7 = [];
-        for (let i = 6; i >= 0; i--) { const st = td.getTime() - i * DAY; d7.push({ st, n: allMsgs.filter((x) => x.m.ts >= st && x.m.ts < st + DAY).length, nu: us.filter((u) => u.createdAt >= st && u.createdAt < st + DAY).length }); }
-        const mx = Math.max(1, ...d7.map((d) => d.n));
-        const P = prices(); const mS = new Date(td.getFullYear(), td.getMonth(), 1).getTime(); const mo = usageSummary(usageRows().filter((r) => r.x.ts >= mS), P);
-        const todo = [
-          [open.length, '미처리 신고', '#/admin/reports', 'coral'],
-          [riskMsgs.length, '위험 표시 대화 확인', '#/admin/monitor?risk=1', 'coral'],
-          [silent, '7일 이상 대화가 끊긴 회원', '#/admin/users', 'lavender'],
-          [Store.db.quality.filter((q) => q.status === 'open').length, '개선 메모 처리', '#/admin/quality', 'sky'],
-        ];
-        return `<div class="adm-dashboard">
-          <div class="metrics">
-            <a class="card stack-sm" href="#/admin/users"><span class="label">회원 (닉네임 · 게스트)</span><strong class="metric">${members + guests}명</strong><span class="tiny muted">닉네임 ${members} · 게스트 ${guests} · 관리 상대 ${totalContacts}명</span></a>
-            <a class="card stack-sm" href="#/admin/monitor"><span class="label">오늘 들어온 대화</span><strong class="metric">${todayMsgs.length}건</strong><span class="tiny muted">어제 ${d7[5].n}건</span></a>
-            <a class="card stack-sm" href="#/admin/ai"><span class="label">이번 달 AI 예상 금액</span><strong class="metric">${krw(mo.usd)}</strong><span class="tiny muted">${mo.calls}회 · ${((mo.tin + mo.tout) / 1000).toFixed(1)}K 토큰</span></a>
-          </div>
-          <div class="adm-work">
-            <section class="card adm-today" aria-label="오늘 할 일"><h2>오늘 할 일 <span class="tiny muted">${todo.filter((x) => x[0]).length}건 대기</span></h2>
-              <ul>${todo.map(([n, l, h, tone]) => `<li><a class="adm-task ${n ? 'is-' + tone : 'is-done'}" href="${h}"><span>${l}</span><strong>${n ? n + '건 →' : '완료'}</strong></a></li>`).join('')}</ul></section>
-            <section class="card adm-trend" aria-label="최근 7일 추이"><h2>최근 7일 들어온 대화</h2>
-              <div class="spark">${d7.map((d) => { const dt = new Date(d.st); return `<div class="spark-col" title="${dt.getMonth() + 1}/${dt.getDate()} · 대화 ${d.n}건 · 가입 ${d.nu}명"><span style="height:${Math.max(3, (d.n / mx) * 100)}%"></span><em>${dt.getMonth() + 1}/${dt.getDate()} · ${d.n}</em></div>`; }).join('')}</div></section>
-          </div>
-        </div>`;
-      })()}
-      <div class="admin-grid">
-        <div class="card stack"><div class="between wrap"><h2>최근 위험 표시</h2><a class="link" href="#/admin/monitor?risk=1">대화에서 확인</a></div>
-          ${riskMsgs.length ? `<div class="table-wrap"><table><thead><tr><th>시각</th><th>회원</th><th>앱 / 상대</th><th>분류</th><th>원문</th></tr></thead><tbody>${riskMsgs.sort((a, b) => b.m.ts - a.m.ts).slice(0, 8).map(({ m, u }) => { const c = u.contacts.find((x) => x.id === m.contactId); return `<tr class="clickable" data-open="${u.id}|${m.contactId || ''}"><td>${fmt(m.ts)}</td><td>${esc(u.nickname)} / ${esc(u.id)}</td><td>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '미지정'}</td><td>${m.risk.map((r) => `<span class="badge alert">${r === 'money' ? '금전 요구' : '외부 유도'}</span>`).join(' ')}</td><td class="wrap-cell">${esc(m.text.slice(0, 70))}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="small muted">위험 표시가 없습니다.</p>'}
-        </div>
-        <div class="card stack"><h2>신고 및 단절</h2>
-          <ul class="list">
-            <li class="list-row between"><span>미처리 신고</span><strong>${open.length}건</strong></li>
-            <li class="list-row between"><span>7일 이상 대화가 없는 회원</span><strong>${silent}명</strong></li>
-            <li class="list-row between"><span>개선 메모(미처리)</span><strong>${Store.db.quality.filter((q) => q.status === 'open').length}건</strong></li>
-            <li class="list-row between"><span>오늘 열람 기록</span><strong>${Store.db.audit.filter((a) => a.ts >= td.getTime()).length}건</strong></li>
-          </ul>
-          <a class="btn secondary full" href="#/admin/reports">신고 목록 보기</a>
-        </div>
+    const risk7 = riskMsgs.filter((x) => x.m.ts >= now - 7 * DAY);
+    const banned = us.filter((u) => u.status === 'banned');
+    const bannedRecent = banned.filter((u) => u.messages.some((m) => m.ts >= now - 7 * DAY));
+    const auditT = Store.db.audit.filter((a) => a.ts >= td && /view|monitor|viewas/.test(a.action || ''));
+    const silent = us.filter((u) => daysAgo(memberStats(u).lastTs) >= 7);
+    const qOpen = Store.db.quality.filter((q) => q.status === 'open');
+    const oldest = (arr, f) => (arr.length ? ago(Math.min(...arr.map(f))) : '');
+    const queue = [
+      [open.length, '미처리 신고', open.length ? '가장 오래된 건 ' + oldest(open, (x) => x.createdAt) : '', '#/admin/reports', 'attention'],
+      [risk7.length, '위험 표시 대화 (최근 7일)', risk7.length ? '가장 오래된 건 ' + oldest(risk7, (x) => x.m.ts) : '', '#/admin/monitor?risk=1', 'attention'],
+      [bannedRecent.length, '차단 회원의 최근 기록', banned.length ? '차단 회원 ' + banned.length + '명' : '', '#/admin/users?type=banned', 'info'],
+      [auditT.length, '오늘 대화 열람 로그 확인', '', '#/admin/audit', 'info'],
+      [silent.length, '7일 이상 대화가 끊긴 회원', '', '#/admin/users', 'neutral'],
+      [qOpen.length, '개선 메모 처리', '', '#/admin/quality', 'neutral'],
+    ];
+    // 7일 추이 (현재 vs 직전 7일)
+    const metric = r.q.m === 'msgs' ? 'msgs' : 'active';
+    const val = (s, e) => (metric === 'msgs' ? allMsgs.filter((x) => inR(x.m.ts, s, e)).length : activeIn(s, e).size);
+    const cur = [], prev = [];
+    for (let i = 6; i >= 0; i--) { const s = td - i * DAY; cur.push({ s, v: val(s, s + DAY) }); prev.push(val(s - 7 * DAY, s - 6 * DAY)); }
+    const W = 600, H = 220, L = 36, R = 12, T = 12, B = 28;
+    const mx = Math.max(1, ...cur.map((x) => x.v), ...prev);
+    const step = Math.max(1, Math.ceil(mx / 4)); const top = step * 4;
+    const X = (i) => L + (i * (W - L - R)) / 6, Y = (v) => T + (H - T - B) * (1 - v / top);
+    const grid = [0, 1, 2, 3, 4].map((k) => `<line class="ops-gridline" x1="${L}" x2="${W - R}" y1="${Y(k * step)}" y2="${Y(k * step)}"/><text class="ops-axis" x="${L - 8}" y="${Y(k * step) + 4}" text-anchor="end">${k * step}</text>`).join('');
+    const xl = cur.map((x, i) => { const d = new Date(x.s); return `<text class="ops-axis" x="${X(i)}" y="${H - 8}" text-anchor="${i === 6 ? 'end' : 'middle'}">${i === 6 ? '오늘(진행 중)' : (d.getMonth() + 1) + '/' + d.getDate()}</text>`; }).join('');
+    const pts = (arr) => arr.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+    const sumC = cur.reduce((a, x) => a + x.v, 0), sumP = prev.reduce((a, b) => a + b, 0);
+    const chart = `<figure class="ops-chart"><svg class="ops-plot" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="ops-ct ops-cd"><title id="ops-ct">최근 7일 ${metric === 'msgs' ? '메시지' : '메시지 활동 회원'}</title><desc id="ops-cd">점선은 직전 7일</desc>${grid}${xl}
+      <polyline class="ops-line ops-line--prev" points="${pts(prev)}"/><polyline class="ops-line" points="${pts(cur.map((x) => x.v))}"/>
+      ${cur.map((x, i) => `<circle class="ops-point" cx="${X(i)}" cy="${Y(x.v)}" r="3.5"><title>${new Date(x.s).getMonth() + 1}/${new Date(x.s).getDate()} · ${x.v} (직전 주 ${prev[i]})</title></circle>`).join('')}</svg>
+      <figcaption class="ops-legend"><span>━ 이번 7일 합계 ${num(sumC)}</span><span>┅ 직전 7일 ${num(sumP)}</span>${delta(sumC, sumP, true)}</figcaption></figure>`;
+    // 검토 큐
+    const rq = [];
+    open.forEach((rp) => { const u = findUser(rp.userId); if (!u) return; const c = u.contacts.find((x) => x.id === rp.contactId); rq.push({ ts: rp.createdAt, kind: '신고 · ' + (REASON[rp.reason] || rp.reason), u, c, st: rp.status === 'open' ? '접수' : '처리 중', tone: 'attention' }); });
+    risk7.forEach(({ m, u }) => { const c = u.contacts.find((x) => x.id === m.contactId); const linked = open.some((rp) => rp.userId === u.id && rp.contactId === m.contactId); if (linked) return; rq.push({ ts: m.ts, kind: '위험 · ' + m.risk.map((x) => (x === 'money' ? '금전 요구' : '외부 유도')).join('·'), u, c, st: '미검토', tone: 'info' }); });
+    rq.sort((a, b) => b.ts - a.ts);
+    // AI 비용
+    const mS = new Date(d0.getFullYear(), d0.getMonth(), 1).getTime();
+    const mo = usageSummary(uRows.filter((x) => x.x.ts >= mS), P);
+    const dim = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate(); const dEl = Math.max(1, (now - mS) / DAY);
+    const byModel = {}; uRows.filter((x) => x.x.ts >= mS && x.x.provider !== 'mymemory').forEach(({ x }) => { const k = x.model; byModel[k] = byModel[k] || { calls: 0, tin: 0, tout: 0, usd: 0 }; byModel[k].calls++; byModel[k].tin += x.in || 0; byModel[k].tout += x.out || 0; byModel[k].usd += usageCost(x, P); });
+    const models = Object.entries(byModel).sort((a, b) => b[1].usd - a[1].usd);
+    // 도구 사용
+    const act30 = us.filter((u) => u.messages.some((m) => m.ts >= now - 30 * DAY));
+    const usedReply = act30.filter((u) => u.messages.some((m) => m.source === 'reply' || m.chosen)).length;
+    const usedOut = act30.filter((u) => u.messages.some((m) => m.dir === 'out')).length;
+    const usedMem = act30.filter((u) => u.digests && Object.values(u.digests).some((o) => Object.keys(o || {}).length)).length;
+    const usedOcr = act30.filter((u) => u.messages.some((m) => m.source === 'ocr')).length;
+    const bar = (label, n, tot, cls, extra) => `<li class="ops-bar"><div class="ops-row"><span>${esc(label)}</span><strong>${extra || ''}${pct(n, tot)}%</strong></div><div class="ops-track"><span class="ops-fill ${cls || ''}" style="--p:${pct(n, tot)}%"></span></div></li>`;
+    // 코호트
+    const coh = [];
+    for (let i = 13; i >= 1; i--) {
+      const s = td - i * DAY; const grp = us.filter((u) => inR(u.createdAt, s, s + DAY)); if (!grp.length) continue;
+      const cells = []; for (let k = 1; k <= 7; k++) { const cs = s + k * DAY; if (cs > now) { cells.push(null); continue; } const n = grp.filter((u) => u.messages.some((m) => inR(m.ts, cs, cs + DAY))).length; cells.push(pct(n, grp.length)); }
+      coh.push({ s, n: grp.length, cells });
+    }
+    const lvl = (p) => (p === 0 ? 0 : p < 15 ? 1 : p < 35 ? 2 : p < 60 ? 3 : 4);
+    // 시간대 히트맵 (최근 30일, 요일 × 3시간)
+    const hm = Array.from({ length: 7 }, () => Array(8).fill(0));
+    allMsgs.forEach(({ m }) => { if (m.ts < now - 30 * DAY) return; const d = new Date(m.ts); hm[(d.getDay() + 6) % 7][Math.floor(d.getHours() / 3)]++; });
+    const hmx = Math.max(1, ...hm.flat());
+    const WD = ['월', '화', '수', '목', '금', '토', '일'];
+    // 분포
+    const dist = r.q.d === 'app' ? 'app' : r.q.d === 'src' ? 'src' : 'lang';
+    const cnt = {};
+    if (dist === 'lang') allMsgs.forEach(({ m }) => { if (m.lang && m.trLang && m.lang !== m.trLang) { const k = LN(m.lang) + ' → ' + LN(m.trLang); cnt[k] = (cnt[k] || 0) + 1; } });
+    if (dist === 'app') allMsgs.forEach(({ m, u }) => { const c = u.contacts.find((x) => x.id === m.contactId); const k = c ? APPN(c.app) : '미지정'; cnt[k] = (cnt[k] || 0) + 1; });
+    if (dist === 'src') { const SRC = { paste: '붙여넣기', ocr: '스크린샷', import: '대화 가져오기', write: '직접 작성', reply: '답장 추천 사용', sample: '예시' }; allMsgs.forEach(({ m }) => { const k = SRC[m.source] || '기타'; cnt[k] = (cnt[k] || 0) + 1; }); }
+    const cTot = Object.values(cnt).reduce((a, b) => a + b, 0);
+    // 요금제
+    const plan = { free: 0, pro: 0, premium: 0 }; us.forEach((u) => { plan[u.type === 'guest' ? 'free' : (u.plan || 'free')]++; });
+    const mrr = plan.pro * 5900 + plan.premium * 9900;
+    const q2 = (k, v) => { const o = Object.assign({}, r.q, { [k]: v }); return '#/admin/dashboard?' + Object.entries(o).filter(([, x]) => x).map(([a, b]) => a + '=' + encodeURIComponent(b)).join('&'); };
+    const seg = (k, cur, opts) => `<div class="ops-seg" role="group">${opts.map(([v, l]) => `<a href="${q2(k, v)}" aria-current="${cur === v}">${l}</a>`).join('')}</div>`;
+    const ts = new Date();
+    page('dashboard', `<section class="lm-ops" aria-label="운영 현황">
+      <header class="ops-header"><div><h1>운영 현황</h1><p class="ops-muted">${ts.getFullYear()}.${ts.getMonth() + 1}.${ts.getDate()} ${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')} 집계 · 전일 비교는 어제 같은 시각까지 · 전체 회원 ${num(us.length)}명 (닉네임 ${members} · 게스트 ${guests})</p></div>
+        <div class="ops-controls"><a class="btn secondary sm" href="#/admin/ai">AI 사용량</a><a class="btn sm" href="#/admin/monitor">전체 대화 열기</a></div></header>
+      <div class="ops-kpis">
+        <a class="ops-kpi" href="#/admin/users"><h2>메시지 활동 회원</h2><strong class="ops-value">${num(actT.size)}명</strong>${delta(actT.size, actY.size, true, '명')}<p class="ops-muted">닉네임 ${actTm} · 게스트 ${actT.size - actTm}</p></a>
+        <a class="ops-kpi" href="#/admin/users"><h2>신규 가입</h2><strong class="ops-value">${num(newT)}명</strong>${delta(newT, newY, true, '명')}<p class="ops-muted">누적 ${num(us.length)}명</p></a>
+        <a class="ops-kpi" href="#/admin/monitor"><h2>처리한 메시지</h2><strong class="ops-value">${num(msgT)}건</strong>${delta(msgT, msgY, true, '건')}<p class="ops-muted">회원당 ${actT.size ? (msgT / actT.size).toFixed(1) : 0}건</p></a>
+        <a class="ops-kpi" href="#/admin/reports"><h2>미처리 신고</h2><strong class="ops-value">${num(open.length)}건</strong>${delta(repT, repY, false, '건')}<p class="ops-muted">증감은 신규 접수 기준</p></a>
+        <a class="ops-kpi" href="#/admin/ai"><h2>오늘 AI 예상 비용</h2><strong class="ops-value">${won(aiT.usd * fx)}</strong>${delta(Math.round(aiT.usd * fx), Math.round(aiY.usd * fx), false, '원')}<p class="ops-muted">AI 호출 ${num(aiT.calls)}회 · 무료 번역 ${num(aiT.mt)}회</p></a>
       </div>
-      <div class="admin-grid">
-        <div class="card stack"><h2>언어 방향 분포</h2><div class="mini-bars">${bars(pairs, 8) || '<p class="small muted">데이터 없음</p>'}</div></div>
-        <div class="card stack"><h2>사용 메신저 분포 (상대 기준)</h2><div class="mini-bars">${bars(Object.fromEntries(Object.entries(apps).map(([k, v]) => [APPN(k), v])), 9) || '<p class="small muted">데이터 없음</p>'}</div></div>
-      </div>`);
+      <div class="ops-split ops-split--priority">
+        <section class="ops-panel" aria-label="오늘 처리할 일"><header class="ops-panel-head"><h2>오늘 처리할 일</h2><span class="ops-tag" data-tone="${queue.slice(0, 2).some((x) => x[0]) ? 'attention' : 'good'}">${queue.filter((x) => x[0]).length}개 항목 대기</span></header>
+          <ul class="ops-queue">${queue.map(([n, l, sub, h, tone]) => `<li><a class="ops-task" href="${h}"><span>${l}${sub ? `<br><span class="ops-muted">${sub}</span>` : ''}</span><span class="ops-tag" data-tone="${n ? tone : 'good'}">${n ? num(n) + '건 →' : '없음'}</span></a></li>`).join('')}</ul></section>
+        <section class="ops-panel" aria-label="최근 7일 활동"><header class="ops-panel-head"><h2>최근 7일 활동</h2><div class="ops-controls">${seg('m', metric, [['active', '활동 회원'], ['msgs', '메시지']])}</div></header>${chart}</section>
+      </div>
+      <section class="ops-panel" aria-label="신고·위험 검토 큐"><header class="ops-panel-head"><h2>신고·위험 검토 큐 <span class="ops-muted">${rq.length}건</span></h2><a class="link" href="#/admin/reports">신고 전체 보기</a></header>
+        ${rq.length ? `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">유형</th><th scope="col">회원</th><th scope="col">상대</th><th scope="col">메신저</th><th scope="col">감지 시각</th><th scope="col">상태</th><th scope="col"></th></tr></thead><tbody>
+          ${rq.slice(0, 10).map((x) => `<tr class="clickable" data-open="${x.u.id}|${x.c ? x.c.id : ''}"><td><span class="ops-tag" data-tone="${x.tone}">${esc(x.kind)}</span></td><td>${esc(x.u.nickname)} <span class="ops-muted">${esc(x.u.id)}</span></td><td>${x.c ? esc(x.c.nickname) : '—'}</td><td>${x.c ? esc(APPN(x.c.app)) : '—'}</td><td class="ops-num">${fmt(x.ts)} <span class="ops-muted">${ago(x.ts)}</span></td><td>${x.st}</td><td><a class="link" href="#/admin/monitor?u=${x.u.id}&c=${x.c ? x.c.id : ''}">상세</a></td></tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">검토할 신고·위험 대화가 없습니다.</p>'}</section>
+      <div class="ops-split">
+        <section class="ops-panel" aria-label="AI 비용과 무료 번역"><header class="ops-panel-head"><h2>AI 비용 · 이번 달</h2><span class="ops-tag" data-tone="info">월말 예상 ${won((mo.usd / dEl) * dim * fx)}</span></header>
+          <strong class="ops-value">${won(mo.usd * fx)} <span class="ops-muted">${usd(mo.usd)}</span></strong>
+          ${models.length ? `<ul class="ops-bars">${models.map(([k, v], i) => `<li class="ops-bar"><div class="ops-row"><span>${esc(k)}</span><strong>${won(v.usd * fx)} · ${pct(v.usd, mo.usd)}%</strong></div><div class="ops-track"><span class="ops-fill ${i % 2 ? 'ops-fill--violet' : ''}" style="--p:${pct(v.usd, mo.usd)}%"></span></div></li>`).join('')}</ul>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">모델</th><th scope="col" class="ops-num">호출</th><th scope="col" class="ops-num">입력 토큰</th><th scope="col" class="ops-num">출력 토큰</th><th scope="col" class="ops-num">예상 비용</th></tr></thead><tbody>${models.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="ops-num">${num(v.calls)}</td><td class="ops-num">${num(v.tin)}</td><td class="ops-num">${num(v.tout)}</td><td class="ops-num">${won(v.usd * fx)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">이번 달 AI 호출이 없습니다.</p>'}
+          <p class="ops-muted">무료 번역 ${num(mo.mt)}회 · ${num(mo.mtChars)}자 · 환율 ₩${fx}/$ · 단가는 AI 사용량 메뉴에서 변경</p></section>
+        <section class="ops-panel" aria-label="대화 도구 사용"><header class="ops-panel-head"><h2>대화 도구 사용</h2><span class="ops-tag">최근 30일 활동 ${act30.length}명 기준</span></header>
+          <ul class="ops-bars">${bar('보낸 말 번역 기록', usedOut, act30.length, '', usedOut + '명 · ')}${bar('답장 추천 사용', usedReply, act30.length, 'ops-fill--sky', usedReply + '명 · ')}${bar('스크린샷 번역', usedOcr, act30.length, 'ops-fill--violet', usedOcr + '명 · ')}${bar('하루 기억 생성', usedMem, act30.length, 'ops-fill--sky', usedMem + '명 · ')}</ul>
+          <p class="ops-muted">해당 기능을 한 번 이상 쓴 회원 비율입니다. 기능 간 순서를 기록하는 이벤트가 쌓이면 퍼널로 바꿉니다.</p>
+          <header class="ops-panel-head"><h2>요금제 구성</h2><span class="ops-tag" data-tone="info">예상 MRR · 결제 미연동</span></header>
+          <strong class="ops-value">${won(mrr)}<span class="ops-muted"> / 월</span></strong>
+          <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th scope="col">요금제</th><th scope="col" class="ops-num">가격</th><th scope="col" class="ops-num">인원</th><th scope="col" class="ops-num">비중</th><th scope="col" class="ops-num">월 금액</th></tr></thead><tbody>
+            ${[['무료', 0, plan.free], ['프로', 5900, plan.pro], ['프리미엄', 9900, plan.premium]].map(([n, p, c]) => `<tr><td>${n}</td><td class="ops-num">${won(p)}</td><td class="ops-num">${num(c)}명</td><td class="ops-num">${pct(c, us.length)}%</td><td class="ops-num">${won(p * c)}</td></tr>`).join('')}</tbody></table></div>
+          <p class="ops-muted">유료 전환율 ${pct(plan.pro + plan.premium, us.length)}% · 게스트는 무료로 집계</p></section>
+      </div>
+      <section class="ops-panel" aria-label="가입 코호트"><header class="ops-panel-head"><h2>7일 재방문 (가입일 코호트)</h2><span class="ops-muted">가입 후 N일째에 메시지를 처리한 회원 비율</span></header>
+        ${coh.length ? `<div class="ops-table-wrap"><table class="ops-table ops-heat"><thead><tr><th scope="col">가입일</th><th scope="col">가입</th>${[1, 2, 3, 4, 5, 6, 7].map((k) => `<th scope="col">D${k}</th>`).join('')}</tr></thead><tbody>
+          ${coh.map((c) => `<tr><th scope="row">${fmtD(c.s)}</th><td>${c.n}명</td>${c.cells.map((p) => (p === null ? '<td>—</td>' : `<td data-level="${lvl(p)}">${p}%</td>`)).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="ops-empty">최근 2주 가입자가 없습니다.</p>'}</section>
+      <div class="ops-split">
+        <section class="ops-panel" aria-label="이용 시간대"><header class="ops-panel-head"><h2>이용 시간대 (최근 30일)</h2><span class="ops-muted">요일 × 3시간 · 메시지 수</span></header>
+          <div class="ops-table-wrap"><table class="ops-table ops-heat"><thead><tr><th scope="col"></th>${[0, 3, 6, 9, 12, 15, 18, 21].map((h) => `<th scope="col">${h}시</th>`).join('')}</tr></thead><tbody>
+            ${hm.map((row, i) => `<tr><th scope="row">${WD[i]}</th>${row.map((v) => `<td data-level="${v ? Math.min(4, 1 + Math.floor((v / hmx) * 3.99)) : 0}" title="${WD[i]} · ${v}건">${v || ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+        <section class="ops-panel" aria-label="언어·메신저·출처"><header class="ops-panel-head"><h2>언어·메신저·출처</h2><div class="ops-controls">${seg('d', dist, [['lang', '언어 방향'], ['app', '메신저'], ['src', '입력 방식']])}</div></header>
+          ${cTot ? `<ul class="ops-bars">${Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 9).map(([k, v], i) => `<li class="ops-bar"><div class="ops-row"><span>${esc(k)}</span><strong>${num(v)}건 · ${pct(v, cTot)}%</strong></div><div class="ops-track"><span class="ops-fill ${['', 'ops-fill--sky', 'ops-fill--violet'][i % 3]}" style="--p:${pct(v, cTot)}%"></span></div></li>`).join('')}</ul><p class="ops-muted">표본 ${num(cTot)}건</p>` : '<p class="ops-empty">데이터가 없습니다.</p>'}</section>
+      </div>
+    </section>`);
     bindOpen();
   }
   function bindOpen() { $app.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', () => { const [u, c] = tr.dataset.open.split('|'); location.hash = `#/admin/monitor?u=${u}&c=${c}`; })); }
