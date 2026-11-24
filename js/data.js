@@ -227,7 +227,7 @@
    */
   const SAMPLE_POOL = [
     {
-      key: 'woojae', nickname: '서준', lang: 'ko', country: 'KR', app: 'kakaotalk', color: 'mint', relation: 'romance', stage: 1,
+      key: 'seojun', nickname: '서준', lang: 'ko', country: 'KR', app: 'kakaotalk', color: 'mint', relation: 'romance', stage: 1,
       metDaysAgo: 16, birthday: '1996-05-23', blood: 'O', mbti: 'ENFJ', gender: 'm', age: 30,
       note: { ko: '조용한 카페를 좋아함. 약속 전에 귀가 시간 확인하기.', zh: '喜欢安静的咖啡店。约见前先确认回程时间。', ja: '静かなカフェが好き。約束の前に帰りの時間を確認。', vi: 'Thích quán cà phê yên tĩnh. Trước khi hẹn nhớ hỏi giờ về.', en: 'Likes quiet cafés. Check his return time before plans.' },
       msgs: [

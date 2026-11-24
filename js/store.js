@@ -26,8 +26,9 @@
         if (d.admin && (d.admin.pin === '0000' || !d.admin.pin)) d.admin.pin = '1234';
         // 샘플 연락처 중복 정리
         Object.values(d.users || {}).forEach((u) => { const seen = {}; (u.contacts || []).slice().forEach((c) => { if (!c.sample) return; const k = c.nickname + '|' + c.app; if (seen[k]) { u.contacts = u.contacts.filter((x) => x.id !== c.id); u.messages = (u.messages || []).filter((m) => m.contactId !== c.id); u.promises = (u.promises || []).filter((p) => p.contactId !== c.id); } else seen[k] = 1; }); });
-        // 샘플 연락처 이름 변경(우재 → 서준) 반영
-        Object.values(d.users || {}).forEach((u) => (u.contacts || []).forEach((c) => { if (c.sample && (c.nickname === '우재' || c.nickname === '宇宰')) c.nickname = '서준'; }));
+        // 샘플·데모 연락처 이름 변경 반영 (실명 제거)
+        const RN = /\uC6B0\uC7AC|\u5B87\u5BB0/g; ['audit', 'quality', 'reports'].forEach((k) => (d[k] || []).forEach((x) => Object.keys(x).forEach((f) => { if (typeof x[f] === 'string') x[f] = x[f].replace(RN, '\uC11C\uC900'); })));
+        Object.values(d.users || {}).forEach((u) => { (u.contacts || []).forEach((c) => { if (['\uC6B0\uC7AC', '\u5B87\u5BB0', '\u30A6\u30B8\u30A7', 'Woojae'].includes(c.nickname)) c.nickname = '\uC11C\uC900'; }); if (u.nickname && /\uC6B0\uC7AC|\uC9C4\uC6B0\uC7AC/.test(u.nickname)) u.nickname = u.type === 'guest' ? u.nickname : 'Member'; });
         return d;
       }
     } catch (e) { /* 손상된 데이터는 새로 시작 */ }
@@ -251,12 +252,12 @@
       persist(); return;
     }
     const defs = [
-      ['Lin', 'zh', 'member', ['woojae', 'haruka', 'minh'], 15],
-      ['はると', 'ja', 'member', ['woojae', 'lin', 'alex'], 30],
-      ['Minh Anh', 'vi', 'member', ['woojae', 'lin'], 9],
-      ['Sarah', 'en', 'member', ['woojae', 'haruka', 'minh', 'lin'], 45],
+      ['Lin', 'zh', 'member', ['seojun', 'haruka', 'minh'], 15],
+      ['はると', 'ja', 'member', ['seojun', 'lin', 'alex'], 30],
+      ['Minh Anh', 'vi', 'member', ['seojun', 'lin'], 9],
+      ['Sarah', 'en', 'member', ['seojun', 'haruka', 'minh', 'lin'], 45],
       ['지훈', 'ko', 'member', ['lin', 'haruka'], 22],
-      ['Guest', 'zh', 'guest', ['woojae'], 2],
+      ['Guest', 'zh', 'guest', ['seojun'], 2],
       ['Kira', 'ko', 'member', ['lin', 'scam'], 11],
       ['Guest', 'vi', 'guest', ['haruka'], 1],
     ];
