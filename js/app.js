@@ -807,7 +807,8 @@
     if (Engine.aiConfig().key && c) {
       try {
         const stage = STAGE_NAMES.en[STAGES[c.relation || 'friend'][c.stage || 0]];
-        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage, tone: toneCtx(c).tone });
+        const tc0 = toneCtx(c); const tset = tc0.toneKey === 'basic' ? TONE6.map((k) => ({ key: k, label: t('t_' + k), prompt: TONE_PROMPT[k] })) : null;
+        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage, tone: tc0.tone, toneSet: tset, age: ageOf(c) });
         res.provider = 'ai';
       } catch (e) { ai = null; }
     }
@@ -888,6 +889,16 @@
       });
       const outs = await Promise.all(built.map((b) => tr(b.src, target, RL, { relation: c ? c.relation : '' }).catch(() => ({ text: '' }))));
       replies = built.map((b, i) => ({ label: b.label, src: b.src, text: outs[i].text, meaning: b.src }));
+      const tk = toneCtx(c).toneKey;
+      if (RL === 'ko' && built.length) {
+        let tb;
+        if (tk === 'basic') tb = TONE6.map((k, i) => ({ label: t('t_' + k), src: koTone(built[i % Math.min(3, built.length)].src, k) }));
+        else tb = built.map((b) => ({ label: b.label, src: koTone(b.src, tk) }));
+        const outs2 = await Promise.all(tb.map((b) => tr(b.src, target, RL, { relation: c ? c.relation : '', tone: TONE_PROMPT[tk === 'basic' ? 'polite' : tk] }).catch(() => ({ text: '' }))));
+        replies = tb.map((b, i) => ({ label: b.label, src: b.src, text: outs2[i].text, meaning: b.src }));
+      }
+      const ag = ageOf(c);
+      if (ag) replies = replies.map((r) => Object.assign({}, r, target === 'ko' ? { text: koAge(r.text, ag) } : {}, RL === 'ko' && target === 'ko' ? { meaning: koAge(r.meaning, ag), src: koAge(r.src, ag) } : {}));
     }
     res.replies = replies;
     res.target = target;
@@ -1109,6 +1120,28 @@
   const TONE_T = {"ko": {"tone_l": "말투", "emoji_l": "이모티콘", "t_basic": "기본", "t_polite": "정중하게", "t_friendly": "친근하게", "t_cute": "귀엽게·애교", "t_older": "오빠·언니에게", "t_younger": "동생에게", "t_sweet": "다정하게(연인)", "t_business": "비즈니스", "e_none": "안 씀", "e_some": "조금", "e_lots": "많이", "tone_ai_hint": "말투는 AI 연결 시 정확히 반영돼요", "lang_l": "언어"}, "zh": {"tone_l": "语气", "emoji_l": "表情", "t_basic": "默认", "t_polite": "礼貌", "t_friendly": "亲切", "t_cute": "可爱·撒娇", "t_older": "对哥哥·姐姐", "t_younger": "对弟弟·妹妹", "t_sweet": "温柔(恋人)", "t_business": "商务", "e_none": "不用", "e_some": "少量", "e_lots": "多", "tone_ai_hint": "连接 AI 后语气会准确体现", "lang_l": "语言"}, "ja": {"tone_l": "口調", "emoji_l": "絵文字", "t_basic": "標準", "t_polite": "丁寧に", "t_friendly": "親しみやすく", "t_cute": "かわいく・甘えて", "t_older": "年上へ", "t_younger": "年下へ", "t_sweet": "優しく(恋人)", "t_business": "ビジネス", "e_none": "なし", "e_some": "少し", "e_lots": "たくさん", "tone_ai_hint": "口調はAI接続時に正確に反映されます", "lang_l": "言語"}, "vi": {"tone_l": "Giọng điệu", "emoji_l": "Biểu tượng cảm xúc", "t_basic": "Mặc định", "t_polite": "Lịch sự", "t_friendly": "Thân thiện", "t_cute": "Dễ thương·nũng nịu", "t_older": "Với anh·chị", "t_younger": "Với em", "t_sweet": "Ngọt ngào (người yêu)", "t_business": "Công việc", "e_none": "Không", "e_some": "Ít", "e_lots": "Nhiều", "tone_ai_hint": "Giọng điệu được áp dụng chính xác khi kết nối AI", "lang_l": "Ngôn ngữ"}, "en": {"tone_l": "Tone", "emoji_l": "Emoji", "t_basic": "Default", "t_polite": "Polite", "t_friendly": "Friendly", "t_cute": "Cute·playful", "t_older": "To an older friend", "t_younger": "To a younger friend", "t_sweet": "Sweet (dating)", "t_business": "Business", "e_none": "None", "e_some": "A few", "e_lots": "Lots", "tone_ai_hint": "Tone is applied precisely when AI is connected", "lang_l": "Language"}};
   Object.keys(TONE_T).forEach((l) => Object.assign(T[l], TONE_T[l]));
   const TONES = ['basic', 'polite', 'friendly', 'cute', 'older', 'younger', 'sweet', 'business'];
+  const TONE6 = ['polite', 'friendly', 'cute', 'older', 'sweet', 'business'];
+  // AI 없이: 한국어 기본 답장을 말투별로 바꾸기 (간단 규칙)
+  function ageOf(c) { if (!c) return null; const a = Number(c.age); if (a > 0 && a < 120) return a; const by = Number(c.birthYear || (c.birthday && String(c.birthday).slice(0, 4))); if (by > 1900) return new Date().getFullYear() - by; return null; }
+  // 상대 나이대에 맞춘 한국어 말투 (AI 없이 쓰는 규칙)
+  function koAge(x, age) {
+    if (!age || !x) return x;
+    if (age <= 29) return x.replace(/([가-힣])요([!?~]?)(\s*[😊💕]?)$/u, '$1욤$2$3').replace(/알겠어요|알았어요/g, '알았어욤').replace(/그래요(?=[\s.!?~]|$)/g, '그래욤').replace(/좋아요(?=[\s.!?~]|$)/g, '좋아욤').replace(/고마워요/g, '고마워용').replace(/네,\s*/g, 'ㅇㅇ ').replace(/^와,?\s*/, '헐 ').replace(/진짜요\?/g, '앗 진짜요?');
+    if (age >= 50) return x.replace(/ㅎㅎ\s*|ㅋㅋ+\s*/g, '').replace(/[😊💕✨🥰🙈😄👍🙌]/gu, '').replace(/~/g, '').trim();
+    return x;
+  }
+  function koTone(src, k) {
+    let x = String(src || '').trim();
+    const casual = (y) => y.replace(/그쪽은/g, '너는').replace(/당신은요\?/g, '너는?').replace(/당신/g, '너').replace(/그렇군요/g, '그렇구나').replace(/저는/g, '나는').replace(/제가/g, '내가').replace(/저도/g, '나도').replace(/습니다([.!?]?)/g, '어$1').replace(/입니다([.!?]?)/g, '이야$1').replace(/드릴게요/g, '줄게').replace(/할게요/g, '할게').replace(/에요(?=[\s.!?~,]|$)/g, '야').replace(/예요(?=[\s.!?~,]|$)/g, '야').replace(/하세요(?=[\s.!?~,]|$)/g, '해').replace(/([가-힣])요(?=[\s.!?~,😊💕]|$)/gu, '$1');
+    const formal = (y) => y.replace(/할게요/g, '하겠습니다').replace(/드릴게요/g, '드리겠습니다').replace(/줄게요/g, '드리겠습니다').replace(/해요(?=[.!?]|$)/g, '합니다').replace(/좋아요/g, '좋습니다').replace(/고마워요/g, '감사합니다').replace(/괜찮아요/g, '괜찮습니다').replace(/ㅎㅎ\s*/g, '').replace(/[😊💕✨🥰]/gu, '').trim();
+    if (k === 'polite') return x.replace(/당신은요\?/g, '그쪽은요?').replace(/당신/g, '그쪽');
+    if (k === 'friendly') return casual(x);
+    if (k === 'cute') { const y = casual(x).replace(/\s*[😊💕]\s*$/u, ''); return (/[!?]$/.test(y) ? y.slice(0, -1) + '~' + y.slice(-1) : y.replace(/\.$/, '') + '~') + ' 😊'; }
+    if (k === 'older') return casual(x).replace(/^/, '오빠~ ').replace(/([.!?]?)$/, '$1') ;
+    if (k === 'sweet') return casual(x) + ' 💕';
+    if (k === 'business') return formal(x);
+    return x;
+  }
   const TONE_PROMPT = {
     basic: '', polite: 'polite and respectful',
     friendly: 'casual and friendly, like close friends',
