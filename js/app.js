@@ -113,6 +113,7 @@
       document.body.classList.add('is-wide');
       $app.innerHTML = `<div class="ws">
         <aside class="ws-rail" aria-label="main"><span class="rail-logo"><img src="assets/lm-mark.png" alt="LM"></span>
+          <label class="rail-lang" title="${esc(t('lang_l'))}">🌐<select id="lang-quick" aria-label="${esc(t('lang_l'))}">${UI_LANGS.map((l) => `<option value="${l}" ${l === uiLang ? 'selected' : ''}>${esc({ ko: '한국어', zh: '中文', ja: '日本語', vi: 'Tiếng Việt', en: 'English' }[l])}</option>`).join('')}</select></label>
           ${navW.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''} title="${esc(t(lb))}" ${k === 'guide' ? 'style="margin-top:auto"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}
         </aside>
         <main class="ws-main"><div class="screen">${inner}</div></main>
@@ -143,6 +144,7 @@
       const tips = (COACH[uiLang] || COACH.en)[stageKey];
       info = `<div class="ws-card">
         <div class="row">${avatar(c)}<div class="grow" style="min-width:0"><strong class="ellipsis" style="display:block" lang="${esc(c.lang)}">${esc(c.nickname)}</strong><span class="tiny muted">${esc(appName(c.app))} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</span></div></div>
+        <div class="between" style="gap:8px"><span class="row" style="gap:6px"><span class="tiny muted">${t('star_l')}</span>${starsHtml(c, true)}</span><button type="button" class="chip sm ${c.pinned ? 'on' : ''}" data-pin="${c.id}">📌 ${c.pinned ? t('unpin') : t('pin')}</button></div>
         <div class="row wrap" style="gap:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${c.metAt ? `<span class="badge gray">${esc(t('c_days_met', { n: daysBetween(c.metAt, td) + 1 }))}</span>` : ''}</div>
         ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
       </div>
@@ -180,27 +182,36 @@
         <input class="field ws-search" id="ws-search" type="search" placeholder="🔍 ${esc(t('search_ph'))}" value="${esc(chatState.q || '')}">
         <div class="chip-row" id="ws-filters">
           <button type="button" class="chip sm ${!chatState.app && !chatState.needOnly ? 'on' : ''}" data-fapp="">${t('f_all')}</button>
-          <button type="button" class="chip sm ${chatState.needOnly ? 'on' : ''}" id="ws-need">${t('st_need')}${needN ? ' ' + needN : ''}</button>
+          <button type="button" class="chip sm ${chatState.starOnly ? 'on' : ''}" id="ws-star">★ ${t('f_star')}</button><button type="button" class="chip sm ${chatState.needOnly ? 'on' : ''}" id="ws-need">${t('st_need')}${needN ? ' ' + needN : ''}</button>
           ${apps.map((ap) => `<button type="button" class="chip sm ${chatState.app === ap ? 'on' : ''}" data-fapp="${esc(ap)}">${appBadge(ap, true)} ${cnt(ap)}</button>`).join('')}
-          <label class="sort-wrap" title="${esc(t('sort_by'))}"><span aria-hidden="true">⇅</span><select class="sel-xs" aria-label="${esc(t('sort_by'))}" id="ws-sort"><option value="recent" ${chatState.sort !== 'need' && chatState.sort !== 'name' ? 'selected' : ''}>${t('sort_recent')}</option><option value="need" ${chatState.sort === 'need' ? 'selected' : ''}>${t('st_need')}</option><option value="name" ${chatState.sort === 'name' ? 'selected' : ''}>${t('sort_name')}</option></select></label>
+          <label class="sort-wrap" title="${esc(t('sort_by'))}"><span aria-hidden="true">⇅</span><select class="sel-xs" aria-label="${esc(t('sort_by'))}" id="ws-sort"><option value="recent" ${chatState.sort !== 'need' && chatState.sort !== 'name' ? 'selected' : ''}>${t('sort_recent')}</option><option value="need" ${chatState.sort === 'need' ? 'selected' : ''}>${t('st_need')}</option><option value="star" ${chatState.sort === 'star' ? 'selected' : ''}>${t('sort_star')}</option><option value="name" ${chatState.sort === 'name' ? 'selected' : ''}>${t('sort_name')}</option></select></label>
         </div>
 
       </div>`;
   }
+  function prevText(m) {
+    if (m.dir === 'in') return m.trLang === uiLang ? (m.translation || m.text) : ((m.trs && m.trs[uiLang + '|in']) || m.text);
+    return m.lang === uiLang ? m.text : ((m.trs && m.trs[uiLang + '|out']) || m.translation || m.text);
+  }
   function wsRows(u, curId) {
     const q = (chatState.q || '').trim().toLowerCase();
     const rows = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); const last = ms[ms.length - 1]; return { c, last, st: convStatus(ms), ts: last ? last.ts : c.createdAt }; })
-      .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app) + ' ' + (r.c.note || '')).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new') && (!chatState.app || r.c.app === chatState.app))
-      .sort((a, b) => chatState.sort === 'name' ? a.c.nickname.localeCompare(b.c.nickname) : chatState.sort === 'need' ? ((b.st === 'need' || b.st === 'new') - (a.st === 'need' || a.st === 'new')) || b.ts - a.ts : b.ts - a.ts);
-    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''}" data-go="#/chat/${x.id}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><strong class="ellipsis" lang="${esc(x.lang)}" style="display:block">${esc(x.nickname)}</strong><span class="tiny muted ellipsis" style="display:block">${appBadge(x.app)} ${last ? esc(last.dir === 'in' ? (last.translation || last.text) : last.text) : ''}</span></span><span class="ws-right"><span class="tiny muted">${last ? esc(shortTs(last.ts)) : ''}</span>${st ? `<span class="st-pill st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>` : ''}</span></button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
+      .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app) + ' ' + (r.c.note || '')).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new') && (!chatState.app || r.c.app === chatState.app) && (!chatState.starOnly || (r.c.star || 0) >= 1))
+      .sort((a, b) => (!!b.c.pinned - !!a.c.pinned) || (chatState.sort === 'star' ? ((b.c.star || 0) - (a.c.star || 0)) || b.ts - a.ts : 0) || (chatState.sort === 'name' ? a.c.nickname.localeCompare(b.c.nickname) : chatState.sort === 'need' ? ((b.st === 'need' || b.st === 'new') - (a.st === 'need' || a.st === 'new')) || b.ts - a.ts : b.ts - a.ts));
+    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''} ${x.pinned ? 'pinned' : ''}" data-go="#/chat/${x.id}" data-cid="${x.id}" title="${esc(t('dbl_hint'))}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><span class="row-name"><strong class="ellipsis" lang="${esc(x.lang)}">${x.pinned ? '<span class="pin-ic" aria-hidden="true">📌</span>' : ''}${esc(x.nickname)}</strong>${x.star ? starsHtml(x) : ''}</span><span class="tiny muted ellipsis" style="display:block">${appBadge(x.app)} ${last ? esc(prevText(last)) : ''}</span></span><span class="ws-right"><span class="tiny muted">${last ? esc(shortTs(last.ts)) : ''}</span>${st ? `<span class="st-pill st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>` : ''}</span></button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
   }
+  document.addEventListener('change', (e) => { if (e.target.id === 'lang-quick') { const u = Store.me(); uiLang = e.target.value; if (u) { u.lang = uiLang; Store.save(); } render(); setTimeout(() => { try { runDigests(); } catch (x) {} }, 300); } });
   document.addEventListener('change', (e) => { if (e.target.id === 'ws-sort') { chatState.sort = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
+  document.addEventListener('dblclick', (e) => { const it = e.target.closest('.ws-item[data-cid]'); if (!it) return; if (WIDE.matches) { chatState.infoOpen = true; location.hash = '#/chat/' + it.dataset.cid; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); } else location.hash = '#/contact/' + it.dataset.cid; });
   document.addEventListener('input', (e) => { if (e.target.id === 'ws-search') { chatState.q = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
   document.addEventListener('click', (e) => {
     const resd = () => { const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); else if (/^#\/chat\/?$/.test(location.hash)) renderChatPicker(); };
     if (e.target.closest('#ws-need')) { chatState.needOnly = !chatState.needOnly; if (chatState.needOnly) chatState.app = ''; resd(); }
     const fa = e.target.closest('[data-fapp]'); if (fa) { chatState.app = fa.dataset.fapp; if (!fa.dataset.fapp) chatState.needOnly = false; resd(); }
     if (e.target.closest('#ws-info-toggle')) { chatState.infoOpen = !chatState.infoOpen; resd(); }
+    if (e.target.closest('#ws-star')) { chatState.starOnly = !chatState.starOnly; resd(); }
+    const sb = e.target.closest('[data-star]'); if (sb) { e.preventDefault(); e.stopPropagation(); const [cid, n] = sb.dataset.star.split('|'); const cc = Store.contact(cid); if (cc) { Store.updateContact(cid, { star: (cc.star || 0) === Number(n) ? Number(n) - 1 : Number(n) }); resd(); const cs = document.querySelector('.content [data-star]'); if (cs && /^#\/contact\//.test(location.hash)) render(); } }
+    const pb = e.target.closest('[data-pin]'); if (pb) { e.preventDefault(); const cc = Store.contact(pb.dataset.pin); if (cc) { Store.updateContact(cc.id, { pinned: !cc.pinned }); resd(); if (/^#\/contact\//.test(location.hash)) render(); } }
   });
 
   function topBar(title, back, right) {
@@ -678,7 +689,7 @@
     if (Engine.aiConfig().key && c) {
       try {
         const stage = STAGE_NAMES.en[STAGES[c.relation || 'friend'][c.stage || 0]];
-        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage });
+        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage, tone: toneCtx(c).tone });
         res.provider = 'ai';
       } catch (e) { ai = null; }
     }
@@ -761,7 +772,7 @@
       suggestions: replies.map((r) => r.text), nuance: res.nuance.join(' '),
     };
     let msg;
-    if (opts && opts.existing) { msg = opts.existing; Object.assign(msg, fields, { source: msg.source || fields.source, translation: msg.translation || fields.translation }); Store.save(); }
+    if (opts && opts.existing) { msg = opts.existing; const keepTr = msg.translation && msg.trLang === uiLang; Object.assign(msg, fields, { source: msg.source || fields.source, translation: keepTr ? msg.translation : fields.translation, trLang: uiLang }); Store.save(); }
     else msg = Store.addMessage(fields);
     if (opts && opts.existing) msg._learned = Store.learnFromMessage(msg);
     noteLearned(c, msg);
@@ -966,7 +977,31 @@
   Object.keys(LR_T).forEach((l) => Object.assign(T[l], LR_T[l]));
   const MEM_T = {"ko": {"mem_day": "이 날 기억", "mem_title": "날짜별 대화 기억", "mem_none": "아직 기억할 대화가 없어요. 대화를 붙여넣으면 하루 단위로 정리됩니다.", "mem_recent": "지난 대화 기억", "mem_ai": "AI 요약", "mem_basic": "기본 분석", "mem_sum": "대화 {n}개 (받은 말 {i} · 보낸 말 {o})", "mem_topics": "주제", "mem_q": "질문 {n}개", "ft_profile": "상대 정보", "ft_plan_date": "약속·날짜", "ft_like": "좋아함", "ft_dislike": "싫어함", "ft_worry": "고민·컨디션", "ft_family": "가족", "ft_pet": "반려동물", "ft_work": "일·학교", "ft_plan": "계획", "ft_other": "기타", "mem_refresh": "다시 분석"}, "zh": {"mem_day": "当天记忆", "mem_title": "按日期的对话记忆", "mem_none": "还没有可记住的对话。粘贴对话后会按天整理。", "mem_recent": "以前的对话记忆", "mem_ai": "AI 总结", "mem_basic": "基础分析", "mem_sum": "对话 {n} 条（收到 {i} · 发出 {o}）", "mem_topics": "话题", "mem_q": "提问 {n} 个", "ft_profile": "对方信息", "ft_plan_date": "约定·日期", "ft_like": "喜欢", "ft_dislike": "不喜欢", "ft_worry": "烦恼·状态", "ft_family": "家人", "ft_pet": "宠物", "ft_work": "工作·学校", "ft_plan": "计划", "ft_other": "其他", "mem_refresh": "重新分析"}, "ja": {"mem_day": "この日の記憶", "mem_title": "日付ごとの会話の記憶", "mem_none": "まだ覚えておく会話がありません。会話を貼り付けると1日ごとに整理します。", "mem_recent": "前の会話の記憶", "mem_ai": "AI要約", "mem_basic": "基本分析", "mem_sum": "会話 {n}件（届いた {i} · 送った {o}）", "mem_topics": "話題", "mem_q": "質問 {n}件", "ft_profile": "相手の情報", "ft_plan_date": "約束・日付", "ft_like": "好き", "ft_dislike": "苦手", "ft_worry": "悩み・体調", "ft_family": "家族", "ft_pet": "ペット", "ft_work": "仕事・学校", "ft_plan": "予定", "ft_other": "その他", "mem_refresh": "再分析"}, "vi": {"mem_day": "Ghi nhớ ngày này", "mem_title": "Ghi nhớ trò chuyện theo ngày", "mem_none": "Chưa có gì để ghi nhớ. Dán cuộc trò chuyện vào, ứng dụng sẽ sắp xếp theo ngày.", "mem_recent": "Ghi nhớ trò chuyện trước", "mem_ai": "AI tóm tắt", "mem_basic": "Phân tích cơ bản", "mem_sum": "{n} tin nhắn (nhận {i} · gửi {o})", "mem_topics": "Chủ đề", "mem_q": "{n} câu hỏi", "ft_profile": "Thông tin", "ft_plan_date": "Hẹn·ngày", "ft_like": "Thích", "ft_dislike": "Không thích", "ft_worry": "Lo lắng·sức khỏe", "ft_family": "Gia đình", "ft_pet": "Thú cưng", "ft_work": "Công việc·học", "ft_plan": "Kế hoạch", "ft_other": "Khác", "mem_refresh": "Phân tích lại"}, "en": {"mem_day": "Remembered from this day", "mem_title": "Chat memory by day", "mem_none": "Nothing to remember yet. Paste chats and they are organized day by day.", "mem_recent": "From past chats", "mem_ai": "AI summary", "mem_basic": "Basic analysis", "mem_sum": "{n} messages ({i} received · {o} sent)", "mem_topics": "Topics", "mem_q": "{n} questions", "ft_profile": "About them", "ft_plan_date": "Plan·date", "ft_like": "Likes", "ft_dislike": "Dislikes", "ft_worry": "Worries·health", "ft_family": "Family", "ft_pet": "Pets", "ft_work": "Work·school", "ft_plan": "Plans", "ft_other": "Other", "mem_refresh": "Re-analyze"}};
   Object.keys(MEM_T).forEach((l) => Object.assign(T[l], MEM_T[l]));
-  const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {} };
+  const TONE_T = {"ko": {"tone_l": "말투", "emoji_l": "이모티콘", "t_basic": "기본", "t_polite": "정중하게", "t_friendly": "친근하게", "t_cute": "귀엽게·애교", "t_older": "오빠·언니에게", "t_younger": "동생에게", "t_sweet": "다정하게(연인)", "t_business": "비즈니스", "e_none": "안 씀", "e_some": "조금", "e_lots": "많이", "tone_ai_hint": "말투는 AI 연결 시 정확히 반영돼요", "lang_l": "언어"}, "zh": {"tone_l": "语气", "emoji_l": "表情", "t_basic": "默认", "t_polite": "礼貌", "t_friendly": "亲切", "t_cute": "可爱·撒娇", "t_older": "对哥哥·姐姐", "t_younger": "对弟弟·妹妹", "t_sweet": "温柔(恋人)", "t_business": "商务", "e_none": "不用", "e_some": "少量", "e_lots": "多", "tone_ai_hint": "连接 AI 后语气会准确体现", "lang_l": "语言"}, "ja": {"tone_l": "口調", "emoji_l": "絵文字", "t_basic": "標準", "t_polite": "丁寧に", "t_friendly": "親しみやすく", "t_cute": "かわいく・甘えて", "t_older": "年上へ", "t_younger": "年下へ", "t_sweet": "優しく(恋人)", "t_business": "ビジネス", "e_none": "なし", "e_some": "少し", "e_lots": "たくさん", "tone_ai_hint": "口調はAI接続時に正確に反映されます", "lang_l": "言語"}, "vi": {"tone_l": "Giọng điệu", "emoji_l": "Biểu tượng cảm xúc", "t_basic": "Mặc định", "t_polite": "Lịch sự", "t_friendly": "Thân thiện", "t_cute": "Dễ thương·nũng nịu", "t_older": "Với anh·chị", "t_younger": "Với em", "t_sweet": "Ngọt ngào (người yêu)", "t_business": "Công việc", "e_none": "Không", "e_some": "Ít", "e_lots": "Nhiều", "tone_ai_hint": "Giọng điệu được áp dụng chính xác khi kết nối AI", "lang_l": "Ngôn ngữ"}, "en": {"tone_l": "Tone", "emoji_l": "Emoji", "t_basic": "Default", "t_polite": "Polite", "t_friendly": "Friendly", "t_cute": "Cute·playful", "t_older": "To an older friend", "t_younger": "To a younger friend", "t_sweet": "Sweet (dating)", "t_business": "Business", "e_none": "None", "e_some": "A few", "e_lots": "Lots", "tone_ai_hint": "Tone is applied precisely when AI is connected", "lang_l": "Language"}};
+  Object.keys(TONE_T).forEach((l) => Object.assign(T[l], TONE_T[l]));
+  const TONES = ['basic', 'polite', 'friendly', 'cute', 'older', 'younger', 'sweet', 'business'];
+  const TONE_PROMPT = {
+    basic: '', polite: 'polite and respectful',
+    friendly: 'casual and friendly, like close friends',
+    cute: 'cute, playful and affectionate (aegyo); in Chinese use soft particles like 呀/啦/嘛, in Japanese soft endings like 〜だよ/〜ね, in Korean cute endings like ~용/~당',
+    older: 'speaking to an older friend affectionately (in Korean call them 오빠/언니 naturally, in Chinese 哥哥/姐姐, in Japanese お兄ちゃん/お姉ちゃん only if natural), warm and slightly cute',
+    younger: 'speaking to a younger friend, caring and relaxed',
+    sweet: 'warm, sweet and romantic but not excessive',
+    business: 'professional, concise and courteous business tone',
+  };
+  const EMO = { cute: ['🥰', '😊', '💕', '✨', '🙈'], sweet: ['❤️', '😊', '🌙', '💕'], friendly: ['😄', '👍', '🙌', '😊'], older: ['😊', '🥺', '💕'], younger: ['😊', '👍', '🙂'], basic: ['😊', '🙂'], polite: ['🙂', '🙏'], business: [''] };
+  function toneCtx(c) { const tn = (c && c.tone) || chatState.tone || 'basic'; const em = (c && c.emoji) || chatState.emoji || 'none'; return { tone: [TONE_PROMPT[tn], em === 'lots' ? 'use several fitting emoji' : em === 'some' ? 'add one fitting emoji' : 'no emoji unless already in the text'].filter(Boolean).join('; '), toneKey: tn, emoji: em, relation: c ? c.relation : '' }; }
+  function applyEmoji(text, ctx) {
+    if (!ctx || ctx.emoji === 'none' || !text) return text;
+    if (/\p{Extended_Pictographic}/u.test(text) && ctx.emoji === 'some') return text;
+    const pool = EMO[ctx.toneKey] || EMO.basic; if (!pool[0]) return text;
+    const n = ctx.emoji === 'lots' ? 2 : 1; let add = ''; for (let i = 0; i < n; i++) add += pool[(text.length + i * 3) % pool.length];
+    return text.replace(/[\s]+$/, '') + ' ' + add;
+  }
+  const PIN_T = {"ko": {"pin": "상단 고정", "unpin": "고정 해제", "star_l": "관심도", "f_star": "관심", "sort_star": "관심도순", "dbl_hint": "이름을 두 번 누르면 상대 정보가 열려요"}, "zh": {"pin": "置顶", "unpin": "取消置顶", "star_l": "关注度", "f_star": "关注", "sort_star": "按关注度", "dbl_hint": "双击名字打开对方信息"}, "ja": {"pin": "上に固定", "unpin": "固定を解除", "star_l": "関心度", "f_star": "注目", "sort_star": "関心度順", "dbl_hint": "名前をダブルクリックで相手の情報"}, "vi": {"pin": "Ghim lên đầu", "unpin": "Bỏ ghim", "star_l": "Mức quan tâm", "f_star": "Quan tâm", "sort_star": "Theo mức quan tâm", "dbl_hint": "Nhấn đúp tên để mở thông tin"}, "en": {"pin": "Pin to top", "unpin": "Unpin", "star_l": "Interest", "f_star": "Starred", "sort_star": "Interest", "dbl_hint": "Double-click a name to open their info"}};
+  Object.keys(PIN_T).forEach((l) => Object.assign(T[l], PIN_T[l]));
+  function starsHtml(c, interactive) { const n = c.star || 0; return `<span class="stars" aria-label="${esc(t('star_l'))} ${n}/3">${[1, 2, 3].map((i) => interactive ? `<button type="button" class="star ${i <= n ? 'on' : ''}" data-star="${c.id}|${i}" title="${esc(t('star_l'))} ${i}">★</button>` : `<i class="star ${i <= n ? 'on' : ''}">★</i>`).join('')}</span>`; }
+  const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
 
   function renderChat(r) {
     const u = Store.me();
@@ -1007,6 +1042,10 @@
         <div class="tools"><div class="row" style="gap:8px"><label class="tiny muted" for="ch-dir">${t('dir_label')}</label>
           <select class="field sel-sm" id="ch-dir"><option value="">${t('dir_auto')}</option><option value="in">${esc(t('dir_in', { from: langUi(target), to: langUi(uiLang) }))}</option><option value="out">${esc(t('dir_out', { from: langUi(uiLang), to: langUi(target) }))}</option></select></div>
           <span class="badge gray" id="ch-det">${t('smart_hint')}</span></div>
+        <div class="tools tone-row"><div class="row wrap" style="gap:6px 10px">
+          <label class="tiny muted" for="ch-tone">${t('tone_l')}</label><select class="field sel-sm" id="ch-tone">${TONES.map((k) => `<option value="${k}" ${((c && c.tone) || chatState.tone) === k ? 'selected' : ''}>${esc(t('t_' + k))}</option>`).join('')}</select>
+          <label class="tiny muted" for="ch-emoji">${t('emoji_l')}</label><select class="field sel-sm" id="ch-emoji">${['none', 'some', 'lots'].map((k) => `<option value="${k}" ${((c && c.emoji) || chatState.emoji) === k ? 'selected' : ''}>${esc(t('e_' + k))}</option>`).join('')}</select>
+          ${ai ? '' : `<span class="tiny muted">${t('tone_ai_hint')}</span>`}</div></div>
         <label class="tiny muted" for="ch-input" style="font-weight:700">${esc(t('draft_of', { who: c ? appName(c.app) + ' / ' + c.nickname : t('chat_none') }))}</label>
         <textarea class="field" id="ch-input" rows="2" placeholder="${esc(t('smart_ph'))}">${esc(draft)}</textarea>
         <div class="tools">
@@ -1020,8 +1059,9 @@
         <p class="tiny muted" id="h-ocr" hidden></p>
       </div></div>`, 'chat');
     if (!WIDE.matches) { const bn = $app.querySelector('nav.bottom'); if (bn) bn.remove(); }
-    if (c && lastIn && !lastIn.analysis && !chatState.auto[lastIn.id] && ms[ms.length - 1] === lastIn) {
-      chatState.auto[lastIn.id] = true;
+    if (c && lastIn && lastIn.analysis && (lastIn.analysis.ui || 'ko') !== uiLang && !chatState.auto[lastIn.id + uiLang]) { lastIn.analysis = null; }
+    if (c && lastIn && !lastIn.analysis && !chatState.auto[lastIn.id + uiLang] && ms[ms.length - 1] === lastIn) {
+      chatState.auto[lastIn.id + uiLang] = true;
       analyzeExisting(c, lastIn).then((res) => { const mm = Store.me().messages.find((x) => x.id === lastIn.id); if (mm) { mm.analysis = slimAnalysis(res); Store.save(); } if (helperState.contactId === c.id && /^#\/(chat|home)?/.test(location.hash || '#/')) renderChat({ id: c.id }); }).catch(() => {});
     }
     bindChat(c, id, target);
@@ -1029,6 +1069,21 @@
     if (th && th.lastElementChild) requestAnimationFrame(() => { const mn = document.querySelector('.ws-main'); if (mn) mn.scrollTop = mn.scrollHeight; else { window.scrollTo(0, document.documentElement.scrollHeight); } });
   }
 
+  /* 화면 언어가 바뀌면 번역 줄도 그 언어로 다시 보여줍니다 (원문은 그대로). */
+  const trQueue = new Set(); let trTimer = null;
+  function viewTr(m, src, srcLang) {
+    if (!src) return '';
+    if (srcLang === uiLang) return src;
+    m.trs = m.trs || {};
+    const key = uiLang + '|' + (m.dir === 'in' ? 'in' : 'out');
+    if (m.trs[key]) return m.trs[key];
+    const qk = m.id + '|' + key;
+    if (!trQueue.has(qk)) {
+      trQueue.add(qk);
+      Engine.translate(src, uiLang, srcLang).then((r) => { m.trs[key] = r.text; Store.save(); clearTimeout(trTimer); trTimer = setTimeout(() => { if (/^#\/(chat|home)?/.test(location.hash || '#/')) renderChat({ id: helperState.contactId }); }, 250); }).catch(() => {}).finally(() => trQueue.delete(qk));
+    }
+    return '…';
+  }
   function bubbleHtml(c, m, isLatestIn) {
     const a = m.analysis;
     const risk = m.risk && m.risk.length;
@@ -1037,14 +1092,14 @@
       const tl = langUi(m.trLang || (c && c.lang) || '');
       return `<article class="entry mine" data-mid="${m.id}"><div class="meta"><strong>${t('me_reply')}</strong><time>${hm(m.ts)}</time>${m.sent ? statusBadge('done') : statusBadge('copied')}</div>
         <div class="bubble out"><p lang="${esc(m.trLang)}" class="b-main">${esc(m.translation || m.text)}</p>
-        ${m.translation ? `<p class="meaning" lang="${esc(m.lang)}">${esc(m.text)}</p>` : ''}
+        ${m.translation ? (() => { const v = (m.trLang === uiLang) ? '' : (m.lang === uiLang ? m.text : viewTr(m, m.translation, m.trLang)); return v ? `<p class="meaning" lang="${esc(uiLang)}">${esc(v)}</p>` : ''; })() : ''}
         <div class="b-acts">${m.translation ? `<button class="btn sm secondary" type="button" data-copy-msg="${m.id}">${icon('copy', 'sm')} ${esc(t('copy_lang', { lang: tl }))}</button>` : ''}${m.sent ? '' : `<button class="btn sm ghost" type="button" data-sent="${m.id}">✓ ${t('mark_sent')}</button>`}</div></div></article>`;
     }
     const open = chatState.open[m.id] !== undefined ? chatState.open[m.id] : (isLatestIn && !!a);
     const isNew = isLatestIn && Date.now() - m.ts < 30 * 60000 && !a;
     return `<article class="entry" data-mid="${m.id}"><div class="meta"><strong lang="${esc(c ? c.lang : '')}">${c ? esc(c.nickname) : '?'}</strong><time>${hm(m.ts)}</time>${isNew ? statusBadge('new') : ''}${risk ? `<span class="badge alert">⚠ ${m.risk.includes('money') ? t('risk_money') : t('risk_off')}</span>` : ''}</div>
       <div class="bubble in ${risk ? 'risk' : ''}"><p lang="${esc(m.lang)}" class="b-main">${esc(m.text)}</p>
-        ${m.translation ? `<p class="meaning" lang="${esc(m.trLang)}">${esc(m.translation)}</p>` : ''}
+        ${(() => { const v = m.lang === uiLang ? '' : (m.trLang === uiLang ? m.translation : viewTr(m, m.text, m.lang)); return v ? `<p class="meaning" lang="${esc(uiLang)}">${esc(v)}</p>` : ''; })()}
         ${open ? '' : `<div class="b-acts"><button class="link" type="button" data-analyze="${m.id}" style="min-height:28px;font-size:13px">💡 ${a ? t('show_sug') : t('analysis')}</button></div>`}
       </div>
       ${m.learnedNote ? `<div class="learned-line">🔍 ${t('learned_toast')}: <b>${esc(m.learnedNote)}</b></div>` : ''}
@@ -1100,6 +1155,9 @@
     input.addEventListener('input', () => { if (!dsel.value) chatState.dirOverride = null; refreshDet(); });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendBtn.click(); } });
     dsel.addEventListener('change', () => { chatState.dirOverride = dsel.value || null; refreshDet(); });
+    const tsel = document.getElementById('ch-tone'), esel = document.getElementById('ch-emoji');
+    tsel.addEventListener('change', () => { chatState.tone = tsel.value; if (c) { Store.updateContact(c.id, { tone: tsel.value }); } });
+    esel.addEventListener('change', () => { chatState.emoji = esel.value; if (c) { Store.updateContact(c.id, { emoji: esel.value }); } });
     refreshDet();
     const tg = document.getElementById('ch-target'); if (tg) tg.addEventListener('change', () => { chatState.target = tg.value; renderChat({ id }); });
     const more = document.getElementById('ch-more'); if (more) more.addEventListener('click', () => { chatState.limit += 60; renderChat({ id }); });
@@ -1116,7 +1174,7 @@
           if (msg) { msg.analysis = slimAnalysis(res); Store.save(); Object.keys(chatState.open).forEach((k) => { chatState.open[k] = false; }); chatState.open[msg.id] = true; }
         } else {
           const pr = chatState.prepared[id];
-          const r2 = pr && pr.meaning === text ? { text: pr.text } : await tr(text, target, uiLang, { tone: helperState.tone, relation: c ? c.relation : '' });
+          const tctx = toneCtx(c); const r2 = pr && pr.meaning === text ? { text: applyEmoji(pr.text, tctx) } : await tr(text, target, uiLang, tctx); if (!Engine.aiConfig().key) r2.text = applyEmoji(r2.text, tctx);
           const m = Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text, lang: uiLang, translation: r2.text, trLang: target, source: pr && pr.meaning === text ? 'reply' : 'write', replyTo: pr && pr.meaning === text ? pr.mid : undefined });
           if (pr && pr.meaning === text) { const om = Store.me().messages.find((x) => x.id === pr.mid); if (om) om.chosen = pr.text; }
           delete chatState.prepared[id];
@@ -1142,8 +1200,9 @@
     }));
     $app.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', async () => {
       const [mid, i] = b.dataset.use.split('|'); const m = Store.me().messages.find((x) => x.id === mid); const rp = m.analysis.replies[Number(i)];
-      await copyText(rp.text);
-      Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: rp.meaning || rp.text, lang: uiLang, translation: rp.text, trLang: m.analysis.target, source: 'reply', replyTo: m.id });
+      const outTxt = Engine.aiConfig().key ? rp.text : applyEmoji(rp.text, toneCtx(c));
+      await copyText(outTxt);
+      Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: rp.meaning || rp.text, lang: uiLang, translation: outTxt, trLang: m.analysis.target, source: 'reply', replyTo: m.id });
       m.chosen = rp.text; chatState.open[mid] = false; Store.save();
       toast(t('copied', { app: c ? appName(c.app) : 'messenger' }));
       renderChat({ id });
@@ -1163,7 +1222,7 @@
   }
 
   function slimAnalysis(res) {
-    return { nuance: res.nuance, facts: res.facts, situation: res.situation || '', inferences: res.inferences, when: res.when, place: res.place, replies: res.replies, target: res.target, culture: res.culture, provider: res.provider, risk: res.risk };
+    return { ui: uiLang, nuance: res.nuance, facts: res.facts, situation: res.situation || '', inferences: res.inferences, when: res.when, place: res.place, replies: res.replies, target: res.target, culture: res.culture, provider: res.provider, risk: res.risk };
   }
 
   // 이미 저장된 받은 메시지를 분석 (중복 저장 없이)
@@ -1177,7 +1236,7 @@
     const u = Store.me();
     const none = u.messages.filter((m) => !m.contactId);
     const items = agendaItems(u).filter((x) => x.kind !== 'upcoming').slice(0, 3);
-    shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button></div>`)}
+    shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><select id="lang-quick" class="lang-top" aria-label="${esc(t('lang_l'))}">${UI_LANGS.map((l) => `<option value="${l}" ${l === uiLang ? 'selected' : ''}>🌐 ${esc({ ko: '한국어', zh: '中文', ja: '日本語', vi: 'Tiếng Việt', en: 'English' }[l])}</option>`).join('')}</select><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button></div>`)}
       <div class="content stack">
         ${items.length ? `<button type="button" class="today-strip one" data-go="#/agenda"><b>${t('today')} ${items.length}</b><span class="small ellipsis">${itemText(items[0])}</span><span aria-hidden="true">›</span></button>` : ''}
         ${filtersHtml(u)}
@@ -1205,9 +1264,10 @@
       Object.keys(byDay).forEach((k) => {
         const list = byDay[k];
         const cur = D[k];
-        if (cur && cur.n === list.length) return;
-        const mem = Engine.dayMemory(list);
-        D[k] = Object.assign({}, mem, { by: 'basic', at: Date.now(), summary: '' });
+        if (cur && cur.n === list.length && (cur.ui || 'ko') === uiLang) return;
+        const view = list.map((m) => Object.assign({}, m, { translation: m.dir === 'in' ? (m.trLang === uiLang ? m.translation : ((m.trs && m.trs[uiLang + '|in']) || '')) : m.translation }));
+        const mem = Engine.dayMemory(view);
+        D[k] = Object.assign({}, mem, { by: 'basic', at: Date.now(), summary: '', ui: uiLang });
         changed = true;
         if (Engine.aiConfig().key && !aiDigestQueue.some((q) => q.cid === c.id && q.day === k)) aiDigestQueue.push({ cid: c.id, day: k });
       });
@@ -1225,7 +1285,7 @@
       if (c && list.length) {
         const r = await Engine.aiDayMemory(list, c, uiLang);
         const D = u.digests[c.id] = u.digests[c.id] || {};
-        D[job.day] = Object.assign({}, D[job.day] || {}, { summary: r.summary, facts: r.facts.length ? r.facts : (D[job.day] || {}).facts || [], by: 'ai', at: Date.now(), n: list.length });
+        D[job.day] = Object.assign({}, D[job.day] || {}, { ui: uiLang, summary: r.summary, facts: r.facts.length ? r.facts : (D[job.day] || {}).facts || [], by: 'ai', at: Date.now(), n: list.length });
         Store.save();
       }
     } catch (e) { /* AI 실패 시 기본 분석 유지 */ }
@@ -1286,6 +1346,7 @@
         <div class="card soft stack">
           <div class="row">${avatar(c, 'lg')}<div class="grow"><h1 lang="${esc(c.lang)}">${esc(c.nickname)}</h1><p class="small muted">${esc(appName(c.app))} / ${esc(c.nickname)} · ${esc(langUi(c.lang))}${c.country ? ' · ' + esc(countryName(c.country)) : ''}</p>
             <div class="row wrap" style="gap:6px;margin-top:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${daysMet ? `<span class="badge gray">${esc(t('c_days_met', { n: daysMet }))}</span>` : ''}</div></div></div>
+          <div class="between" style="gap:8px"><span class="row" style="gap:6px"><span class="small muted">${t('star_l')}</span>${starsHtml(c, true)}</span><button type="button" class="chip sm ${c.pinned ? 'on' : ''}" data-pin="${c.id}">📌 ${c.pinned ? t('unpin') : t('pin')}</button></div>
           <div class="two"><button class="btn" type="button" data-go="#/chat/${c.id}">${t('c_import')}</button><button class="btn secondary" type="button" data-go="#/coach/${c.id}">${t('coach_link')}</button></div>
         </div>
         <div class="card stack-sm">
@@ -1832,7 +1893,7 @@
         </div>
         <p class="tiny muted center">${esc(t('brand'))} · ${esc(t('tagline'))} · <a href="#/admin" style="text-decoration:underline">${t('admin')}</a></p>
       </div>`, 'settings');
-    document.getElementById('st-lang').addEventListener('change', (e) => { u.lang = e.target.value; uiLang = u.lang; Store.save(); renderSettings(); });
+    document.getElementById('st-lang').addEventListener('change', (e) => { u.lang = e.target.value; uiLang = u.lang; Store.save(); renderSettings(); setTimeout(() => { try { runDigests(); } catch (x) {} }, 300); });
     const reg = document.getElementById('st-reg');
     if (reg) reg.addEventListener('click', () => { const n = document.getElementById('st-nick').value.trim(); if (!n) { toast(t('ob_need_nick')); return; } Store.upgradeToMember(n); toast(t('set_saved')); renderSettings(); });
     document.getElementById('st-me').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); u.me = Object.assign({}, u.me, { birth: f.get('birth'), birthTime: f.get('birthTime'), lunar: !!f.get('lunar'), blood: f.get('blood'), mbti: f.get('mbti'), gender: f.get('gender') }); Store.save(); toast(t('set_saved')); });

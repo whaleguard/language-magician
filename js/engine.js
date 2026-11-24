@@ -535,6 +535,7 @@
       'User UI language: ' + LANGS[p.uiLang].llm,
       'Contact nickname: ' + p.contact.nickname + ', contact language: ' + LANGS[p.contact.lang].llm + ', app: ' + p.contact.app,
       'Relationship goal: ' + (p.contact.relation || 'friend') + ', stage: ' + (p.stageName || ''),
+      'Write the suggested replies in this tone: ' + (p.tone || 'natural, matching the relationship'),
       'Known profile (entered by user): ' + JSON.stringify({ age: p.contact.age, gender: p.contact.gender, blood: p.contact.blood, mbti: p.contact.mbti, country: p.contact.country }),
       'Recent history:\n' + (hist || '(none)'),
       'NEW MESSAGE (' + (p.dir === 'in' ? 'from THEM' : 'ME drafting') + '):\n' + p.text,

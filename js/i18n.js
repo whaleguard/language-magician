@@ -442,7 +442,7 @@
       question: [['dir_answer', '음, 저는 {answer}. 당신은요?'], ['dir_ask', '좋은 질문이에요! 혹시 왜 궁금했어요?'], ['dir_light', '확인해 보고 바로 알려줄게요!']],
       positive: [['dir_light', '와, 정말 좋네요! 😊'], ['dir_continue', '좋겠다! 더 자세히 얘기해 줘요.'], ['dir_affection', '당신이 기뻐하니까 나도 기뻐요.']],
       general: [['dir_continue', '그렇군요! 그 얘기 더 듣고 싶어요.'], ['dir_light', 'ㅎㅎ 좋아요 😊'], ['dir_ask', '요즘은 어떻게 지내요?']],
-      answer_ph: '(내 대답)',
+      answer_ph: '…',
     },
     zh: {
       invite: [['dir_accept', '好啊！{when}{place}见 😊'], ['dir_resched', '谢谢你约我。那个时间有点不方便，换一天可以吗？'], ['dir_decline', '真的谢谢你。这次去不了，下次一定一起！']],
@@ -454,7 +454,7 @@
       question: [['dir_answer', '嗯，我是{answer}。你呢？'], ['dir_ask', '好问题！怎么突然想问这个？'], ['dir_light', '我确认一下马上告诉你！']],
       positive: [['dir_light', '哇，太好了！😊'], ['dir_continue', '真好！再多跟我说说。'], ['dir_affection', '你开心我也开心。']],
       general: [['dir_continue', '原来是这样！想多听你说说。'], ['dir_light', '哈哈，好呀 😊'], ['dir_ask', '你最近过得怎么样？']],
-      answer_ph: '（我的回答）',
+      answer_ph: '…',
     },
     ja: {
       invite: [['dir_accept', 'いいね！{when}{place}で会おう 😊'], ['dir_resched', '誘ってくれてありがとう。その時間はちょっと難しいんだけど、別の日はどう？'], ['dir_decline', '本当にありがとう。今回は行けないけど、次はぜひ一緒に！']],
@@ -466,7 +466,7 @@
       question: [['dir_answer', 'うーん、私は{answer}。あなたは？'], ['dir_ask', 'いい質問！どうして気になったの？'], ['dir_light', '確認してすぐ教えるね！']],
       positive: [['dir_light', 'わあ、よかったね！😊'], ['dir_continue', 'いいなあ！もっと詳しく聞かせて。'], ['dir_affection', 'あなたが嬉しいと私も嬉しい。']],
       general: [['dir_continue', 'そうなんだ！もっと聞きたいな。'], ['dir_light', 'ふふ、いいね 😊'], ['dir_ask', '最近はどう過ごしてる？']],
-      answer_ph: '（自分の答え）',
+      answer_ph: '…',
     },
     vi: {
       invite: [['dir_accept', 'Được đó! Hẹn gặp {when}{place} nhé 😊'], ['dir_resched', 'Cảm ơn bạn đã rủ. Lúc đó mình hơi bận, ngày khác được không?'], ['dir_decline', 'Cảm ơn bạn nhiều. Lần này mình không đi được, lần sau nhất định đi cùng nhé!']],
@@ -478,7 +478,7 @@
       question: [['dir_answer', 'Ừm, mình thì {answer}. Còn bạn?'], ['dir_ask', 'Câu hỏi hay đó! Sao bạn lại tò mò vậy?'], ['dir_light', 'Để mình kiểm tra rồi báo bạn ngay!']],
       positive: [['dir_light', 'Wow, tuyệt quá! 😊'], ['dir_continue', 'Thích ghê! Kể thêm cho mình nghe đi.'], ['dir_affection', 'Bạn vui thì mình cũng vui.']],
       general: [['dir_continue', 'Ra vậy! Mình muốn nghe thêm.'], ['dir_light', 'Hihi được đó 😊'], ['dir_ask', 'Dạo này bạn thế nào?']],
-      answer_ph: '(câu trả lời của tôi)',
+      answer_ph: '…',
     },
     en: {
       invite: [['dir_accept', 'Sounds great! See you {when}{place} 😊'], ['dir_resched', 'Thanks for asking! That time is a bit hard for me. How about another day?'], ['dir_decline', 'Thank you so much. I can\'t make it this time, but let\'s definitely do it next time!']],
@@ -490,7 +490,7 @@
       question: [['dir_answer', 'Hmm, for me {answer}. What about you?'], ['dir_ask', 'Good question! What made you curious?'], ['dir_light', 'Let me check and get back to you!']],
       positive: [['dir_light', 'Wow, that\'s great! 😊'], ['dir_continue', 'Nice! Tell me more.'], ['dir_affection', 'I\'m happy because you\'re happy.']],
       general: [['dir_continue', 'I see! I\'d love to hear more.'], ['dir_light', 'Haha, nice 😊'], ['dir_ask', 'How have you been lately?']],
-      answer_ph: '(my answer)',
+      answer_ph: '…',
     },
   };
 

@@ -130,7 +130,8 @@ footer .brand { display:inline-flex; margin-bottom:8px }
 @media(max-width:760px) {
   .wrap { width:calc(100% - 32px) }
   .site-head nav { display:none }
-  .lang { display:none }
+  .lang { padding:6px 4px; font-size:13px; max-width:96px }
+  .head-actions .cta { padding:8px 12px; min-height:40px; font-size:14px }
   .hero { padding:44px 0 36px }
   .band { padding:44px 0 }
   .split,.grid,.plans { grid-template-columns:minmax(0,1fr); gap:10px }
@@ -148,7 +149,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
       <a href="#how">사용 방법</a><a href="#features">기능</a><a href="#plans">요금제</a><a href="#faq">FAQ</a>
     </nav>
     <div class="head-actions">
-      <select class="lang" id="lang" aria-label="앱 표시 언어">
+      <select class="lang" id="lang" aria-label="앱 표시 언어"><!-- 🌐 -->
         <option value="ko">한국어</option><option value="zh" lang="zh-Hans">简体中文</option><option value="ja" lang="ja">日本語</option><option value="vi" lang="vi">Tiếng Việt</option><option value="en" lang="en">English</option>
       </select>
       <a class="cta" href="app.html" data-app>바로 써보기</a>
@@ -331,14 +332,30 @@ footer .brand { display:inline-flex; margin-bottom:8px }
     <p>© 2026 주식회사 고래등</p>
   </div>
 </footer>
+<script src="js/landing-i18n.js"></script>
 <script>
-  // 선택한 표시 언어로 앱을 엽니다.
+  // 표시 언어 전환 (한국어·中文·日本語·Tiếng Việt·English) + 선택한 언어로 앱 열기
   (function () {
-    var sel = document.getElementById('lang');
+    var D = window.LANDING_I18N, sel = document.getElementById('lang');
+    var nodes = [], attrs = [];
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) { var n = walker.currentNode, k = n.nodeValue.trim(), i = D.ko_t.indexOf(k); if (i >= 0 && !n.parentNode.closest('option')) nodes.push([n, i, n.nodeValue]); }
+    document.querySelectorAll('[alt],[aria-label],[title]').forEach(function (el) { ['alt', 'aria-label', 'title'].forEach(function (a) { var v = el.getAttribute(a); var i = v ? D.ko_a.indexOf(v) : -1; if (i >= 0) attrs.push([el, a, i]); }); });
+    var titles = { ko: document.title, zh: '语言魔术师 · 用自己的语言写，用对方的语言回复', ja: '言葉の魔法使い · 自分の言葉で書いて、相手の言葉で返信', vi: 'Phù thủy ngôn ngữ · Viết bằng tiếng của bạn, trả lời bằng tiếng của họ', en: 'Language Magician · Write in your words, reply in their language' };
+    function apply(l) {
+      nodes.forEach(function (x) { var t = l === 'ko' ? D.ko_t[x[1]] : D[l][x[1]]; x[0].nodeValue = x[2].replace(D.ko_t[x[1]], t); });
+      attrs.forEach(function (x) { x[0].setAttribute(x[1], l === 'ko' ? D.ko_a[x[2]] : D.a[l][x[2]]); });
+      document.documentElement.lang = l === 'zh' ? 'zh-Hans' : l;
+      document.title = titles[l] || titles.ko;
+      document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + l; });
+      try { localStorage.setItem('lm_land_lang', l); } catch (e) {}
+    }
+    var saved = null; try { saved = localStorage.getItem('lm_land_lang'); } catch (e) {}
+    var q = (location.search.match(/[?&]lang=(ko|zh|ja|vi|en)/) || [])[1];
     var nav = (navigator.language || 'ko').slice(0, 2);
-    if (['ko', 'zh', 'ja', 'vi', 'en'].indexOf(nav) >= 0) sel.value = nav;
-    function upd() { document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + sel.value; }); }
-    sel.addEventListener('change', upd); upd();
+    var l = q || saved || (['ko', 'zh', 'ja', 'vi', 'en'].indexOf(nav) >= 0 ? nav : 'en');
+    sel.value = l; apply(l);
+    sel.addEventListener('change', function () { apply(sel.value); });
     // 영상이 준비돼 있으면 이미지 자리를 영상으로 바꿉니다.
     function swapVideo(imgSel, src) {
       var img = document.querySelector(imgSel); if (!img || !window.fetch) return;
