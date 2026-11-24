@@ -754,6 +754,7 @@
   }
 
   /* ---------- 받은 말 분석 ---------- */
+  function myL(c) { return (c && c.myLang) || uiLang; }
   function pickReplySet(intents, c, text) {
     if (text && Engine.isJunk(text)) return 'unclear';
     const biz = c && (c.relation === 'business' || c.tone === 'business');
@@ -777,6 +778,7 @@
   }
 
   async function analyzeIncoming(c, text, opts) {
+    const ML = myL(c); const RL = REPLIES[ML] ? ML : uiLang;
     const u = Store.me();
     const from = Engine.detect(text);
     const history = c ? Store.messagesOf(c.id).filter((x) => !(opts && opts.existing) || x.ts < opts.existing.ts) : [];
@@ -789,7 +791,7 @@
         res.provider = 'ai';
       } catch (e) { ai = null; }
     }
-    const trn = ai && ai.translation ? { text: ai.translation } : await tr(text, uiLang, from);
+    const trn = ai && ai.translation ? { text: ai.translation } : await tr(text, ML, from);
     res.translation = trn.text;
     const both = text + '\n' + res.translation;
     res.intents = Engine.intents(text);
@@ -847,17 +849,17 @@
       replies = ai.replies.slice(0, 3).map((r) => ({ label: r.label, text: r.text, meaning: r.meaning, src: r.meaning }));
     } else {
       const set = pickReplySet(res.intents, c, text);
-      const tpl = REPLIES[uiLang][set] || REPLIES[uiLang].general;
+      const tpl = REPLIES[RL][set] || REPLIES[RL].general;
       const wb = res.when ? fmtWhenUi(res.when) : '';
-      const byTxt = !wb ? '' : ({ ko: wb + '까지 ', zh: wb + '之前', ja: wb + 'までに', vi: 'trước ' + wb + ' ', en: 'by ' + wb })[uiLang] || '';
+      const byTxt = !wb ? '' : ({ ko: wb + '까지 ', zh: wb + '之前', ja: wb + 'までに', vi: 'trước ' + wb + ' ', en: 'by ' + wb })[RL] || '';
       const whenTxt = res.when ? fmtWhenUi(res.when) + ' ' : '';
-      const placeTxt = res.place ? res.place + (uiLang === 'ko' ? '에서' : uiLang === 'en' ? ' at ' : ' ') : '';
+      const placeTxt = res.place ? res.place + (RL === 'ko' ? '에서' : RL === 'en' ? ' at ' : ' ') : '';
       const built = tpl.map(([lab, s]) => {
-        let x = s.replace('{when}', whenTxt).replace('{place}', uiLang === 'en' ? (res.place ? 'at ' + res.place : '') : placeTxt).replace('{answer}', REPLIES[uiLang].answer_ph).replace('{by}', byTxt);
+        let x = s.replace('{when}', whenTxt).replace('{place}', RL === 'en' ? (res.place ? 'at ' + res.place : '') : placeTxt).replace('{answer}', REPLIES[RL].answer_ph).replace('{by}', byTxt);
         x = x.replace(/\s{2,}/g, ' ').replace(/\s+([!?.,])/g, '$1');
         return { label: t(lab), src: x };
       });
-      const outs = await Promise.all(built.map((b) => tr(b.src, target, uiLang, { relation: c ? c.relation : '' }).catch(() => ({ text: '' }))));
+      const outs = await Promise.all(built.map((b) => tr(b.src, target, RL, { relation: c ? c.relation : '' }).catch(() => ({ text: '' }))));
       replies = built.map((b, i) => ({ label: b.label, src: b.src, text: outs[i].text, meaning: b.src }));
     }
     res.replies = replies;
@@ -867,7 +869,7 @@
     res.avoid = ai && ai.avoid ? ai.avoid : null;
     // 저장(관리자 모니터링 대상)
     const fields = {
-      contactId: c ? c.id : null, dir: 'in', text, lang: from, translation: res.translation, trLang: uiLang,
+      contactId: c ? c.id : null, dir: 'in', text, lang: from, translation: res.translation, trLang: ML,
       source: helperState.source || 'paste', intents: res.intents, risk: res.risk, provider: res.provider,
       suggestions: replies.map((r) => r.text), nuance: res.nuance.join(' '),
     };
@@ -1107,6 +1109,14 @@
   Object.keys(JUNK_T).forEach((l) => Object.assign(T[l], JUNK_T[l]));
   const POP_T = { ko: { pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
   Object.keys(POP_T).forEach((l) => Object.assign(T[l], POP_T[l]));
+  const MODE_T = {
+    ko: { mode_in: '받은 말 넣기', mode_out: '보낼 말 쓰기', lbl_in: '📥 {who} → 나 · 받은 말을 붙여넣으세요 ({lang})', lbl_out: '📤 나 → {who} · 보낼 말을 {my}로 쓰세요 ({lang}로 번역)', lbl_out_same: '📤 나 → {who} · 보낼 말을 쓰세요 (같은 언어라 번역 없이 기록·정리)', lbl_auto: '{who} · 받은 말을 붙여넣거나, 보낼 말을 쓰세요 (언어로 자동 구분)', ph_in: '상대가 보낸 {lang} 메시지를 붙여넣기 · 스크린샷은 Ctrl+V', ph_out: '보낼 말을 {my}로 쓰세요', lp_title: '대화 언어 바꾸기', lp_their: '상대 언어', lp_my: '내 언어', lp_saved: '대화 언어: {a} ↔ {b}' },
+    zh: { mode_in: '添加收到的话', mode_out: '写要发的话', lbl_in: '📥 粘贴{who}发来的话（{lang}）', lbl_out: '📤 用{my}写给{who}的话 → 翻译成{lang}', lbl_out_same: '📤 写给{who}的话（同一语言，不翻译只记录）', lbl_auto: '{who} · 粘贴收到的话或写要发的话（按语言自动区分）', ph_in: '粘贴对方发来的{lang}消息 · 截图按 Ctrl+V', ph_out: '用{my}写要发的话', lp_title: '更改对话语言', lp_their: '对方语言', lp_my: '我的语言', lp_saved: '对话语言：{a} ↔ {b}' },
+    ja: { mode_in: '届いた言葉を入れる', mode_out: '送る言葉を書く', lbl_in: '📥 {who}から届いた言葉を貼り付け（{lang}）', lbl_out: '📤 {who}に送る言葉を{my}で書く → {lang}に翻訳', lbl_out_same: '📤 {who}に送る言葉を書く（同じ言語なので翻訳せず記録）', lbl_auto: '{who} · 届いた言葉を貼るか、送る言葉を書く（言語で自動判別）', ph_in: '相手の{lang}メッセージを貼り付け · スクショは Ctrl+V', ph_out: '送る言葉を{my}で書いてください', lp_title: '会話の言語を変更', lp_their: '相手の言語', lp_my: '自分の言語', lp_saved: '会話の言語：{a} ↔ {b}' },
+    vi: { mode_in: 'Thêm tin nhận được', mode_out: 'Viết tin sẽ gửi', lbl_in: '📥 Dán tin {who} gửi ({lang})', lbl_out: '📤 Viết tin gửi {who} bằng {my} → dịch sang {lang}', lbl_out_same: '📤 Viết tin gửi {who} (cùng ngôn ngữ, chỉ ghi lại)', lbl_auto: '{who} · Dán tin nhận được hoặc viết tin sẽ gửi (tự nhận theo ngôn ngữ)', ph_in: 'Dán tin {lang} họ gửi · ảnh chụp bấm Ctrl+V', ph_out: 'Viết tin bằng {my}', lp_title: 'Đổi ngôn ngữ trò chuyện', lp_their: 'Ngôn ngữ của họ', lp_my: 'Ngôn ngữ của tôi', lp_saved: 'Ngôn ngữ: {a} ↔ {b}' },
+    en: { mode_in: 'Add received', mode_out: 'Write to send', lbl_in: '📥 Paste what {who} sent ({lang})', lbl_out: '📤 Write to {who} in {my} → translated to {lang}', lbl_out_same: '📤 Write to {who} (same language — saved without translation)', lbl_auto: '{who} · Paste a received message or write one to send (auto by language)', ph_in: 'Paste their {lang} message · Ctrl+V for screenshots', ph_out: 'Write your message in {my}', lp_title: 'Change chat languages', lp_their: 'Their language', lp_my: 'My language', lp_saved: 'Chat languages: {a} ↔ {b}' },
+  };
+  Object.keys(MODE_T).forEach((l) => Object.assign(T[l], MODE_T[l]));
   Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   [['ko', '열기', '접기'],['zh', '展开', '收起'],['ja', '開く', '閉じる'],['vi', 'Mở', 'Thu gọn'],['en', 'Open', 'Close']].forEach(([l, a, b]) => { T[l].open_l = a; T[l].close_l = b; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
@@ -1133,7 +1143,7 @@
     let lastDay = '';
     const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; const dg = c ? digestsOf(c.id)[Engine.ymd(d)] : null; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>` + (dg && ((dg.facts && dg.facts.length) || dg.summary) ? `<details class="day-mem"><summary>📌 ${t('mem_day')} ${dg.facts ? dg.facts.length : ''} <span class="muted">· ${dg.by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></summary><p class="small">${esc(digestLine(dg))}</p><div class="facts">${(dg.facts || []).map(factChip).join('')}</div></details>` : ''); } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
-        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
+        ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block"><button type="button" class="lang-pair-btn" id="ch-lang" title="${esc(t('lp_title'))}">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(myL(c)) }))} ▾</button> · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
         <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c && POP ? `<button class="icon-btn" type="button" id="pop-main" title="${esc(t('pop_main'))}" aria-label="${esc(t('pop_main'))}">⤢</button>` : ''}${c && !POP && WIDE.matches ? `<button class="icon-btn" type="button" data-pop="${c.id}" title="${esc(t('pop_open'))}" aria-label="${esc(t('pop_open'))}">↗</button>` : ''}${c && !POP ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
       <div class="content chat-scroll" style="padding-bottom:12px">
         ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
@@ -1147,14 +1157,19 @@
         </div>
       </div>
       <div class="dock"><div class="composer" id="composer">
-        <div class="tools"><div class="row" style="gap:8px"><label class="tiny muted" for="ch-dir">${t('dir_label')}</label>
-          <select class="field sel-sm" id="ch-dir"><option value="">${t('dir_auto')}</option><option value="in">${esc(t('dir_in', { from: langUi(target), to: langUi(uiLang) }))}</option><option value="out">${esc(t('dir_out', { from: langUi(uiLang), to: langUi(target) }))}</option></select></div>
-          <span class="badge gray" id="ch-det">${t('smart_hint')}</span></div>
+        ${c ? `<div class="lp-pop" id="lp-pop" hidden><label class="stack-xs"><span class="tiny muted">${t('lp_their')}</span><select class="field sel-sm" id="lp-their">${Object.keys(Engine.LANGS).map((l) => `<option value="${l}" ${l === c.lang ? 'selected' : ''}>${esc(langName(l))}</option>`).join('')}</select></label><span class="lp-arrow">↔</span><label class="stack-xs"><span class="tiny muted">${t('lp_my')}</span><select class="field sel-sm" id="lp-my">${Object.keys(Engine.LANGS).map((l) => `<option value="${l}" ${l === myL(c) ? 'selected' : ''}>${esc(langName(l))}</option>`).join('')}</select></label><button class="btn sm" type="button" id="lp-save">${t('save')}</button></div>` : ''}
+        <div class="mode-seg" role="radiogroup" aria-label="${esc(t('dir_label'))}">
+          <button type="button" class="mode-btn mode-in" data-mode="in" role="radio"><span>📥 <b>${t('mode_in')}</b></span><small>${esc(langUi(target))} → ${esc(langUi(myL(c)))}</small></button>
+          <button type="button" class="mode-btn mode-out" data-mode="out" role="radio"><span>📤 <b>${t('mode_out')}</b></span><small>${esc(langUi(myL(c)))} → ${esc(langUi(target))}</small></button>
+          <button type="button" class="mode-btn mode-auto" data-mode="" role="radio">${t('dir_auto')}</button>
+          <select id="ch-dir" hidden><option value=""></option><option value="in"></option><option value="out"></option></select>
+        </div>
+        <span class="badge gray" id="ch-det" hidden>${t('smart_hint')}</span>
         <div class="tools tone-row"><div class="row wrap" style="gap:6px 10px">
           <label class="tiny muted" for="ch-tone">${t('tone_l')}</label><select class="field sel-sm" id="ch-tone">${TONES.map((k) => `<option value="${k}" ${((c && c.tone) || chatState.tone) === k ? 'selected' : ''}>${esc(t('t_' + k))}</option>`).join('')}</select>
           <label class="tiny muted" for="ch-emoji">${t('emoji_l')}</label><select class="field sel-sm" id="ch-emoji">${['none', 'some', 'lots'].map((k) => `<option value="${k}" ${((c && c.emoji) || chatState.emoji) === k ? 'selected' : ''}>${esc(t('e_' + k))}</option>`).join('')}</select>
           ${ai ? '' : `<span class="tiny muted">${t('tone_ai_hint')}</span>`}</div></div>
-        <label class="tiny muted" for="ch-input" style="font-weight:700">${esc(t('draft_of', { who: c ? appName(c.app) + ' / ' + c.nickname : t('chat_none') }))}</label>
+        <label class="tiny" for="ch-input" id="ch-input-l" style="font-weight:700"></label>
         <textarea class="field" id="ch-input" rows="2" placeholder="${esc(t('smart_ph'))}">${esc(draft)}</textarea>
         <div class="tools">
           <div class="row wrap" style="gap:2px 14px">
@@ -1234,16 +1249,19 @@
       </details>
       <div class="sug-h"><h2>${t('suggest_title')}</h2><button class="link" type="button" data-analyze="${m.id}" style="min-height:24px;font-size:12px">▲</button></div>
       <div class="sug-grid">${(a.replies || []).slice(0, 3).map((rp, i) => `<div class="sug-card ${m.chosen === rp.text ? 'on' : ''}">
-        <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span><small lang="${esc(a.target)}">${esc(rp.text)}</small></button>
+        <button type="button" class="sug-pick" data-edit="${m.id}|${i}"><strong>${esc(rp.label)}</strong><span>${esc(rp.meaning || '')}</span>${rp.text && rp.text !== rp.meaning ? `<small lang="${esc(a.target)}">${esc(rp.text)}</small>` : ''}</button>
         <button type="button" class="sug-copy" data-use="${m.id}|${i}" title="${esc(t('use_reply'))}">${icon('copy', 'sm')} ${t('use_reply')}</button></div>`).join('')}</div>
       ${m.risk && m.risk.length ? `<button class="btn danger-btn sm" type="button" data-report="${m.id}">${t('c_report')}</button>` : ''}
     </div>`;
   }
 
-  function detectDir(text, override) {
+  function detectDir(text, override, c) {
     if (override) return override;
     if (!text.trim()) return null;
-    return Engine.detect(text) === uiLang ? 'out' : 'in';
+    const my = myL(c), their = c ? c.lang : null, d = Engine.detect(text);
+    if (their && their === my) return 'out';
+    if (their && d === their) return 'in';
+    return d === my ? 'out' : 'in';
   }
 
   function bindChat(c, id, target) {
@@ -1253,9 +1271,16 @@
     const sendBtn = document.getElementById('ch-send');
     chatState.dirOverride = null;
     const refreshDet = () => {
-      const d = detectDir(input.value, chatState.dirOverride);
+      const d = detectDir(input.value, chatState.dirOverride, c);
       chatState.draft[id] = input.value;
-      sendBtn.textContent = d === 'in' ? t('btn_in') : t('btn_out', { lang: langUi(target) });
+      sendBtn.textContent = d === 'in' ? t('btn_in') : (c && c.lang === myL(c) ? t('copy_lang', { lang: langUi(target) }) : t('btn_out', { lang: langUi(target) }));
+      const who = c ? c.nickname : t('chat_none'); const lab = document.getElementById('ch-input-l'); const comp = document.getElementById('composer');
+      const ov = chatState.dirOverride || '';
+      document.querySelectorAll('.mode-btn').forEach((b) => { const on = b.dataset.mode === ov; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); b.classList.toggle('detected', !ov && !!d && b.dataset.mode === d); });
+      const shown = d || (c && c.lang === myL(c) ? 'out' : '');
+      if (comp) { comp.classList.toggle('is-in', shown === 'in'); comp.classList.toggle('is-out', shown === 'out'); }
+      if (lab) lab.textContent = shown === 'in' ? t('lbl_in', { who, lang: langUi(target) }) : shown === 'out' ? t(c && c.lang === myL(c) ? 'lbl_out_same' : 'lbl_out', { who, my: langUi(myL(c)), lang: langUi(target) }) : t('lbl_auto', { who });
+      input.placeholder = shown === 'in' ? t('ph_in', { lang: langUi(target) }) : shown === 'out' ? t('ph_out', { my: langUi(myL(c)) }) : t('smart_ph');
       if (!d) { det.textContent = t('smart_hint'); det.className = 'badge gray'; return; }
       det.textContent = (d === 'in' ? '⬅ ' + t('det_in') + ' · ' + langName(Engine.detect(input.value)) : '➡ ' + t('det_out') + ' → ' + langName(target));
       det.className = 'badge ' + (d === 'in' ? 'lilac' : '');
@@ -1263,6 +1288,12 @@
     input.addEventListener('input', () => { if (!dsel.value) chatState.dirOverride = null; refreshDet(); });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendBtn.click(); } });
     dsel.addEventListener('change', () => { chatState.dirOverride = dsel.value || null; refreshDet(); });
+    document.querySelectorAll('.mode-btn').forEach((b) => b.addEventListener('click', () => { dsel.value = b.dataset.mode; chatState.dirOverride = b.dataset.mode || null; refreshDet(); input.focus(); }));
+    const lpb = document.getElementById('ch-lang'), lpp = document.getElementById('lp-pop');
+    if (lpb && lpp) {
+      lpb.addEventListener('click', () => { lpp.hidden = !lpp.hidden; });
+      document.getElementById('lp-save').addEventListener('click', () => { const th = document.getElementById('lp-their').value, my = document.getElementById('lp-my').value; Store.updateContact(c.id, { lang: th, myLang: my === uiLang ? '' : my }); toast(t('lp_saved', { a: langUi(th), b: langUi(my) })); renderChat({ id }); });
+    }
     const tsel = document.getElementById('ch-tone'), esel = document.getElementById('ch-emoji');
     tsel.addEventListener('change', () => { chatState.tone = tsel.value; if (c) { Store.updateContact(c.id, { tone: tsel.value }); } });
     esel.addEventListener('change', () => { chatState.emoji = esel.value; if (c) { Store.updateContact(c.id, { emoji: esel.value }); } });
@@ -1280,7 +1311,7 @@
     document.getElementById('ch-send').addEventListener('click', async (ev) => {
       const text = input.value.trim(); if (!text) { input.focus(); return; }
       if (Engine.isJunk(text)) { toast(t('junk_input')); input.focus(); return; }
-      const d = detectDir(text, chatState.dirOverride);
+      const d = detectDir(text, chatState.dirOverride, c);
       const btn = ev.currentTarget; spinBtn(btn, true, '');
       try {
         const exp = parseChatExport(text, c);
@@ -1291,8 +1322,8 @@
           if (msg) { msg.analysis = slimAnalysis(res); Store.save(); Object.keys(chatState.open).forEach((k) => { chatState.open[k] = false; }); chatState.open[msg.id] = true; }
         } else {
           const pr = chatState.prepared[id];
-          const tctx = toneCtx(c); const r2 = pr && pr.meaning === text ? { text: applyEmoji(pr.text, tctx) } : await tr(text, target, uiLang, tctx); if (!Engine.aiConfig().key) r2.text = applyEmoji(r2.text, tctx);
-          const m = Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text, lang: uiLang, translation: r2.text, trLang: target, source: pr && pr.meaning === text ? 'reply' : 'write', replyTo: pr && pr.meaning === text ? pr.mid : undefined });
+          const tctx = toneCtx(c); const r2 = pr && pr.meaning === text ? { text: applyEmoji(pr.text, tctx) } : await tr(text, target, myL(c), tctx); if (!Engine.aiConfig().key) r2.text = applyEmoji(r2.text, tctx);
+          const m = Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text, lang: myL(c), translation: r2.text, trLang: target, source: pr && pr.meaning === text ? 'reply' : 'write', replyTo: pr && pr.meaning === text ? pr.mid : undefined });
           if (pr && pr.meaning === text) { const om = Store.me().messages.find((x) => x.id === pr.mid); if (om) om.chosen = pr.text; }
           delete chatState.prepared[id];
           await copyText(r2.text);
@@ -1319,7 +1350,7 @@
       const [mid, i] = b.dataset.use.split('|'); const m = Store.me().messages.find((x) => x.id === mid); const rp = m.analysis.replies[Number(i)];
       const outTxt = Engine.aiConfig().key ? rp.text : applyEmoji(rp.text, toneCtx(c));
       await copyText(outTxt);
-      Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: rp.meaning || rp.text, lang: uiLang, translation: outTxt, trLang: m.analysis.target, source: 'reply', replyTo: m.id });
+      Store.addMessage({ contactId: c ? c.id : null, dir: 'out', text: rp.meaning || rp.text, lang: myL(c), translation: outTxt, trLang: m.analysis.target, source: 'reply', replyTo: m.id });
       m.chosen = rp.text; chatState.open[mid] = false; Store.save();
       toast(t('copied', { app: c ? appName(c.app) : 'messenger' }));
       renderChat({ id });
