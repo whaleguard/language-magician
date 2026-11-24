@@ -181,11 +181,38 @@
   const POP = new URLSearchParams(location.search).has('pop');
   if (POP) document.documentElement.classList.add('pop');
   let popN = 0;
+  const POPS = {};
+  const livePops = () => Object.entries(POPS).filter(([, w]) => w && !w.closed);
+  // 열린 새 창들을 화면 오른쪽부터 나란히 정리
+  function tilePops() {
+    const ws = livePops(); if (!ws.length) return;
+    const W = screen.availWidth, H = screen.availHeight, L0 = screen.availLeft || 0, T0 = screen.availTop || 0;
+    const cols = Math.min(ws.length, Math.max(1, Math.floor((W * 0.6) / 420)));
+    const rows = Math.ceil(ws.length / cols);
+    const w = Math.min(460, Math.floor((W * 0.6) / cols)), h = Math.floor(H / rows);
+    ws.forEach(([, win], i) => { const c = i % cols, r = Math.floor(i / cols); try { win.resizeTo(w, h); win.moveTo(L0 + W - (cols - c) * w, T0 + r * h); } catch (e) {} });
+    try { window.moveTo(L0, T0); window.resizeTo(W - cols * w, H); } catch (e) {}
+    toast(t('pop_tiled', { n: ws.length }));
+  }
+  function closePops() { livePops().forEach(([, w]) => { try { w.close(); } catch (e) {} }); Object.keys(POPS).forEach((k) => delete POPS[k]); updatePopBar(); }
+  function updatePopBar() {
+    if (POP) return; const n = livePops().length; let el = document.getElementById('pop-bar');
+    if (!n) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'pop-bar'; document.body.appendChild(el); }
+    el.innerHTML = `<span>🪟 ${esc(t('pop_open_n', { n }))}</span><button type="button" id="pop-tile">${esc(t('pop_tile'))}</button><button type="button" id="pop-front">${esc(t('pop_front'))}</button><button type="button" id="pop-close">${esc(t('pop_close_all'))}</button>`;
+  }
+  setInterval(updatePopBar, 3000);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#pop-tile')) tilePops();
+    else if (e.target.closest('#pop-close')) closePops();
+    else if (e.target.closest('#pop-front')) livePops().forEach(([, w]) => { try { w.focus(); } catch (x) {} });
+  });
   function openPop(cid) {
     const w = 440, h = Math.min(860, screen.availHeight - 40);
     const left = Math.max(0, screen.availWidth - w - 24 - (popN % 4) * 36), top = 20 + (popN % 4) * 36; popN++;
     const win = window.open('app.html?pop=1&lang=' + uiLang + '#/chat/' + cid, 'lm_pop_' + cid, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
     if (!win) { toast(t('pop_blocked')); return; }
+    POPS[cid] = win; setTimeout(updatePopBar, 300);
     try { win.focus(); } catch (e) {}
   }
   document.addEventListener('click', (e) => {
@@ -1219,7 +1246,7 @@
   Object.keys(TOOL_T).forEach((l) => Object.assign(T[l], TOOL_T[l]));
   const JUNK_T = { ko: { junk_input: '자음·모음만 있어서 뜻을 알 수 없어요. 문장으로 써 주세요. (ㅋㅋ·ㅇㅋ·ㄱㅅ 같은 줄임말은 번역돼요)' }, zh: { junk_input: '只有韩文字母，无法理解意思。请输入完整的句子。' }, ja: { junk_input: '子音・母音だけでは意味がわかりません。文章で入力してください。' }, vi: { junk_input: 'Chỉ có phụ âm/nguyên âm nên không hiểu nghĩa. Hãy nhập thành câu.' }, en: { junk_input: 'Only loose Korean letters — the meaning is unclear. Please type a sentence.' } };
   Object.keys(JUNK_T).forEach((l) => Object.assign(T[l], JUNK_T[l]));
-  const POP_T = { ko: { pop_short: '새 창', pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_short: '新窗口', pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_short: '別ウィンドウ', pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_short: 'Cửa sổ mới', pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_short: 'New window', pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
+  const POP_T = { ko: { pop_open_n: '새 창 {n}개 열림', pop_tile: '창 정리', pop_front: '모두 앞으로', pop_close_all: '모두 닫기', pop_tiled: '새 창 {n}개를 나란히 정리했어요', pop_short: '새 창', pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_open_n: '已打开 {n} 个新窗口', pop_tile: '整理窗口', pop_front: '全部置前', pop_close_all: '全部关闭', pop_tiled: '已并排整理 {n} 个窗口', pop_short: '新窗口', pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_open_n: '新しいウィンドウ {n}個', pop_tile: 'ウィンドウ整列', pop_front: 'すべて前へ', pop_close_all: 'すべて閉じる', pop_tiled: '{n}個のウィンドウを並べました', pop_short: '別ウィンドウ', pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_open_n: 'Đang mở {n} cửa sổ', pop_tile: 'Sắp xếp cửa sổ', pop_front: 'Đưa lên trước', pop_close_all: 'Đóng tất cả', pop_tiled: 'Đã xếp {n} cửa sổ cạnh nhau', pop_short: 'Cửa sổ mới', pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_open_n: '{n} chat windows open', pop_tile: 'Tile windows', pop_front: 'Bring to front', pop_close_all: 'Close all', pop_tiled: 'Tiled {n} windows side by side', pop_short: 'New window', pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
   Object.keys(POP_T).forEach((l) => Object.assign(T[l], POP_T[l]));
   const MODE_T = {
     ko: { lp_note: '내 언어 = 내 화면·번역·추천 언어 · 상대 언어 = 보낼 말을 번역할 언어', mode_in: '받은 말 넣기', mode_out: '보낼 말 쓰기', lbl_in: '📥 {who} → 나 · 받은 말을 붙여넣으세요 ({lang})', lbl_out: '📤 나 → {who} · 보낼 말을 {my}로 쓰세요 ({lang}로 번역)', lbl_out_same: '📤 나 → {who} · 보낼 말을 쓰세요 (같은 언어라 번역 없이 기록·정리)', lbl_auto: '{who} · 받은 말을 붙여넣거나, 보낼 말을 쓰세요 (언어로 자동 구분)', ph_in: '상대가 보낸 {lang} 메시지를 붙여넣기 · 스크린샷은 Ctrl+V', ph_out: '보낼 말을 {my}로 쓰세요', lp_title: '대화 언어 바꾸기', lp_their: '상대 언어', lp_my: '내 언어', lp_saved: '대화 언어: {a} ↔ {b}' },

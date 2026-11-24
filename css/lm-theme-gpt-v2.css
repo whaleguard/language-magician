@@ -341,3 +341,6 @@ img { -webkit-user-drag: none; }
 .side-info:not(.open) .ws-toggle { position: relative; background: var(--primary) !important; color: #fff !important; font-weight: 700; font-size: 14px !important; padding: 14px 16px !important; }
 .side-info:not(.open) .ws-toggle .ws-toggle-act { background: #fff; color: var(--primary); border-radius: 8px; padding: 3px 10px; }
 .side-info.open .side-info-body { overflow-y: auto; }
+#pop-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-radius: 12px; background: #10243e; color: #fff; font-size: 13.5px; box-shadow: 0 6px 20px rgba(16,36,62,.25); }
+#pop-bar button { border: 0; border-radius: 8px; padding: 6px 12px; background: #fff; color: #10243e; font-weight: 700; font-size: 13px; cursor: pointer; }
+#pop-bar button:hover { background: var(--mint); }
