@@ -317,6 +317,7 @@
   document.addEventListener('change', (e) => { if (e.target.id === 'lang-quick') { const u = Store.me(); uiLang = e.target.value; if (u) { u.lang = uiLang; Store.save(); } render(); setTimeout(() => { try { runDigests(); } catch (x) {} }, 300); } });
   document.addEventListener('change', (e) => { if (e.target.id === 'ws-sort') { chatState.sort = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
   document.addEventListener('click', (e) => { if (e.target.closest('#ch-info-btn')) { chatState.infoOpen = !chatState.infoOpen; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); const b = document.getElementById('ch-info-btn'); if (b) { b.classList.toggle('on', chatState.infoOpen); b.setAttribute('aria-pressed', String(chatState.infoOpen)); } } });
+  document.addEventListener('click', (e) => { const it = e.target.closest('.ws-item[data-cid]'); if (!it || e.target.closest('[data-pop]')) return; if (!chatState.infoOpen) { chatState.infoOpen = true; setTimeout(() => { const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); }, 0); } }, true);
   document.addEventListener('dblclick', (e) => { const it = e.target.closest('.ws-item[data-cid]'); if (!it) return; if (WIDE.matches) { chatState.infoOpen = true; location.hash = '#/chat/' + it.dataset.cid; const sd = document.querySelector('.ws-side'); if (sd) sd.innerHTML = sideHtml(); } else location.hash = '#/contact/' + it.dataset.cid; });
   document.addEventListener('input', (e) => { if (e.target.id === 'ws-search') { chatState.q = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
   document.addEventListener('click', (e) => {
@@ -1261,6 +1262,7 @@
     if (!id) return renderChatPicker();
     const c = id === 'none' ? null : Store.contact(id);
     if (id !== 'none' && !c) return renderChatPicker();
+    if (c && chatState.lastCid !== c.id) { if (chatState.lastCid) chatState.infoOpen = true; chatState.lastCid = c.id; }
     helperState.contactId = c ? c.id : null;
     const ms = c ? Store.messagesOf(c.id) : u.messages.filter((m) => !m.contactId).sort((a, b) => a.ts - b.ts);
     const jump = r.q && r.q.m ? ms.findIndex((m) => m.id === r.q.m) : -1;
