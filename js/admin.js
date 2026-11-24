@@ -531,7 +531,7 @@
   function auditPage(r) {
     const q = (r.q.q || '').toLowerCase();
     const list = ((serverShared && serverShared.audit) || Store.db.audit).filter((a) => ((!isLeader() && !isHqp() && !isHqb()) || a.operator === Store.db.admin.operator) && (!isOrg() || a.orgId === role().org.id) && (!q || JSON.stringify(a).toLowerCase().includes(q)));
-    const act = { notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
+    const act = { capture: '화면 캡처 시도', notice: '메시지 발송', view: '대화 열람', ban: '이용 차단', unban: '차단 해제', report: '신고 처리', login: '로그인', settings: '설정 변경', sync: '서버 동기화' };
     page('audit', `<div class="between wrap"><div class="stack-sm"><h1>열람 감사로그</h1><p class="muted">관리자·대상·시각·사유를 기록합니다. 기록은 수정·삭제할 수 없습니다.</p></div>
       <form id="au-f" class="row"><input class="field" name="q" type="search" placeholder="관리자 ID, 회원 ID, 대화 ID" value="${esc(r.q.q || '')}"><button class="btn" type="submit">검색</button></form></div>
       <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>시각</th><th>관리자</th><th>행위</th><th>대상 회원</th><th>앱 / 상대 닉네임</th><th>대화 ID</th><th>사유</th></tr></thead><tbody>
