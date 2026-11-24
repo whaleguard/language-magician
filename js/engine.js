@@ -607,6 +607,7 @@
       'Contact nickname: ' + p.contact.nickname + ', contact language: ' + LANGS[p.contact.lang].llm + ', app: ' + p.contact.app,
       'Relationship goal: ' + (p.contact.relation || 'friend') + ', stage: ' + (p.stageName || ''),
       p.toneSet && p.toneSet.length ? 'The user has no preferred tone: write exactly one reply in EACH of these tones, in this order, and use the given label: ' + p.toneSet.map((x) => x.label + ' = ' + x.prompt).join(' | ') : 'Write ALL six replies in this tone (six different contents, same tone): ' + (p.tone || 'natural, matching the relationship'),
+      'Mirror the contact\'s own texting style seen in the history (their slang, abbreviations like ㅇㅇ/ㅋㅋ/好哒/りょ, cute endings like ~욤/~용, tildes, emoji frequency, length). If they write casually or cutely, the replies should too; if they write formally, stay formal.',
       (p.age ? 'Contact is about ' + p.age + ' years old: write replies the way people of that generation naturally text in the contact language — for teens/20s use their casual short forms and trendy endings (Korean examples: ㅇㅋ, ㄱㄱ, ㅇㅇ, ㅋㅋ, 알았어욤, 그래욤, 앗 진짜요?; Chinese: 好哒, 嗯嗯, 哈哈哈; Japanese: りょ, おけ, 笑; Vietnamese: ok nha, hihi; English: lol, omg, ok!), for 30s-40s natural everyday style, for 50+ polite and clear without slang or many emoji. Keep it natural, never forced.' : '') ,
       'Known profile (entered by user): ' + JSON.stringify({ age: p.contact.age, gender: p.contact.gender, blood: p.contact.blood, mbti: p.contact.mbti, country: p.contact.country }),
       'Recent history:\n' + (hist || '(none)'),

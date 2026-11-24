@@ -929,6 +929,7 @@
       }
       const ag = ageOf(c);
       if (ag) replies = replies.map((r) => Object.assign({}, r, target === 'ko' ? { text: koAge(r.text, ag) } : {}, RL === 'ko' && target === 'ko' ? { meaning: koAge(r.meaning, ag), src: koAge(r.src, ag) } : {}));
+      if (target === 'ko') { const ms2 = koMirrorStyle(c); replies = replies.map((r, i) => (i === 0 && toneCtx(c).toneKey === 'basic') || /비즈니스|商务|ビジネス|Business|Kinh doanh/.test(r.label) ? r : Object.assign({}, r, { text: koMirror(r.text, ms2) }, RL === 'ko' ? { meaning: koMirror(r.meaning, ms2), src: koMirror(r.src, ms2) } : {})); }
     }
     res.replies = replies;
     res.target = target;
@@ -1159,6 +1160,22 @@
     if (age <= 29) return x.replace(/([가-힣])요([!?~]?)(\s*[😊💕]?)$/u, '$1욤$2$3').replace(/알겠어요|알았어요/g, '알았어욤').replace(/그래요(?=[\s.!?~]|$)/g, '그래욤').replace(/좋아요(?=[\s.!?~]|$)/g, '좋아욤').replace(/고마워요/g, '고마워용').replace(/네,\s*/g, 'ㅇㅇ ').replace(/^와,?\s*/, '헐 ').replace(/진짜요\?/g, '앗 진짜요?');
     if (age >= 50) return x.replace(/ㅎㅎ\s*|ㅋㅋ+\s*/g, '').replace(/[😊💕✨🥰🙈😄👍🙌]/gu, '').replace(/~/g, '').trim();
     return x;
+  }
+  // 상대가 쓰는 말투 따라 하기 (ㅇㅇ·ㅋㅋ·~욤·~ 등)
+  function koMirrorStyle(c) {
+    const ins = c ? Store.messagesOf(c.id).filter((m) => m.dir === 'in').slice(-12).map((m) => m.text || '') : [];
+    const all = ins.join(' ');
+    return { yom: /[가-힣](욤|용)(?=[\s!?.~]|$)/.test(all), kk: /ㅋㅋ/.test(all), hh: /ㅎㅎ/.test(all), oo: /(^|\s)ㅇㅇ(\s|$)/.test(all), ok: /ㅇㅋ/.test(all), tilde: (all.match(/~/g) || []).length >= 2, emoji: /\p{Extended_Pictographic}/u.test(all), n: ins.length };
+  }
+  function koMirror(x, st) {
+    if (!x || !st || !st.n) return x;
+    let y = x;
+    if (st.yom) y = y.replace(/([가-힣])요([!?~]?)(?=\s|$)/gu, '$1욤$2');
+    if (st.oo) y = y.replace(/^네[,!]?\s*/, 'ㅇㅇ ');
+    if (st.ok) y = y.replace(/^(좋아요|좋아욤|좋아|알겠어요|알았어욤)[!.]?\s*/, 'ㅇㅋ ');
+    if (st.tilde && !/~/.test(y)) y = y.replace(/([!?.]?)$/, '~$1');
+    if ((st.kk || st.hh) && !/ㅋㅋ|ㅎㅎ/.test(y)) { const lol = st.kk ? 'ㅋㅋ' : 'ㅎㅎ'; y = /\s*\p{Extended_Pictographic}+\s*$/u.test(y) ? y.replace(/(\s*)(\p{Extended_Pictographic}+)\s*$/u, ' ' + lol + ' $2') : y + ' ' + lol; }
+    return y.replace(/\s{2,}/g, ' ').trim();
   }
   function koTone(src, k) {
     let x = String(src || '').trim();
