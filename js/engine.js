@@ -391,6 +391,7 @@
     sorry: /(미안|죄송|对不起|抱歉|不好意思|ごめん|すみません|xin lỗi|sorry|apolog)/i,
     affection: /(보고\s?싶|좋아해|사랑|想你|喜欢你|爱你|会いたい|好き|nhớ|thương|yêu|miss you|love you|like you)/i,
     negative: /(힘들|슬퍼|우울|화나|짜증|难过|伤心|生气|烦|辛い|悲しい|ムカつく|buồn|chán|giận|sad|upset|angry|annoyed|stressed)/i,
+    greeting: /(\bhello\b|\bhi\b|\bhey\b|good (morning|afternoon|evening|night)|안녕|좋은 아침|굿모닝|잘 자|你好|您好|早上好|早安|晚上好|晚安|おはよう|こんにちは|こんばんは|おやすみ|xin chào|chào buổi|chào bạn|chúc ngủ ngon)/i,
     request: /(보내\s?주|보내줄|해\s?주실|해\s?줄\s?수|부탁|견적|请(你|您)?(发|帮|给)|麻烦|能不能|お願い|ください|いただけ|送って|vui lòng|gửi giúp|làm ơn|could you|can you send|please|send (me|us|a|the)|by (mon|tue|wed|thu|fri|sat|sun|tomorrow|next)|quote|invoice|deadline|asap)/i,
     positive: /(좋아|재밌|행복|최고|기뻐|开心|高兴|太好了|嬉しい|楽しい|vui|tuyệt|happy|great|awesome|fun)/i,
     money: /(송금|계좌|돈 좀|빌려|투자|코인|비트코인|转账|汇款|借钱|投资|虚拟币|送金|振込|投資|chuyển khoản|vay tiền|đầu tư|wire|bank account|lend me|invest|crypto|bitcoin|gift card)/i,

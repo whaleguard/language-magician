@@ -448,6 +448,8 @@
       biz_thanks: [['dir_thanks', '저희가 더 감사합니다. 앞으로도 잘 부탁드립니다.'], ['dir_continue', '감사합니다. 다음 단계도 바로 진행하겠습니다.'], ['dir_light', '별말씀을요. 필요하신 것 있으면 언제든 말씀해 주세요.']],
       biz_general: [['dir_continue', '네, 확인했습니다. 감사합니다.'], ['dir_ask', '말씀 감사합니다. 진행 일정은 어떻게 생각하고 계신가요?'], ['dir_light', '알겠습니다. 정리해서 다시 연락드리겠습니다.']],
       unclear: [['dir_ask', '방금 메시지가 잘 안 보여요. 다시 보내줄래요?'], ['dir_continue', '무슨 뜻인지 조금만 더 설명해 줄래요?'], ['dir_light', 'ㅎㅎ 잘못 보낸 거죠?']],
+      greeting: [['dir_light', '좋은 아침이에요! 😊'], ['dir_ask', '안녕하세요! 오늘 하루는 어때요?'], ['dir_continue', '반가워요! 잘 잤어요?']],
+      biz_greeting: [['dir_light', '안녕하세요, 좋은 아침입니다.'], ['dir_continue', '안녕하세요. 오늘도 잘 부탁드립니다.'], ['dir_ask', '안녕하세요! 요청하신 건 관련해 궁금한 점 있으실까요?']],
       answer_ph: '…',
     },
     zh: {
@@ -466,6 +468,8 @@
       biz_thanks: [['dir_thanks', '我们才要感谢您，今后也请多关照。'], ['dir_continue', '谢谢，下一步我们马上推进。'], ['dir_light', '不客气，有需要随时告诉我。']],
       biz_general: [['dir_continue', '好的，已确认，谢谢。'], ['dir_ask', '谢谢您。您对进度安排有什么想法？'], ['dir_light', '明白了，整理后再联系您。']],
       unclear: [['dir_ask', '刚才的消息看不太懂，能再发一次吗？'], ['dir_continue', '能再解释一下是什么意思吗？'], ['dir_light', '哈哈，是不是发错了？']],
+      greeting: [['dir_light', '早上好！😊'], ['dir_ask', '你好！今天过得怎么样？'], ['dir_continue', '很高兴见到你！睡得好吗？']],
+      biz_greeting: [['dir_light', '您好，早上好。'], ['dir_continue', '您好，今天也请多关照。'], ['dir_ask', '您好！关于您的需求，有什么想了解的吗？']],
       answer_ph: '…',
     },
     ja: {
@@ -484,6 +488,8 @@
       biz_thanks: [['dir_thanks', 'こちらこそありがとうございます。今後ともよろしくお願いいたします。'], ['dir_continue', 'ありがとうございます。次のステップもすぐ進めます。'], ['dir_light', 'とんでもないです。何かあればいつでもお知らせください。']],
       biz_general: [['dir_continue', '承知しました。ありがとうございます。'], ['dir_ask', 'ありがとうございます。スケジュールはどのようにお考えですか？'], ['dir_light', 'かしこまりました。まとめて改めてご連絡します。']],
       unclear: [['dir_ask', '今のメッセージがよくわからなかった。もう一回送ってくれる？'], ['dir_continue', 'どういう意味かもう少し教えて？'], ['dir_light', 'ふふ、送り間違い？']],
+      greeting: [['dir_light', 'おはよう！😊'], ['dir_ask', 'こんにちは！今日はどう？'], ['dir_continue', '会えてうれしい！よく眠れた？']],
+      biz_greeting: [['dir_light', 'おはようございます。'], ['dir_continue', 'こんにちは。本日もよろしくお願いいたします。'], ['dir_ask', 'こんにちは！ご依頼の件で気になる点はございますか？']],
       answer_ph: '…',
     },
     vi: {
@@ -502,6 +508,8 @@
       biz_thanks: [['dir_thanks', 'Chúng tôi mới phải cảm ơn ạ. Mong tiếp tục hợp tác.'], ['dir_continue', 'Cảm ơn anh/chị. Tôi sẽ tiến hành bước tiếp theo ngay.'], ['dir_light', 'Không có gì ạ. Cần gì anh/chị cứ báo nhé.']],
       biz_general: [['dir_continue', 'Vâng, tôi đã rõ. Cảm ơn anh/chị.'], ['dir_ask', 'Cảm ơn anh/chị. Về tiến độ, anh/chị dự tính thế nào ạ?'], ['dir_light', 'Vâng, tôi sẽ tổng hợp rồi liên hệ lại ạ.']],
       unclear: [['dir_ask', 'Tin nhắn vừa rồi mình không hiểu lắm, gửi lại được không?'], ['dir_continue', 'Bạn giải thích thêm chút được không?'], ['dir_light', 'Hihi, gửi nhầm hả?']],
+      greeting: [['dir_light', 'Chào buổi sáng! 😊'], ['dir_ask', 'Chào bạn! Hôm nay thế nào?'], ['dir_continue', 'Vui quá! Bạn ngủ ngon không?']],
+      biz_greeting: [['dir_light', 'Xin chào, chúc anh/chị buổi sáng tốt lành.'], ['dir_continue', 'Xin chào. Hôm nay cũng mong được hợp tác ạ.'], ['dir_ask', 'Xin chào! Anh/chị có thắc mắc gì về yêu cầu không ạ?']],
       answer_ph: '…',
     },
     en: {
@@ -520,6 +528,8 @@
       biz_thanks: [['dir_thanks', 'Thank you as well. We look forward to working with you.'], ['dir_continue', "Thanks. We'll move on to the next step right away."], ['dir_light', 'My pleasure. Let me know anytime you need anything.']],
       biz_general: [['dir_continue', 'Noted, thank you.'], ['dir_ask', 'Thank you. What timeline do you have in mind?'], ['dir_light', "Understood. I'll put it together and follow up."]],
       unclear: [['dir_ask', "I couldn't quite read your last message. Could you send it again?"], ['dir_continue', 'Could you explain a bit more what you mean?'], ['dir_light', 'Haha, was that a typo?']],
+      greeting: [['dir_light', 'Good morning! 😊'], ['dir_ask', "Hi! How's your day going?"], ['dir_continue', 'Nice to hear from you! Did you sleep well?']],
+      biz_greeting: [['dir_light', 'Good morning.'], ['dir_continue', 'Hello, thank you for reaching out today.'], ['dir_ask', 'Hello! Is there anything I can help you with today?']],
       answer_ph: '…',
     },
   };

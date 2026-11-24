@@ -101,6 +101,11 @@
     if (u.status === 'banned') return renderBlocked(u);
     const pages = { home: renderChat, today: renderHome, helper: renderChat, chat: renderChat, contacts: renderContacts, contact: renderContact, 'contact-edit': renderContactEdit, coach: renderCoach, agenda: renderAgenda, anniv: renderAnniv, saju: renderSaju, gift: renderGift, culture: renderCulture, settings: renderSettings, guide: renderGuide, tools: renderTools };
     (pages[r.name] || renderChat)(r);
+    if (['chat', 'home', 'helper', 'contact', 'coach'].includes(r.name) || !pages[r.name]) {
+      const cid = r.id || (['chat', 'home', 'helper'].includes(r.name) || !pages[r.name] ? helperState.contactId : '');
+      const c = cid && u.contacts.find((x) => x.id === cid);
+      if (c) document.title = (POP ? '💬 ' : '') + c.nickname + ' · ' + appName(c.app) + ' — ' + t('brand');
+    }
     window.scrollTo(0, 0); const _mn = document.querySelector('.ws-main'); if (_mn) _mn.scrollTop = 0;
   }
 
@@ -756,9 +761,10 @@
       if (intents.includes('request')) return 'biz_request';
       if (intents.includes('thanks')) return 'biz_thanks';
       if (intents.includes('question')) return 'biz_question';
+      if (intents.includes('greeting')) return 'biz_greeting';
       return 'biz_general';
     }
-    const order = ['invite', 'negative', 'busy', 'request', 'affection', 'sorry', 'thanks', 'question', 'positive'];
+    const order = ['invite', 'negative', 'busy', 'request', 'affection', 'sorry', 'thanks', 'question', 'greeting', 'positive'];
     for (const k of order) if (intents.includes(k)) return k;
     return 'general';
   }
@@ -786,8 +792,10 @@
     const trn = ai && ai.translation ? { text: ai.translation } : await tr(text, uiLang, from);
     res.translation = trn.text;
     const both = text + '\n' + res.translation;
-    res.intents = Engine.intents(both);
-    res.risk = res.intents.filter((x) => x === 'money' || x === 'offplatform');
+    res.intents = Engine.intents(text);
+    if (!res.intents.length) res.intents = Engine.intents(res.translation).filter((k) => k !== 'question');
+    res.risk = Engine.intents(both).filter((x) => x === 'money' || x === 'offplatform');
+    res.risk.forEach((k) => { if (!res.intents.includes(k)) res.intents.push(k); });
     res.when = Engine.extractWhen(text) || Engine.extractWhen(res.translation);
     res.place = Engine.extractPlace(text) || Engine.extractPlace(res.translation);
     const ex = EXPLAIN[uiLang];
