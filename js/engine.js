@@ -573,7 +573,9 @@
       const src = m.text + ' ' + (m.translation || '');
       const pf = m.dir === 'in' ? extractProfile(m.text) : {};
       if (Object.keys(pf).length) add('profile', m);
-      if (!pf.birthMD && !pf.birthYear && !pf.age && extractWhen(m.text, m.ts) || extractWhen(m.translation || '', m.ts)) add('plan_date', m);
+      const w = extractWhen(m.text, m.ts) || extractWhen(m.translation || '', m.ts);
+      const isPlan = w && (w.time || (w.date && w.date !== ymd(new Date(m.ts))));
+      if (!pf.birthMD && !pf.birthYear && !pf.age && isPlan) add('plan_date', m);
       ['like', 'dislike', 'worry', 'family', 'pet', 'work', 'plan'].forEach((k) => { if (m.dir === 'in' && MEM_RX[k].test(src)) add(k, m); });
     });
     const qs = ins.filter((m) => RX.question.test(m.text));

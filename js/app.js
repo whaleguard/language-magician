@@ -182,8 +182,9 @@
           <button type="button" class="chip sm ${!chatState.app && !chatState.needOnly ? 'on' : ''}" data-fapp="">${t('f_all')}</button>
           <button type="button" class="chip sm ${chatState.needOnly ? 'on' : ''}" id="ws-need">${t('st_need')}${needN ? ' ' + needN : ''}</button>
           ${apps.map((ap) => `<button type="button" class="chip sm ${chatState.app === ap ? 'on' : ''}" data-fapp="${esc(ap)}">${appBadge(ap, true)} ${cnt(ap)}</button>`).join('')}
+          <label class="sort-wrap" title="${esc(t('sort_by'))}"><span aria-hidden="true">⇅</span><select class="sel-xs" aria-label="${esc(t('sort_by'))}" id="ws-sort"><option value="recent" ${chatState.sort !== 'need' && chatState.sort !== 'name' ? 'selected' : ''}>${t('sort_recent')}</option><option value="need" ${chatState.sort === 'need' ? 'selected' : ''}>${t('st_need')}</option><option value="name" ${chatState.sort === 'name' ? 'selected' : ''}>${t('sort_name')}</option></select></label>
         </div>
-        <div class="between tiny muted"><span>${t('sort_by')}</span><select class="field sel-xs" id="ws-sort"><option value="recent" ${chatState.sort !== 'need' && chatState.sort !== 'name' ? 'selected' : ''}>${t('sort_recent')}</option><option value="need" ${chatState.sort === 'need' ? 'selected' : ''}>${t('st_need')}</option><option value="name" ${chatState.sort === 'name' ? 'selected' : ''}>${t('sort_name')}</option></select></div>
+
       </div>`;
   }
   function wsRows(u, curId) {
@@ -1112,7 +1113,7 @@
         if (d === 'in') {
           const res = await analyzeIncoming(c, text);
           const msg = Store.me().messages.find((x) => x.id === res.msgId);
-          if (msg) { msg.analysis = slimAnalysis(res); Store.save(); chatState.open[msg.id] = true; }
+          if (msg) { msg.analysis = slimAnalysis(res); Store.save(); Object.keys(chatState.open).forEach((k) => { chatState.open[k] = false; }); chatState.open[msg.id] = true; }
         } else {
           const pr = chatState.prepared[id];
           const r2 = pr && pr.meaning === text ? { text: pr.text } : await tr(text, target, uiLang, { tone: helperState.tone, relation: c ? c.relation : '' });
@@ -1131,7 +1132,7 @@
     $app.querySelectorAll('[data-copy-msg]').forEach((b) => b.addEventListener('click', async () => { const m = Store.me().messages.find((x) => x.id === b.dataset.copyMsg); if (m) { await copyText(m.translation || m.text); toast(t('copied', { app: c ? appName(c.app) : 'messenger' })); } }));
     $app.querySelectorAll('[data-analyze]').forEach((b) => b.addEventListener('click', async () => {
       const mid = b.dataset.analyze; const m = Store.me().messages.find((x) => x.id === mid);
-      const isOpen = chatState.open[mid] !== undefined ? chatState.open[mid] : false;
+      const isOpen = !!b.closest('.insight') || chatState.open[mid] === true;
       chatState.open[mid] = !isOpen || (!m.analysis && isOpen === false);
       if (chatState.open[mid] && !m.analysis) {
         renderChat({ id });
@@ -1178,7 +1179,7 @@
     const items = agendaItems(u).filter((x) => x.kind !== 'upcoming').slice(0, 3);
     shell(`${topBar('', null, `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-go="#/guide" aria-label="${esc(t('nav_guide'))}">${icon('help')}</button></div>`)}
       <div class="content stack">
-        ${items.length ? `<button type="button" class="today-strip" data-go="#/agenda"><span class="ws-h">${t('today')}</span>${items.map((x) => `<span class="small ellipsis">${itemText(x)}</span>`).join('')}</button>` : ''}
+        ${items.length ? `<button type="button" class="today-strip one" data-go="#/agenda"><b>${t('today')} ${items.length}</b><span class="small ellipsis">${itemText(items[0])}</span><span aria-hidden="true">›</span></button>` : ''}
         ${filtersHtml(u)}
         <div class="ws-list tall card" id="ws-list" style="padding:4px">${wsRows(u, '')}</div>
         <button class="list-row card" type="button" data-go="#/chat/none" style="padding:10px 12px"><span class="avatar">?</span><span class="grow"><strong>${t('chat_none')}</strong>${none.length ? `<br><span class="small muted">${esc(t('thread_count', { n: none.length }))}</span>` : ''}</span></button>

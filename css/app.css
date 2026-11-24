@@ -646,3 +646,7 @@ body.is-wide .ws-rail { display: flex; flex-direction: column; }
 .adm-bar b { font-size: 11px; color: var(--ink); margin-bottom: 2px; order: -1; }
 .adm-bar-new { position: absolute; top: -2px; font-style: normal; font-size: 10px; font-weight: 700; color: var(--primary); }
 @media (max-width: 860px) { .adm-top { grid-template-columns: minmax(0, 1fr); } }
+.today-strip.one { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.today-strip.one .ellipsis { flex: 1; min-width: 0; text-align: start; }
+.sort-wrap { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; font-size: 12px; color: var(--muted); }
+.sort-wrap .sel-xs { border: 0; background: transparent; padding: 2px 4px; font-size: 12px; color: var(--ink); min-height: 26px; }
