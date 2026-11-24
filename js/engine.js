@@ -30,7 +30,7 @@
   /* ---------------- 언어 감지 ---------------- */
   function detect(text) {
     const s = String(text || '');
-    if (/[가-힣]/.test(s)) return 'ko';
+    if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(s)) return 'ko';
     if (/[぀-ヿ]/.test(s)) return 'ja';
     if (/[一-鿿]/.test(s)) {
       // 번체 특유 글자 비율
@@ -199,11 +199,48 @@
    * 번역
    * @returns {Promise<{text:string, provider:string, from:string}>}
    */
+  /* 한국어 초성 줄임말(ㅋㅋ, ㅇㅋ …) → 상대 언어 */
+  const SLANG = [
+    [/ㅋ{2,}/g, { en: 'haha', zh: '哈哈', 'zh-TW': '哈哈', ja: '笑', vi: 'haha' }],
+    [/ㅎ{2,}/g, { en: 'hehe', zh: '嘿嘿', 'zh-TW': '嘿嘿', ja: 'ふふ', vi: 'hihi' }],
+    [/[ㅠㅜ]{2,}/g, { en: '😢', zh: '😢', 'zh-TW': '😢', ja: '😢', vi: '😢' }],
+    [/ㅇㅋ/g, { en: 'OK', zh: '好的', 'zh-TW': '好的', ja: 'OK', vi: 'OK' }],
+    [/ㅇㅇ/g, { en: 'yeah', zh: '嗯嗯', 'zh-TW': '嗯嗯', ja: 'うん', vi: 'ừ' }],
+    [/ㄴㄴ/g, { en: 'no no', zh: '不不', 'zh-TW': '不不', ja: 'いやいや', vi: 'không không' }],
+    [/ㄱㄱ/g, { en: "let's go", zh: '走吧', 'zh-TW': '走吧', ja: '行こう', vi: 'đi thôi' }],
+    [/ㄱㅅ/g, { en: 'thanks', zh: '谢谢', 'zh-TW': '謝謝', ja: 'ありがとう', vi: 'cảm ơn' }],
+    [/ㅈㅅ/g, { en: 'sorry', zh: '抱歉', 'zh-TW': '抱歉', ja: 'ごめん', vi: 'xin lỗi' }],
+    [/ㅊㅋ/g, { en: 'congrats', zh: '恭喜', 'zh-TW': '恭喜', ja: 'おめでとう', vi: 'chúc mừng' }],
+    [/[ㅂㅃ]{2}/g, { en: 'bye', zh: '拜拜', 'zh-TW': '拜拜', ja: 'バイバイ', vi: 'bye' }],
+    [/ㄷㄷ/g, { en: 'wow', zh: '哇', 'zh-TW': '哇', ja: 'すごっ', vi: 'wow' }],
+  ];
+  function slang(text, to) {
+    let out = String(text || ''), hit = false;
+    SLANG.forEach(([rx, m]) => { out = out.replace(rx, () => { hit = true; return ' ' + (m[to] || m.en) + ' '; }); });
+    return { text: out.replace(/\s{2,}/g, ' ').trim(), hit };
+  }
+  // 뜻을 알 수 없는 낱자모만 있는지 (줄임말은 제외)
+  function isJunk(text) {
+    let rest = String(text || '').trim();
+    if (!rest) return false;
+    SLANG.forEach(([rx]) => { rest = rest.replace(rx, ''); });
+    rest = rest.replace(/[\s.,!?~^;:'"()\-_/]+/g, '');
+    return !!rest && /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(rest);
+  }
+
   async function translate(text, to, from, ctx) {
     text = String(text || '').trim();
     if (!text) return { text: '', provider: 'none', from: from || to };
     from = from || detect(text);
     if (from === to) return { text, provider: 'same', from };
+    if (from === 'ko' && /[ㄱ-ㅎㅏ-ㅣ]/.test(text)) {
+      const sl = slang(text, to);
+      if (sl.hit) {
+        if (!/[가-힣]/.test(sl.text)) return { text: sl.text, provider: 'slang', from };
+        text = sl.text;
+      }
+    }
+
     const key = from + '|' + to + '|' + (ctx && ctx.tone ? ctx.tone : '') + '|' + text;
     if (cache[key]) return { text: cache[key], provider: 'cache', from };
     const cfg = aiConfig();
@@ -354,6 +391,7 @@
     sorry: /(미안|죄송|对不起|抱歉|不好意思|ごめん|すみません|xin lỗi|sorry|apolog)/i,
     affection: /(보고\s?싶|좋아해|사랑|想你|喜欢你|爱你|会いたい|好き|nhớ|thương|yêu|miss you|love you|like you)/i,
     negative: /(힘들|슬퍼|우울|화나|짜증|难过|伤心|生气|烦|辛い|悲しい|ムカつく|buồn|chán|giận|sad|upset|angry|annoyed|stressed)/i,
+    request: /(보내\s?주|보내줄|해\s?주실|해\s?줄\s?수|부탁|견적|请(你|您)?(发|帮|给)|麻烦|能不能|お願い|ください|いただけ|送って|vui lòng|gửi giúp|làm ơn|could you|can you send|please|send (me|us|a|the)|by (mon|tue|wed|thu|fri|sat|sun|tomorrow|next)|quote|invoice|deadline|asap)/i,
     positive: /(좋아|재밌|행복|최고|기뻐|开心|高兴|太好了|嬉しい|楽しい|vui|tuyệt|happy|great|awesome|fun)/i,
     money: /(송금|계좌|돈 좀|빌려|투자|코인|비트코인|转账|汇款|借钱|投资|虚拟币|送金|振込|投資|chuyển khoản|vay tiền|đầu tư|wire|bank account|lend me|invest|crypto|bitcoin|gift card)/i,
     offplatform: /(텔레그램|whatsapp|링크|link|telegram|t\.me|bit\.ly)/i,
@@ -594,6 +632,6 @@
 
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, aiAnalyze,
-    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, intents, formality, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

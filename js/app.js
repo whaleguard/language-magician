@@ -718,8 +718,16 @@
   }
 
   /* ---------- 받은 말 분석 ---------- */
-  function pickReplySet(intents) {
-    const order = ['invite', 'negative', 'busy', 'affection', 'sorry', 'thanks', 'question', 'positive'];
+  function pickReplySet(intents, c, text) {
+    if (text && Engine.isJunk(text)) return 'unclear';
+    const biz = c && (c.relation === 'business' || c.tone === 'business');
+    if (biz) {
+      if (intents.includes('request')) return 'biz_request';
+      if (intents.includes('thanks')) return 'biz_thanks';
+      if (intents.includes('question')) return 'biz_question';
+      return 'biz_general';
+    }
+    const order = ['invite', 'negative', 'busy', 'request', 'affection', 'sorry', 'thanks', 'question', 'positive'];
     for (const k of order) if (intents.includes(k)) return k;
     return 'general';
   }
@@ -799,12 +807,14 @@
     if (ai && Array.isArray(ai.replies) && ai.replies.length) {
       replies = ai.replies.slice(0, 3).map((r) => ({ label: r.label, text: r.text, meaning: r.meaning, src: r.meaning }));
     } else {
-      const set = pickReplySet(res.intents);
-      const tpl = REPLIES[uiLang][set];
+      const set = pickReplySet(res.intents, c, text);
+      const tpl = REPLIES[uiLang][set] || REPLIES[uiLang].general;
+      const wb = res.when ? fmtWhenUi(res.when) : '';
+      const byTxt = !wb ? '' : ({ ko: wb + '까지 ', zh: wb + '之前', ja: wb + 'までに', vi: 'trước ' + wb + ' ', en: 'by ' + wb })[uiLang] || '';
       const whenTxt = res.when ? fmtWhenUi(res.when) + ' ' : '';
       const placeTxt = res.place ? res.place + (uiLang === 'ko' ? '에서' : uiLang === 'en' ? ' at ' : ' ') : '';
       const built = tpl.map(([lab, s]) => {
-        let x = s.replace('{when}', whenTxt).replace('{place}', uiLang === 'en' ? (res.place ? 'at ' + res.place : '') : placeTxt).replace('{answer}', REPLIES[uiLang].answer_ph);
+        let x = s.replace('{when}', whenTxt).replace('{place}', uiLang === 'en' ? (res.place ? 'at ' + res.place : '') : placeTxt).replace('{answer}', REPLIES[uiLang].answer_ph).replace('{by}', byTxt);
         x = x.replace(/\s{2,}/g, ' ').replace(/\s+([!?.,])/g, '$1');
         return { label: t(lab), src: x };
       });
@@ -1054,6 +1064,8 @@
   function starsHtml(c, interactive) { const n = c.star || 0; return `<span class="stars" aria-label="${esc(t('star_l'))} ${n}/3">${[1, 2, 3].map((i) => interactive ? `<button type="button" class="star ${i <= n ? 'on' : ''}" data-star="${c.id}|${i}" title="${esc(t('star_l'))} ${i}">★</button>` : `<i class="star ${i <= n ? 'on' : ''}">★</i>`).join('')}</span>`; }
   const TOOL_T = {"ko": {"nav_anniv": "기념일", "nav_coach": "관계 조언", "nav_saju": "사주·궁합", "nav_gift": "선물", "nav_culture": "문화", "nav_tools": "도구", "tools_title": "도구", "tools_lead": "상대를 더 잘 알고, 더 잘 챙기기 위한 기능이에요.", "tl_coach": "단계별로 다음에 할 말과 피할 말", "tl_saju": "사주·띠·별자리·혈액형·MBTI 궁합", "tl_gift": "날에 맞는 선물과 축하 문구", "tl_culture": "나라별 호칭·예절·금기와 예문", "tl_anniv": "생일·만난 날·기념일 한눈에", "tl_agenda": "달력·약속·오늘 할 일", "quick_tools": "바로가기"}, "zh": {"nav_anniv": "纪念日", "nav_coach": "关系建议", "nav_saju": "四柱·合盘", "nav_gift": "礼物", "nav_culture": "文化", "nav_tools": "工具", "tools_title": "工具", "tools_lead": "更了解对方、更好地关心对方的功能。", "tl_coach": "分阶段告诉你该说什么、避免什么", "tl_saju": "四柱·生肖·星座·血型·MBTI 合盘", "tl_gift": "适合日子的礼物和祝福语", "tl_culture": "各国称呼·礼仪·禁忌和例句", "tl_anniv": "生日·认识的日子·纪念日一目了然", "tl_agenda": "日历·约定·今天的事", "quick_tools": "快捷入口"}, "ja": {"nav_anniv": "記念日", "nav_coach": "関係アドバイス", "nav_saju": "四柱推命・相性", "nav_gift": "プレゼント", "nav_culture": "文化", "nav_tools": "ツール", "tools_title": "ツール", "tools_lead": "相手をもっと知り、もっと大切にするための機能です。", "tl_coach": "段階ごとに言うこと・避けること", "tl_saju": "四柱推命・干支・星座・血液型・MBTIの相性", "tl_gift": "日に合うプレゼントとお祝いの言葉", "tl_culture": "国ごとの呼び方・マナー・タブーと例文", "tl_anniv": "誕生日・出会った日・記念日をひと目で", "tl_agenda": "カレンダー・約束・今日やること", "quick_tools": "ショートカット"}, "vi": {"nav_anniv": "Kỷ niệm", "nav_coach": "Tư vấn", "nav_saju": "Tứ trụ·hợp tuổi", "nav_gift": "Quà tặng", "nav_culture": "Văn hóa", "nav_tools": "Công cụ", "tools_title": "Công cụ", "tools_lead": "Các tính năng giúp hiểu và quan tâm người ấy tốt hơn.", "tl_coach": "Nên nói gì, tránh gì theo từng giai đoạn", "tl_saju": "Hợp tuổi theo tứ trụ·con giáp·cung·nhóm máu·MBTI", "tl_gift": "Quà và lời chúc hợp từng dịp", "tl_culture": "Xưng hô·lễ nghi·kiêng kỵ và câu mẫu theo nước", "tl_anniv": "Sinh nhật·ngày quen·kỷ niệm", "tl_agenda": "Lịch·hẹn·việc hôm nay", "quick_tools": "Lối tắt"}, "en": {"nav_anniv": "Dates", "nav_coach": "Coaching", "nav_saju": "Saju·match", "nav_gift": "Gifts", "nav_culture": "Culture", "nav_tools": "Tools", "tools_title": "Tools", "tools_lead": "Features to know them better and care for them well.", "tl_coach": "What to say and avoid at each stage", "tl_saju": "Saju, zodiac, star sign, blood type, MBTI match", "tl_gift": "Gifts and messages for each occasion", "tl_culture": "Forms of address, etiquette, taboos and examples", "tl_anniv": "Birthdays, the day you met, anniversaries", "tl_agenda": "Calendar, plans, today", "quick_tools": "Shortcuts"}};
   Object.keys(TOOL_T).forEach((l) => Object.assign(T[l], TOOL_T[l]));
+  const JUNK_T = { ko: { junk_input: '자음·모음만 있어서 뜻을 알 수 없어요. 문장으로 써 주세요. (ㅋㅋ·ㅇㅋ·ㄱㅅ 같은 줄임말은 번역돼요)' }, zh: { junk_input: '只有韩文字母，无法理解意思。请输入完整的句子。' }, ja: { junk_input: '子音・母音だけでは意味がわかりません。文章で入力してください。' }, vi: { junk_input: 'Chỉ có phụ âm/nguyên âm nên không hiểu nghĩa. Hãy nhập thành câu.' }, en: { junk_input: 'Only loose Korean letters — the meaning is unclear. Please type a sentence.' } };
+  Object.keys(JUNK_T).forEach((l) => Object.assign(T[l], JUNK_T[l]));
   Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   [['ko', '열기', '접기'],['zh', '展开', '收起'],['ja', '開く', '閉じる'],['vi', 'Mở', 'Thu gọn'],['en', 'Open', 'Close']].forEach(([l, a, b]) => { T[l].open_l = a; T[l].close_l = b; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
@@ -1226,6 +1238,7 @@
     comp.addEventListener('drop', (e) => { e.preventDefault(); comp.classList.remove('drop'); const f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/')); if (f) handleImage(f); });
     document.getElementById('ch-send').addEventListener('click', async (ev) => {
       const text = input.value.trim(); if (!text) { input.focus(); return; }
+      if (Engine.isJunk(text)) { toast(t('junk_input')); input.focus(); return; }
       const d = detectDir(text, chatState.dirOverride);
       const btn = ev.currentTarget; spinBtn(btn, true, '');
       try {
