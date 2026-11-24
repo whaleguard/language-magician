@@ -78,3 +78,10 @@
   .lm-ops .ops-chart { overflow-x: auto; }
   .lm-ops .ops-plot { min-width: 520px; }
 }
+.lm-ops .ops-more { display: block; }
+.lm-ops .ops-more > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; padding: 6px 2px 12px; border-top: 1px solid var(--line); }
+.lm-ops .ops-more > summary::-webkit-details-marker { display: none; }
+.lm-ops .ops-more > summary::before { content: '▾'; color: var(--muted); }
+.lm-ops .ops-more:not([open]) > summary::before { content: '▸'; }
+.lm-ops .ops-more > summary h2 { font-size: 18px; }
+.lm-ops .ops-more-body { display: grid; gap: 16px; }
