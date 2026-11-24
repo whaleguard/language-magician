@@ -420,7 +420,9 @@
     },
   };
 
+  function reload() { if (viewAs) return; db = load(); }
   global.Store = {
+    reload, KEY,
     get db() { return db; }, CONSENT_VERSION,
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,

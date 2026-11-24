@@ -244,3 +244,12 @@ tr.clickable:hover td, .sel-item:hover { background: var(--bg); }
 body.viewas .ws { height: calc(100dvh - 38px) !important; }
 body.viewas .ws > :is(.ws-rail, .ws-main, .ws-side) { height: calc(100dvh - 38px) !important; }
 @media (max-width: 700px) { .viewas-bar { position: sticky !important; top: 0; font-size: 11.5px; padding: 5px 8px; gap: 4px 6px; } }
+
+/* 대화 새 창(팝업) */
+.ws-pop { display: none; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-size: 13px; color: var(--primary); background: var(--mint); border: 1px solid var(--sky-line, #cfe3f3); cursor: pointer; }
+.ws-item:hover .ws-pop, .ws-item:focus-within .ws-pop { display: inline-flex; }
+.ws-pop:hover { background: var(--primary); color: #fff; }
+body.pop .app, body.pop #app { max-width: none !important; width: 100% !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+body.pop .pop-screen { min-height: 100dvh; max-width: none; padding-bottom: 0; }
+body.pop nav.bottom { display: none !important; }
+body.pop .chat-bar .back-btn { display: none; }

@@ -111,10 +111,41 @@
     return `<div class="viewas-bar">👁 <b>${esc(v.nickname)}</b> <span>(${esc(v.id)})</span> 회원 화면 보기 중 · 읽기 전용, 변경 내용은 저장되지 않아요 <button type="button" id="viewas-exit">관리자로 돌아가기</button></div>`;
   }
   document.addEventListener('click', (e) => { if (e.target.closest('#viewas-exit')) { const v = Store.viewingAs(); Store.stopViewAs(); location.href = 'app.html#/admin/users?u=' + (v ? v.id : ''); location.reload(); } });
+  const POP = new URLSearchParams(location.search).has('pop');
+  if (POP) document.documentElement.classList.add('pop');
+  let popN = 0;
+  function openPop(cid) {
+    const w = 440, h = Math.min(860, screen.availHeight - 40);
+    const left = Math.max(0, screen.availWidth - w - 24 - (popN % 4) * 36), top = 20 + (popN % 4) * 36; popN++;
+    const win = window.open('app.html?pop=1&lang=' + uiLang + '#/chat/' + cid, 'lm_pop_' + cid, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+    if (!win) { toast(t('pop_blocked')); return; }
+    try { win.focus(); } catch (e) {}
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pop]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation(); openPop(b.dataset.pop);
+  }, true);
+  document.addEventListener('click', (e) => { if (e.target.closest('#pop-main')) { e.preventDefault(); try { if (window.opener && !window.opener.closed) { window.opener.focus(); return; } } catch (x) {} window.open('app.html#/chat', 'lm_main'); } });
+  // 다른 창(팝업·메인)에서 저장하면 이 창도 최신으로
+  let syncPending = false;
+  const typing = () => { const a = document.activeElement; return a && (a.id === 'ch-input' || a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && a.value; };
+  window.addEventListener('storage', (e) => {
+    if (e.key !== Store.KEY || Store.viewingAs()) return;
+    Store.reload();
+    if (typing()) { syncPending = true; return; }
+    const sc = document.querySelector('.ws-main, .chat-scroll'); render();
+  });
+  document.addEventListener('focusout', () => { if (syncPending && !typing()) { syncPending = false; setTimeout(render, 50); } });
+
   function shell(inner, active, opts) {
     const nav = [['chat', 'chat', 'nav_helper'], ['contacts', 'person', 'nav_contacts'], ['agenda', 'calendar', 'nav_agenda'], ['settings', 'settings', 'nav_settings']];
     const navW = nav.slice(0, 3).concat([['anniv', 'cake', 'nav_anniv'], ['coach', 'heart', 'nav_coach'], ['saju', 'yin', 'nav_saju'], ['gift', 'gift', 'nav_gift'], ['culture', 'globe', 'nav_culture'], nav[3], ['guide', 'help', 'nav_guide']]);
     const navM = nav.slice(0, 3).concat([['tools', 'grid', 'nav_tools'], nav[3]]);
+    if (POP) {
+      document.body.classList.remove('is-wide'); document.body.classList.add('pop');
+      $app.innerHTML = `<div class="screen pop-screen">${inner}</div>`;
+      return;
+    }
     if (WIDE.matches && !(opts && opts.noNav)) {
       document.body.classList.add('is-wide');
       $app.innerHTML = `<div class="ws">
@@ -207,7 +238,7 @@
     const rows = u.contacts.map((c) => { const ms = Store.messagesOf(c.id, u); const last = ms[ms.length - 1]; return { c, last, st: convStatus(ms), ts: last ? last.ts : c.createdAt }; })
       .filter((r) => (!q || (r.c.nickname + ' ' + appName(r.c.app) + ' ' + (r.c.note || '')).toLowerCase().includes(q)) && (!chatState.needOnly || r.st === 'need' || r.st === 'new') && (!chatState.app || r.c.app === chatState.app) && (!chatState.starOnly || (r.c.star || 0) >= 1))
       .sort((a, b) => (!!b.c.pinned - !!a.c.pinned) || (chatState.sort === 'star' ? ((b.c.star || 0) - (a.c.star || 0)) || b.ts - a.ts : 0) || (chatState.sort === 'name' ? a.c.nickname.localeCompare(b.c.nickname) : chatState.sort === 'need' ? ((b.st === 'need' || b.st === 'new') - (a.st === 'need' || a.st === 'new')) || b.ts - a.ts : b.ts - a.ts));
-    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''} ${x.pinned ? 'pinned' : ''}" data-go="#/chat/${x.id}" data-cid="${x.id}" title="${esc(t('dbl_hint'))}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><span class="row-name"><strong class="ellipsis" lang="${esc(x.lang)}">${x.pinned ? '<span class="pin-ic" aria-hidden="true">📌</span>' : ''}${esc(x.nickname)}</strong>${x.star ? starsHtml(x) : ''}</span><span class="tiny muted ellipsis" style="display:block">${appBadge(x.app)} ${last ? esc(prevText(last)) : ''}</span></span><span class="ws-right"><span class="tiny muted">${last ? esc(shortTs(last.ts)) : ''}</span>${st ? `<span class="st-pill st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>` : ''}</span></button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
+    return rows.map(({ c: x, last, st }) => `<button type="button" class="ws-item ${x.id === curId ? 'on' : ''} ${x.pinned ? 'pinned' : ''}" data-go="#/chat/${x.id}" data-cid="${x.id}" title="${esc(t('dbl_hint'))}">${avatar(x, 'sm')}<span class="grow" style="min-width:0"><span class="row-name"><strong class="ellipsis" lang="${esc(x.lang)}">${x.pinned ? '<span class="pin-ic" aria-hidden="true">📌</span>' : ''}${esc(x.nickname)}</strong>${x.star ? starsHtml(x) : ''}</span><span class="tiny muted ellipsis" style="display:block">${appBadge(x.app)} ${last ? esc(prevText(last)) : ''}</span></span><span class="ws-right"><span class="ws-pop" data-pop="${x.id}" role="button" title="${esc(t('pop_open'))}">↗</span><span class="tiny muted">${last ? esc(shortTs(last.ts)) : ''}</span>${st ? `<span class="st-pill st-${st}">${t({ new: 'st_new', need: 'st_need', copied: 'st_copied', done: 'st_done' }[st])}</span>` : ''}</span></button>`).join('') || `<p class="tiny muted" style="padding:8px">${t('no_result')}</p>`;
   }
   document.addEventListener('change', (e) => { if (e.target.id === 'lang-quick') { const u = Store.me(); uiLang = e.target.value; if (u) { u.lang = uiLang; Store.save(); } render(); setTimeout(() => { try { runDigests(); } catch (x) {} }, 300); } });
   document.addEventListener('change', (e) => { if (e.target.id === 'ws-sort') { chatState.sort = e.target.value; const u = Store.me(); const l = document.getElementById('ws-list'); if (u && l) l.innerHTML = wsRows(u, helperState.contactId || route().id); } });
@@ -1066,6 +1097,8 @@
   Object.keys(TOOL_T).forEach((l) => Object.assign(T[l], TOOL_T[l]));
   const JUNK_T = { ko: { junk_input: '자음·모음만 있어서 뜻을 알 수 없어요. 문장으로 써 주세요. (ㅋㅋ·ㅇㅋ·ㄱㅅ 같은 줄임말은 번역돼요)' }, zh: { junk_input: '只有韩文字母，无法理解意思。请输入完整的句子。' }, ja: { junk_input: '子音・母音だけでは意味がわかりません。文章で入力してください。' }, vi: { junk_input: 'Chỉ có phụ âm/nguyên âm nên không hiểu nghĩa. Hãy nhập thành câu.' }, en: { junk_input: 'Only loose Korean letters — the meaning is unclear. Please type a sentence.' } };
   Object.keys(JUNK_T).forEach((l) => Object.assign(T[l], JUNK_T[l]));
+  const POP_T = { ko: { pop_open: '새 창으로 열기 (메신저 옆에 띄워 두기)', pop_main: '메인 창으로', pop_blocked: '팝업이 막혔어요. 주소창 오른쪽에서 팝업을 허용해 주세요.', pop_hint: '대화마다 새 창으로 띄워 메신저 옆에 두고 쓸 수 있어요' }, zh: { pop_open: '在新窗口打开（放在聊天软件旁边）', pop_main: '回到主窗口', pop_blocked: '弹出窗口被拦截，请在地址栏右侧允许弹出窗口。', pop_hint: '每个对话都可以单独开窗口，放在聊天软件旁边用' }, ja: { pop_open: '新しいウィンドウで開く（メッセンジャーの横に置く）', pop_main: 'メイン画面へ', pop_blocked: 'ポップアップがブロックされました。アドレスバー右側で許可してください。', pop_hint: '会話ごとに別ウィンドウで開き、メッセンジャーの横に置けます' }, vi: { pop_open: 'Mở cửa sổ mới (đặt cạnh ứng dụng chat)', pop_main: 'Về cửa sổ chính', pop_blocked: 'Cửa sổ bật lên bị chặn. Hãy cho phép ở bên phải thanh địa chỉ.', pop_hint: 'Mỗi cuộc trò chuyện có thể mở cửa sổ riêng, đặt cạnh ứng dụng chat' }, en: { pop_open: 'Open in a new window (keep it next to your messenger)', pop_main: 'Back to main window', pop_blocked: 'Pop-up blocked. Allow pop-ups from the right side of the address bar.', pop_hint: 'Open each chat in its own window next to your messenger' } };
+  Object.keys(POP_T).forEach((l) => Object.assign(T[l], POP_T[l]));
   Object.keys({"ko": "대화 {n}개를 가져왔어요", "zh": "已导入 {n} 条对话", "ja": "会話を{n}件取り込みました", "vi": "Đã nhập {n} tin nhắn", "en": "Imported {n} messages"}).forEach(() => {}); [['ko', '대화 {n}개를 가져왔어요'],['zh', '已导入 {n} 条对话'],['ja', '会話を{n}件取り込みました'],['vi', 'Đã nhập {n} tin nhắn'],['en', 'Imported {n} messages']].forEach(([l, v]) => { T[l].imported_n = v; });
   [['ko', '열기', '접기'],['zh', '展开', '收起'],['ja', '開く', '閉じる'],['vi', 'Mở', 'Thu gọn'],['en', 'Open', 'Close']].forEach(([l, a, b]) => { T[l].open_l = a; T[l].close_l = b; });
   const chatState = { dirOverride: null, draft: {}, open: {}, limit: 40, needOnly: false, prepared: {}, auto: {}, infoOpen: true, tone: 'basic', emoji: 'none' };
@@ -1093,7 +1126,7 @@
     const threadHtml = shown.map((m) => { const d = new Date(m.ts); const dk = d.toDateString(); let sep = ''; if (dk !== lastDay) { lastDay = dk; const dg = c ? digestsOf(c.id)[Engine.ymd(d)] : null; sep = `<div class="day"><time>${esc(fmtDateW(d))}</time></div>` + (dg && ((dg.facts && dg.facts.length) || dg.summary) ? `<details class="day-mem"><summary>📌 ${t('mem_day')} ${dg.facts ? dg.facts.length : ''} <span class="muted">· ${dg.by === 'ai' ? t('mem_ai') : t('mem_basic')}</span></summary><p class="small">${esc(digestLine(dg))}</p><div class="facts">${(dg.facts || []).map(factChip).join('')}</div></details>` : ''); } return sep + bubbleHtml(c, m, lastIn && m.id === lastIn.id); }).join('');
     shell(`<header class="top chat-bar between" style="flex-wrap:nowrap"><div class="row grow" style="min-width:0;flex-wrap:nowrap"><button class="icon-btn back-btn" type="button" data-go="#/chat" aria-label="${t('back')}">${icon('back')}</button>
         ${c ? `${avatar(c)}<div class="grow" style="min-width:0"><h1 class="ellipsis">${appBadge(c.app)} <span lang="${esc(c.lang)}">${esc(c.nickname)}</span></h1><small class="muted ellipsis" style="display:block">${esc(t('lang_pair', { a: langUi(c.lang), b: langUi(uiLang) }))} · ${esc(t('thread_count', { n: ms.length }))}</small></div>` : `<h1>${t('chat_none')}</h1>`}</div>
-        <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
+        <div class="row" style="gap:6px;flex-wrap:nowrap;flex:0 0 auto">${statusBadge(st)}${c && POP ? `<button class="icon-btn" type="button" id="pop-main" title="${esc(t('pop_main'))}" aria-label="${esc(t('pop_main'))}">⤢</button>` : ''}${c && !POP && WIDE.matches ? `<button class="icon-btn" type="button" data-pop="${c.id}" title="${esc(t('pop_open'))}" aria-label="${esc(t('pop_open'))}">↗</button>` : ''}${c && !POP ? `<button class="icon-btn" type="button" data-go="#/coach/${c.id}" aria-label="${t('coach_link')}" title="${esc(t('coach_link'))}">💡</button><button class="icon-btn ${WIDE.matches && chatState.infoOpen ? 'on' : ''}" type="button" ${WIDE.matches ? 'id="ch-info-btn"' : `data-go="#/contact/${c.id}"`} aria-label="${t('contact_info')}" title="${esc(t('contact_info'))}" aria-pressed="${WIDE.matches && !!chatState.infoOpen}">${icon('person')}</button>` : ''}</div></header>
       <div class="content chat-scroll" style="padding-bottom:12px">
         ${c && (rc.overduePromises.length || rc.upcomingPromises.length) ? `<div class="chat-pins">
           ${rc.upcomingPromises.slice(0, 2).map((p) => `<span class="pin">📅 ${fmtDateW(p.date)} ${esc(p.time || '')} · ${esc(p.title)}${p.place ? ' · ' + esc(p.place) : ''}</span>`).join('')}
