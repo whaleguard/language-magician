@@ -82,3 +82,4 @@
 .lm-tour .tour-table th:first-child, .lm-tour .tour-table td:first-child { text-align: start; }
 .lm-tour .tour-table thead th { background: var(--tour-tint); color: var(--tour-navy); }
 .lm-tour .tour-table-wrap { overflow-x: auto; }
+.lm-tour .tour-scene-head h2:focus { outline: none; }
