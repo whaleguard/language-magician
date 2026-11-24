@@ -105,7 +105,7 @@
         <p class="tiny muted">테스트 버전 · 최종 admin · 일반고객 personal1 · 기업고객 business1 · 거래처 company1 · 팀장 leader1 (비밀번호 모두 1234)</p>
       </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
     document.getElementById('al').addEventListener('submit', (e) => {
-      e.preventDefault(); const f = new FormData(e.target);
+      e.preventDefault(); Store.reload(); const f = new FormData(e.target);
       Store.ensureDemoMembers();
       const sf = Store.staffLogin(f.get('id'), f.get('pin'));
       if (sf) {
@@ -122,19 +122,22 @@
         location.hash = '#/admin/dashboard'; return;
       }
       const lt = Store.leaderLogin(f.get('id'), f.get('pin'));
-      if (lt && !(String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase())) {
+      if (lt && Store.normId(f.get('id')) !== String(Store.db.admin.loginId || 'admin').toLowerCase()) {
         Store.db.admin.operator = '팀장 ' + (lt.leaderName || lt.loginId) + ' (' + lt.loginId + ')'; Store.db.admin.orgId = lt.orgId || ''; Store.persist();
         authed = true; sessionStorage.setItem('lm_admin_ok', '1'); sessionStorage.setItem('lm_admin_role', 'leader:' + lt.id);
         Store.audit({ action: 'login', target: lt.id, reason: '팀장 로그인 · ' + lt.name });
         location.hash = '#/admin/dashboard'; return;
       }
-      if (String(f.get('id') || '').trim().toLowerCase() === String(Store.db.admin.loginId || 'admin').toLowerCase() && String(f.get('pin')) === String(Store.db.admin.pin)) {
+      if (Store.normId(f.get('id')) === String(Store.db.admin.loginId || 'admin').toLowerCase() && String(f.get('pin') || '').trim() === String(Store.db.admin.pin)) {
         Store.db.admin.operator = 'admin'; Store.db.admin.orgId = ''; Store.persist(); sessionStorage.setItem('lm_admin_role', 'admin');
         authed = true; sessionStorage.setItem('lm_admin_ok', '1');
         Store.ensureDemoMembers();
         Store.audit({ action: 'login', target: '-', reason: '관리자 로그인' });
         location.hash = '#/admin/dashboard';
-      } else { LM.toast('아이디 또는 비밀번호가 맞지 않습니다'); }
+      } else {
+        const who = Store.whoHasId(f.get('id'));
+        LM.toast(who ? '비밀번호가 맞지 않습니다' : '이 브라우저에 없는 아이디입니다 · 팀장 계정은 만든 같은 PC·같은 브라우저에서 로그인하세요 (서버 연결 전 테스트 버전)', 5000);
+      }
     });
   }
 
@@ -795,12 +798,12 @@
             <div class="tm-members">${all.sort((a, b) => ((sel.members || []).includes(b.id) - (sel.members || []).includes(a.id)) || a.nickname.localeCompare(b.nickname)).map((u) => { const other = Store.teamOf(u.id); return `<label class="tm-member" data-k="${esc((u.nickname + ' ' + u.id).toLowerCase())}"><input type="checkbox" name="m" value="${u.id}" ${(sel.members || []).includes(u.id) ? 'checked' : ''}> <span><strong>${esc(u.nickname)}</strong> <span class="ops-muted">${esc(u.id)} · ${esc(LN(u.lang || 'ko'))}${other && other.id !== sel.id ? ' · ' + esc(other.name) : ''}</span></span></label>`; }).join('')}</div>
             <div class="between wrap"><button class="btn danger-btn sm" type="button" id="tm-del">팀 삭제</button><div class="row" style="gap:6px"><a class="btn secondary" href="#/admin/notices">팀원에게 메시지</a><button class="btn" type="submit">저장</button></div></div></form>` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만드세요.</p>'}</section>
       </div>`);
-    document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(e.target); if (Store.teams().some((t) => t.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || Store.orgs().some((g) => g.loginId.toLowerCase() === String(f.get('loginId')).toLowerCase()) || String(f.get('loginId')).toLowerCase() === 'admin') { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ orgId: isOrg() ? role().org.id : (f.get('orgId') || ''), name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); location.hash = '#/admin/teams?t=' + t.id; });
+    document.getElementById('tm-new').addEventListener('submit', (e) => { e.preventDefault(); Store.reload(); const f = new FormData(e.target); const lid = Store.normId(f.get('loginId')); if (!/^[a-z0-9._-]{2,30}$/.test(lid)) { LM.toast('팀장 아이디는 영문·숫자로 2자 이상'); return; } f.set('loginId', lid); if (Store.whoHasId(lid)) { LM.toast('이미 쓰는 아이디입니다'); return; } const t = Store.createTeam({ orgId: isOrg() ? role().org.id : (f.get('orgId') || ''), name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin') }); Store.audit({ action: 'settings', target: t.id, reason: '팀 생성 · ' + t.name }); LM.toast('팀장 로그인: ' + t.loginId + ' / ' + t.pin + ' · 로그아웃 후 이 화면에서 로그인', 6000); location.hash = '#/admin/teams?t=' + t.id; });
     const ed = document.getElementById('tm-edit');
     if (ed) {
       const addB = document.getElementById('tm-add'); if (addB) addB.addEventListener('click', () => { const id = document.getElementById('tm-add-id').value.trim().toUpperCase(); const u = Store.db.users[id]; const ot = u && Store.teamOf(id); if (!u) { LM.toast('그 ID의 회원이 없습니다'); return; } if (ot && ot.orgId !== role().org.id) { LM.toast('다른 회사에 소속된 회원입니다'); return; } Store.teamsOfOrg(role().org.id).forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((x) => x !== id); }); Store.updateTeam(sel.id, { members: Array.from(new Set((sel.members || []).concat(id))) }); Store.audit({ action: 'settings', target: sel.id, reason: '상담원 추가 · ' + id }); LM.toast(u.nickname + ' 님을 추가했습니다'); teamsPage(r); });
       document.getElementById('tm-q').addEventListener('input', (e) => { const v = e.target.value.toLowerCase(); ed.querySelectorAll('.tm-member').forEach((l) => { l.hidden = v && !l.dataset.k.includes(v); }); });
-      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); scopedTeams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, Object.assign(isOrg() ? {} : { orgId: f.get('orgId') || '' }, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: f.get('loginId'), pin: f.get('pin'), members })); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
+      ed.addEventListener('submit', (e) => { e.preventDefault(); const f = new FormData(ed); const members = f.getAll('m'); scopedTeams().forEach((t) => { if (t.id !== sel.id) t.members = (t.members || []).filter((id) => !members.includes(id)); }); Store.updateTeam(sel.id, Object.assign(isOrg() ? {} : { orgId: f.get('orgId') || '' }, { name: f.get('name'), leaderName: f.get('leaderName'), loginId: Store.normId(f.get('loginId')), pin: String(f.get('pin') || '').trim(), members })); Store.audit({ action: 'settings', target: sel.id, reason: '팀 수정 · ' + f.get('name') + ' · ' + members.length + '명' }); LM.toast('저장했습니다'); teamsPage(r); });
       document.getElementById('tm-del').addEventListener('click', () => { Store.removeTeam(sel.id); Store.audit({ action: 'settings', target: sel.id, reason: '팀 삭제 · ' + sel.name }); location.hash = '#/admin/teams'; });
     }
   }

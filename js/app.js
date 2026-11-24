@@ -48,11 +48,11 @@
   function dur(min) { if (min === null || min === undefined) return '—'; if (min < 60) return t('minutes', { n: min }); if (min < 1440) return t('hours', { n: Math.round(min / 60) }); return t('days', { n: Math.round(min / 1440) }); }
 
   let toastTimer = null;
-  function toast(msg) {
+  function toast(msg, ms) {
     let el = document.getElementById('toast');
     if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
     el.textContent = msg; el.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms || 2600);
   }
   function sheet(html, onMount) {
     closeSheet();

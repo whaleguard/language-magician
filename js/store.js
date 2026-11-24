@@ -34,10 +34,29 @@
     } catch (e) { /* 손상된 데이터는 새로 시작 */ }
     return blank();
   }
+  // 다른 창(팝업·잠든 탭)이 예전 데이터로 덮어써 팀·거래처·계정이 사라지지 않도록 병합 후 저장
+  const SHARED = ['teams', 'orgs', 'staff', 'notices'];
+  function mergeShared(stored) {
+    const del = new Set((db._del || []).concat(stored._del || []));
+    SHARED.forEach((k) => {
+      const mine = db[k] || []; const ids = new Set(mine.map((x) => x.id));
+      const theirs = (stored[k] || []).filter((x) => x && x.id && !ids.has(x.id) && !del.has(x.id));
+      if (theirs.length) db[k] = mine.concat(theirs);
+      db[k] = (db[k] || []).filter((x) => !del.has(x.id));
+    });
+    // 같은 팀을 다른 창에서 수정했으면 최신 것을 사용
+    ['teams', 'orgs'].forEach((k) => (stored[k] || []).forEach((x) => { const m = (db[k] || []).find((y) => y.id === x.id); if (m && (x.updatedAt || 0) > (m.updatedAt || 0)) Object.assign(m, x); }));
+    db._del = Array.from(del).slice(-500);
+  }
   function persist() {
     if (viewAs) return; // 회원 화면 보기 중에는 저장하지 않음
-    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn('save failed', e); }
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const st = JSON.parse(raw); if ((st._rev || 0) !== (db._rev || 0)) mergeShared(st); db._rev = Math.max(st._rev || 0, db._rev || 0) + 1; } else db._rev = (db._rev || 0) + 1;
+      localStorage.setItem(KEY, JSON.stringify(db));
+    } catch (e) { console.warn('save failed', e); }
   }
+  function markDel(id) { db._del = (db._del || []).concat(id); }
   function save(opts) {
     persist();
     listeners.forEach((fn) => { try { fn(); } catch (e) { /* noop */ } });
@@ -247,28 +266,35 @@
   // 본사 관리자 계정: personal(일반고객 관리자) | business(기업고객 관리자). 최종 관리자는 admin 계정
   function staff() { ensureTeamArrays(); return db.staff; }
   function staffById(id) { return staff().find((x) => x.id === id); }
-  function staffLogin(loginId, pin) { return staff().find((x) => x.loginId && x.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(x.pin) === String(pin)); }
+  function staffLogin(loginId, pin) { const id = normId(loginId); return staff().find((x) => x.loginId && x.loginId.toLowerCase() === id && String(x.pin).trim() === String(pin || '').trim()); }
   function addStaff(o) { const x = { id: uid('s_'), type: o.type === 'business' ? 'business' : 'personal', name: o.name || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234') }; staff().push(x); persist(); Sync.pushShared(); return x; }
-  function removeStaff(id) { db.staff = staff().filter((x) => x.id !== id); persist(); Sync.pushShared(); }
+  function removeStaff(id) { markDel(id); db.staff = staff().filter((x) => x.id !== id); persist(); Sync.pushShared(); }
   // 기업(상담회사) — 기업 관리자 → 팀장 → 상담원
   function orgs() { ensureTeamArrays(); return db.orgs; }
   function orgById(id) { return orgs().find((o) => o.id === id); }
   function createOrg(o) { ensureTeamArrays(); const g = { id: uid('o_'), name: o.name || '새 기업', adminName: o.adminName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), createdAt: Date.now(), demo: !!o.demo }; db.orgs.push(g); persist(); Sync.pushShared(); return g; }
   function updateOrg(id, patch) { const g = orgById(id); if (!g) return null; Object.assign(g, patch); persist(); Sync.pushShared(); return g; }
-  function removeOrg(id) { ensureTeamArrays(); db.orgs = db.orgs.filter((o) => o.id !== id); db.teams.forEach((t) => { if (t.orgId === id) t.orgId = ''; }); persist(); Sync.pushShared(); }
-  function orgLogin(loginId, pin) { return orgs().find((g) => g.loginId && g.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(g.pin) === String(pin)); }
+  function removeOrg(id) { ensureTeamArrays(); markDel(id); db.orgs = db.orgs.filter((o) => o.id !== id); db.teams.forEach((t) => { if (t.orgId === id) t.orgId = ''; }); persist(); Sync.pushShared(); }
+  function orgLogin(loginId, pin) { const id = normId(loginId); return orgs().find((g) => g.loginId && g.loginId.toLowerCase() === id && String(g.pin).trim() === String(pin || '').trim()); }
   function teamsOfOrg(orgId) { return teams().filter((t) => t.orgId === orgId); }
   function teams() { ensureTeamArrays(); return db.teams; }
   function teamById(id) { return teams().find((t) => t.id === id); }
   function teamOf(userId) { return teams().find((t) => (t.members || []).includes(userId)); }
   function createTeam(o) {
     ensureTeamArrays();
-    const t = { id: uid('t_'), orgId: o.orgId || '', name: o.name || '새 팀', leaderName: o.leaderName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234'), members: o.members || [], createdAt: Date.now(), demo: !!o.demo };
+    const t = { id: uid('t_'), orgId: o.orgId || '', name: o.name || '새 팀', leaderName: o.leaderName || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234').trim(), members: o.members || [], createdAt: Date.now(), demo: !!o.demo };
     db.teams.push(t); (t.members || []).forEach((id) => { if (db.users[id]) db.users[id].plan = 'business'; }); persist(); Sync.pushShared(); return t;
   }
-  function updateTeam(id, patch) { const t = teamById(id); if (!t) return null; Object.assign(t, patch); (t.members || []).forEach((uid2) => { if (db.users[uid2] && db.users[uid2].plan !== 'business') db.users[uid2].plan = 'business'; }); persist(); Sync.pushShared(); return t; }
-  function removeTeam(id) { ensureTeamArrays(); db.teams = db.teams.filter((t) => t.id !== id); persist(); Sync.pushShared(); }
-  function leaderLogin(loginId, pin) { return teams().find((t) => t.loginId && t.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase() && String(t.pin) === String(pin)); }
+  function updateTeam(id, patch) { const t = teamById(id); if (!t) return null; Object.assign(t, patch, { updatedAt: Date.now() }); if (patch.loginId != null) t.loginId = String(patch.loginId).trim(); if (patch.pin != null) t.pin = String(patch.pin).trim(); (t.members || []).forEach((uid2) => { if (db.users[uid2] && db.users[uid2].plan !== 'business') db.users[uid2].plan = 'business'; }); persist(); Sync.pushShared(); return t; }
+  function removeTeam(id) { ensureTeamArrays(); markDel(id); db.teams = db.teams.filter((t) => t.id !== id); persist(); Sync.pushShared(); }
+  function leaderLogin(loginId, pin) { const id = normId(loginId); return teams().find((t) => t.loginId && t.loginId.toLowerCase() === id && String(t.pin).trim() === String(pin || '').trim()); }
+  // 한글 자판 상태로 영문 아이디를 친 경우(ㄴㄴ먀 → ssan) 영문으로 바꿔 비교
+  const KO2EN = { 'ㅂ': 'q', 'ㅈ': 'w', 'ㄷ': 'e', 'ㄱ': 'r', 'ㅅ': 't', 'ㅛ': 'y', 'ㅕ': 'u', 'ㅑ': 'i', 'ㅐ': 'o', 'ㅔ': 'p', 'ㅁ': 'a', 'ㄴ': 's', 'ㅇ': 'd', 'ㄹ': 'f', 'ㅎ': 'g', 'ㅗ': 'h', 'ㅓ': 'j', 'ㅏ': 'k', 'ㅣ': 'l', 'ㅋ': 'z', 'ㅌ': 'x', 'ㅊ': 'c', 'ㅍ': 'v', 'ㅠ': 'b', 'ㅜ': 'n', 'ㅡ': 'm', 'ㅃ': 'Q', 'ㅉ': 'W', 'ㄸ': 'E', 'ㄲ': 'R', 'ㅆ': 'T', 'ㅒ': 'O', 'ㅖ': 'P', 'ㅘ': 'hk', 'ㅙ': 'ho', 'ㅚ': 'hl', 'ㅝ': 'nj', 'ㅞ': 'np', 'ㅟ': 'nl', 'ㅢ': 'ml', 'ㄳ': 'rt', 'ㄵ': 'sw', 'ㄶ': 'sg', 'ㄺ': 'fr', 'ㄻ': 'fa', 'ㄼ': 'fq', 'ㄽ': 'ft', 'ㄾ': 'fx', 'ㄿ': 'fv', 'ㅀ': 'fg', 'ㅄ': 'qt' };
+  const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ', JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+  function ko2en(str) { return Array.from(String(str || '')).map((ch) => { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) { const j = [CHO[Math.floor(c / 588)], JUNG[Math.floor((c % 588) / 28)], JONG[c % 28]]; return j.map((x) => (x ? KO2EN[x] || '' : '')).join(''); } return KO2EN[ch] || ch; }).join(''); }
+  function normId(v) { const s = String(v || '').trim(); return (/[\u3131-\u318E\uAC00-\uD7A3]/.test(s) ? ko2en(s) : s).toLowerCase(); }
+  // 아이디는 있는데 비밀번호가 틀렸는지, 이 기기에 아이디 자체가 없는지 구분
+  function whoHasId(loginId) { const id = normId(loginId); if (!id) return null; if (id === String(db.admin.loginId || 'admin').toLowerCase()) return 'admin'; if (staff().some((x) => (x.loginId || '').toLowerCase() === id)) return 'staff'; if (orgs().some((x) => (x.loginId || '').toLowerCase() === id)) return 'org'; if (teams().some((x) => (x.loginId || '').toLowerCase() === id)) return 'leader'; return null; }
   // 운영자(관리자·팀장) → 회원 메시지. tr: { 언어: 번역문 }
   function sendNotice(o) {
     ensureTeamArrays();
@@ -491,6 +517,7 @@
   function clearDemo() {
     Object.keys(db.users).forEach((k) => { if (db.users[k].demo) delete db.users[k]; });
     db.reports = db.reports.filter((r) => !r.demo);
+    (db.teams || []).concat(db.orgs || [], db.notices || []).filter((x) => x.demo).forEach((x) => markDel(x.id));
     db.teams = (db.teams || []).filter((t) => !t.demo); db.orgs = (db.orgs || []).filter((g) => !g.demo); db.notices = (db.notices || []).filter((n) => !n.demo && db.users[n.userId]);
     persist();
   }
@@ -553,7 +580,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
