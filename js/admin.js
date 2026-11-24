@@ -78,10 +78,17 @@
       : rl.type === 'leader'
       ? [['dashboard', '팀 현황'], ['users', '팀원'], ['attendance', '근태'], ['monitor', '팀원 대화'], ['notices', msgL], ['reports', '신고'], ['audit', '내 열람 기록'], ['ai', 'AI 사용량']]
       : [['dashboard', '운영 현황'], ['users', '회원 CRM'], ['monitor', '전체 대화'], ['notices', msgL], ['orgs', '거래처'], ['teams', '팀·팀장'], ['attendance', '근태'], ['staff', '관리자 계정'], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람 감사로그'], ['ai', 'AI 사용량'], ['settings', '운영 설정']];
+    // 메뉴를 그룹으로 묶고, 선택한 그룹의 하위 메뉴는 아래 탭으로
+    const GROUP = { dashboard: 'home', attendance: 'people', users: 'people', monitor: 'people', notices: 'people', orgs: 'org', teams: 'org', staff: 'org', reports: 'safe', quality: 'safe', audit: 'safe', ai: 'sys', settings: 'sys' };
+    const GL = { home: '현황', people: rl.type === 'hqp' ? '회원' : rl.type === 'admin' ? '회원·상담원' : '상담원', org: '조직', safe: '신고·기록', sys: 'AI·설정' };
+    const groups = []; items.forEach(([k]) => { const g = GROUP[k] || 'home'; if (!groups.includes(g)) groups.push(g); });
+    const ag = GROUP[active] || 'home';
+    const sub = items.filter(([k]) => (GROUP[k] || 'home') === ag);
+    const gUnread = (g) => g === 'people' && unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '';
     return `<header class="top between wrap">
       <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : rl.type === 'hqp' ? '본사 · 일반고객 관리' : rl.type === 'hqb' ? '본사 · 기업고객 관리' : '본사 · 최종 관리자'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : (rl.type === 'hqp' || rl.type === 'hqb') ? ` <span class="badge">${esc(rl.name)}</span>` : ''}</a>
-      <nav class="admin-menu" aria-label="관리자 메뉴">${items.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
-    </header>`;
+      <nav class="admin-menu" aria-label="관리자 메뉴">${groups.map((g) => { const first = items.find(([k]) => (GROUP[k] || 'home') === g); return `<a href="#/admin/${first[0]}" ${ag === g ? 'aria-current="page"' : ''}>${GL[g]}${gUnread(g)}</a>`; }).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
+    </header>${sub.length > 1 ? `<nav class="admin-sub" aria-label="하위 메뉴">${sub.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>` : ''}`;
   }
   function page(active, inner) {
     $app.innerHTML = `<div class="screen admin" lang="ko">${nav(active)}<div class="content stack-lg">${serverUsers ? '<span class="badge">서버 동기화 데이터 표시 중</span>' : (Store.Sync.enabled() ? '<span class="badge warning">서버 연결됨 · 새로고침으로 전체 회원을 불러오세요</span>' : '<span class="badge gray">이 기기 데이터 + 데모 회원 표시 중 · 운영 설정에서 서버를 연결하면 모든 회원 대화가 모입니다</span>')}${inner}</div></div>`;
@@ -132,8 +139,47 @@
   }
 
   /* ---------- 운영 현황 ---------- */
+  /* ---------- 관리자 모바일 모드: 운영 현황 한눈에 ---------- */
+  function staffStatus(u, th) {
+    const now = Date.now(); const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const today = (u.att || {})[Store.dkey(d0.getTime())];
+    const cur = today && today.sessions[today.sessions.length - 1];
+    const on = !!(today && today.lastBeat && now - today.lastBeat < 3 * 60000 && cur && !cur[2]);
+    const lastAct = Math.max((today && today.lastBeat) || 0, ...u.messages.map((m) => m.ts), 0);
+    const waiting = u.contacts.map((c) => { const ms = u.messages.filter((m) => m.contactId === c.id); const l = ms.reduce((a, m) => (!a || m.ts > a.ts ? m : a), null); return l && l.dir === 'in' ? l.ts : null; }).filter(Boolean);
+    const overdue = waiting.filter((ts) => now - ts > th * 60000).length;
+    const idle = on && now - lastAct > th * 60000;
+    const state = on ? (idle ? 'idle' : 'on') : today && today.logoutAt ? 'out' : today ? 'away' : 'off';
+    return { state, online: today ? today.online : 0, first: today ? today.first : null, waiting: waiting.length, overdue, idle };
+  }
+  function mobileOps(r) {
+    const rl = role(); const us = users(); const th = Number(r.q.th || 30);
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const list = us.map((u) => Object.assign({ u, team: Store.teamOf(u.id) }, staffStatus(u, th)));
+    const C = (k) => list.filter((x) => x.state === k).length;
+    const openRep = reports().filter((x) => x.status !== 'closed').length;
+    const unreadR = (Store.db.notices || []).filter((n) => n.from === 'member' && !n.readAt && us.some((u) => u.id === n.userId)).length;
+    const todayMsgs = us.reduce((a, u) => a + u.messages.filter((m) => m.ts >= d0.getTime()).length, 0);
+    const fl = r.q.f || 'all';
+    const ST = { on: ['접속 중', 'on'], idle: ['무응답', 'idle'], away: ['자리 비움', 'away'], out: ['로그아웃', 'off'], off: ['미접속', 'off'] };
+    const staffMode = rl.type !== 'hqp';
+    const shown = list.filter((x) => fl === 'all' || (fl === 'on' ? (x.state === 'on' || x.state === 'idle') : fl === 'alert' ? (x.idle || x.overdue) : x.state === fl)).sort((a, b) => ({ idle: 0, on: 1, away: 2, out: 3, off: 4 }[a.state] - { idle: 0, on: 1, away: 2, out: 3, off: 4 }[b.state]) || b.overdue - a.overdue);
+    const hm = (ts) => { if (!ts) return '—'; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const tile = (n, l, tone, href) => `<a class="mo-tile ${tone || ''}" href="${href}"><b>${n}</b><span>${l}</span></a>`;
+    $app.innerHTML = `<div class="screen admin mo-ops" lang="ko">
+      <header class="mo-head"><div><b>상담매직 · 운영 한눈에</b><span>${esc(rl.type === 'leader' ? rl.team.name : rl.type === 'org' ? rl.org.name : rl.type === 'hqp' ? '일반고객' : rl.type === 'hqb' ? '기업고객' : '전체')} · ${hm(Date.now())} 기준</span></div><button type="button" class="link" id="adm-logout">로그아웃</button></header>
+      <div class="mo-tiles">
+        ${staffMode ? tile(C('on') + C('idle'), '접속 중', 'good', '#/admin/dashboard?f=on') + tile(C('idle'), `${th}분 무응답`, C('idle') ? 'warn' : '', '#/admin/dashboard?f=idle') + tile(list.reduce((a, x) => a + x.overdue, 0), '답장 지연', list.some((x) => x.overdue) ? 'warn' : '', '#/admin/dashboard?f=alert') : tile(us.length, '회원', '', '#/admin/users')}
+        ${tile(unreadR, '미확인 답장', unreadR ? 'warn' : '', '#/admin/notices?f=waiting')}${tile(openRep, '미처리 신고', openRep ? 'warn' : '', '#/admin/reports')}${tile(todayMsgs, '오늘 메시지', '', '#/admin/monitor')}
+      </div>
+      ${staffMode ? `<div class="mo-filter">${[['all', '전체', list.length], ['on', '접속 중', C('on') + C('idle')], ['alert', '확인 필요', list.filter((x) => x.idle || x.overdue).length], ['away', '자리 비움', C('away')], ['off', '미접속', C('off') + C('out')]].map(([k, l, n]) => `<a href="#/admin/dashboard?f=${k}" class="${fl === k ? 'on' : ''}">${l} ${n}</a>`).join('')}</div>
+      <ul class="mo-staff">${shown.map((x) => `<li><a href="#/admin/notices?u=${x.u.id}"><i class="dot ${ST[x.state][1]}"></i><span class="grow"><b>${esc(x.u.nickname)}</b> <em>${ST[x.state][0]}</em><br><small>${esc(x.team ? x.team.name : '')}${x.first ? ' · 첫 접속 ' + hm(x.first) : ''}${x.online ? ' · ' + Math.floor(x.online / 60) + '시간 ' + (x.online % 60) + '분' : ''}</small></span>${x.overdue ? `<span class="mo-badge warn">지연 ${x.overdue}</span>` : x.waiting ? `<span class="mo-badge">대기 ${x.waiting}</span>` : ''}</a></li>`).join('') || '<li class="mo-empty">해당 상담원이 없습니다.</li>'}</ul>` : ''}
+      <nav class="mo-actions">${staffMode ? '<a href="#/admin/attendance">근태</a>' : '<a href="#/admin/users">회원</a>'}<a href="#/admin/notices">메시지</a><a href="#/admin/monitor">대화</a><a href="#/admin/dashboard?full=1">PC 화면</a></nav>
+    </div>`;
+  }
   function dashboard(r) {
     r = r || { q: {} };
+    if (window.matchMedia('(max-width: 760px)').matches && !r.q.full) return mobileOps(r);
     const us = users();
     const DAY = 86400000; const now = Date.now();
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const td = d0.getTime();
@@ -757,7 +803,53 @@
   }
 
   /* ---------- 근태: 접속·로그아웃·근무·대화 시간, 무응답 ---------- */
+  /* 월별 근태 */
+  function attendanceMonth(r) {
+    const us = users();
+    const now = new Date(); const ym = r.q.m || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [Y, M] = ym.split('-').map(Number);
+    const dim = new Date(Y, M, 0).getDate();
+    const keys = Array.from({ length: dim }, (_, i) => `${Y}-${String(M).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
+    const dur = (min) => (min >= 60 ? Math.floor(min / 60) + '시간 ' + (min % 60) + '분' : Math.round(min) + '분');
+    const hmMin = (mins) => (mins == null ? '—' : `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(Math.round(mins % 60)).padStart(2, '0')}`);
+    const minOfDay = (ts) => { const d = new Date(ts); return d.getHours() * 60 + d.getMinutes(); };
+    const rows = us.map((u) => {
+      const recs = keys.map((k) => (u.att || {})[k] || null);
+      const worked = recs.filter(Boolean);
+      const online = worked.reduce((a, x) => a + (x.online || 0), 0), active = worked.reduce((a, x) => a + (x.active || 0), 0);
+      const ms = u.messages.filter((m) => { const d = new Date(m.ts); return d.getFullYear() === Y && d.getMonth() + 1 === M; });
+      const talk = new Set(ms.map((m) => Math.floor(m.ts / 300000))).size * 5;
+      const avgIn = worked.length ? worked.reduce((a, x) => a + minOfDay(x.first), 0) / worked.length : null;
+      const avgOut = worked.length ? worked.reduce((a, x) => a + minOfDay(x.logoutAt || x.last), 0) / worked.length : null;
+      const late = worked.filter((x) => minOfDay(x.first) > 9 * 60 + 30).length;
+      return { u, recs, days: worked.length, online, active, talk, msgs: ms.length, avgIn, avgOut, late, team: Store.teamOf(u.id) };
+    }).sort((a, b) => b.online - a.online);
+    const prev = new Date(Y, M - 2, 1), next = new Date(Y, M, 1);
+    const ymOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const lvl = (min) => (!min ? 0 : min < 120 ? 1 : min < 300 ? 2 : min < 420 ? 3 : 4);
+    page('attendance', `<section class="lm-ops">
+      <header class="ops-header"><div><h1>근태 · 월별 <span class="ops-muted" style="font-size:16px">${Y}년 ${M}월</span></h1><p class="ops-muted">출근일·지각(09:30 이후 첫 접속)·평균 출퇴근·총 접속·활동·대화 시간을 상담원별로 집계합니다.</p></div>
+        <div class="ops-controls"><div class="ops-seg"><a href="#/admin/attendance">오늘</a><a href="#/admin/attendance?d=yesterday">어제</a><a href="#/admin/attendance?d=week">최근 7일</a><a href="#/admin/attendance?d=month" aria-current="true">월별</a></div>
+          <div class="ops-seg"><a href="#/admin/attendance?d=month&m=${ymOf(prev)}">‹ ${prev.getMonth() + 1}월</a><a aria-current="true">${M}월</a><a href="#/admin/attendance?d=month&m=${ymOf(next)}">${next.getMonth() + 1}월 ›</a></div></div></header>
+      <div class="ops-kpis">
+        <div class="ops-kpi"><h2>상담원</h2><strong class="ops-value">${rows.length}명</strong><p class="ops-muted">이번 달 출근 ${rows.filter((x) => x.days).length}명</p></div>
+        <div class="ops-kpi"><h2>총 접속 시간</h2><strong class="ops-value">${dur(rows.reduce((a, x) => a + x.online, 0))}</strong></div>
+        <div class="ops-kpi"><h2>평균 출근일</h2><strong class="ops-value">${(rows.reduce((a, x) => a + x.days, 0) / Math.max(1, rows.length)).toFixed(1)}일</strong></div>
+        <div class="ops-kpi"><h2>지각 (09:30 이후)</h2><strong class="ops-value">${rows.reduce((a, x) => a + x.late, 0)}회</strong></div>
+        <div class="ops-kpi"><h2>총 대화 시간</h2><strong class="ops-value">${dur(rows.reduce((a, x) => a + x.talk, 0))}</strong></div>
+      </div>
+      <section class="ops-panel"><header class="ops-panel-head"><h2>상담원별 월 합계</h2></header>
+        <div class="ops-table-wrap"><table class="ops-table att-table"><thead><tr><th>상담원</th><th class="ops-num">출근일</th><th class="ops-num">지각</th><th class="ops-num">평균 첫 접속</th><th class="ops-num">평균 마지막</th><th class="ops-num">총 접속</th><th class="ops-num">일평균</th><th class="ops-num">실제 활동</th><th class="ops-num">대화 시간</th><th class="ops-num">처리 메시지</th></tr></thead><tbody>
+        ${rows.map((x) => `<tr><td><b>${esc(x.u.nickname)}</b> <span class="ops-muted">${esc(x.u.id)}${x.team ? ' · ' + esc(x.team.name) : ''}</span></td><td class="ops-num">${x.days}일</td><td class="ops-num">${x.late ? `<span class="ops-tag" data-tone="attention">${x.late}</span>` : 0}</td><td class="ops-num">${hmMin(x.avgIn)}</td><td class="ops-num">${hmMin(x.avgOut)}</td><td class="ops-num">${x.online ? dur(x.online) : '—'}</td><td class="ops-num">${x.days ? dur(Math.round(x.online / x.days)) : '—'}</td><td class="ops-num">${x.active ? dur(x.active) : '—'}</td><td class="ops-num">${x.talk ? dur(x.talk) : '—'}</td><td class="ops-num">${x.msgs}</td></tr>`).join('')}
+        </tbody></table></div></section>
+      <section class="ops-panel"><header class="ops-panel-head"><h2>일별 접속 달력</h2><span class="ops-muted">칸 = 그날 접속 시간 (진할수록 길게)</span></header>
+        <div class="ops-table-wrap"><table class="ops-table ops-heat att-month"><thead><tr><th>상담원</th>${keys.map((k, i) => { const wd = new Date(Y, M - 1, i + 1).getDay(); return `<th class="${wd === 0 || wd === 6 ? 'we' : ''}">${i + 1}</th>`; }).join('')}</tr></thead><tbody>
+        ${rows.map((x) => `<tr><th scope="row">${esc(x.u.nickname)}</th>${x.recs.map((rc, i) => `<td data-level="${lvl(rc && rc.online)}" title="${keys[i]} · ${rc ? dur(rc.online) : '미접속'}">${rc ? Math.round(rc.online / 60) : ''}</td>`).join('')}</tr>`).join('')}
+        </tbody></table></div></section>
+    </section>`);
+  }
   function attendancePage(r) {
+    if (r.q.d === 'month') return attendanceMonth(r);
     const us = users();
     const DAY = 86400000; const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const range = r.q.d || 'today';
@@ -793,7 +885,7 @@
     const bar = (ss, ds) => { if (!ss || !ss.length) return '<span class="ops-muted">—</span>'; return `<div class="att-bar" title="0시 ~ 24시">${ss.map((s) => { const L = Math.max(0, (s[0] - ds) / DAY * 100), W = Math.max(0.6, (s[1] - s[0]) / DAY * 100); return `<span style="left:${L}%;width:${W}%" title="${hm(s[0])}~${hm(s[1])}${s[2] === 2 ? ' 로그아웃' : s[2] === 1 ? ' 종료' : ' 접속 중'}"></span>`; }).join('')}<i style="left:${9 / 24 * 100}%"></i><i style="left:${18 / 24 * 100}%"></i></div>`; };
     page('attendance', `<section class="lm-ops">
       <header class="ops-header"><div><h1>근태</h1><p class="ops-muted">접속(로그인)·로그아웃·접속 시간·실제 활동·대화 시간·답장 대기를 상담원별로 봅니다. 활동은 화면을 보며 최근 3분 안에 입력·클릭이 있었던 시간입니다.</p></div>
-        <div class="ops-controls">${seg('d', range, [['today', '오늘'], ['yesterday', '어제'], ['week', '최근 7일']])}${seg('th', th, [[10, '10분'], [30, '30분'], [60, '60분']])}<span class="ops-muted">무응답 기준</span></div></header>
+        <div class="ops-controls">${seg('d', range, [['today', '오늘'], ['yesterday', '어제'], ['week', '최근 7일'], ['month', '월별']])}${seg('th', th, [[10, '10분'], [30, '30분'], [60, '60분']])}<span class="ops-muted">무응답 기준</span></div></header>
       <div class="ops-kpis">
         <div class="ops-kpi"><h2>접속 중</h2><strong class="ops-value">${cntS('on') + cntS('idle')}명</strong><p class="ops-muted">전체 ${rows.length}명</p></div>
         <div class="ops-kpi"><h2>접속했지만 무응답</h2><strong class="ops-value">${cntS('idle')}명</strong><span class="ops-delta" data-tone="${cntS('idle') ? 'attention' : 'good'}">${th}분 이상 활동 없음</span></div>

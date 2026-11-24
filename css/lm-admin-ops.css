@@ -89,3 +89,4 @@
 .lm-ops .att-bar span { position: absolute; top: 0; bottom: 0; background: var(--primary); border-radius: 4px; }
 .lm-ops .att-bar i { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(16,36,62,.25); }
 .lm-ops .att-table td { white-space: nowrap; }
+.lm-ops .att-month { min-width: 900px; } .lm-ops .att-month :is(th, td) { padding: 6px 4px; font-size: 11.5px; text-align: center; } .lm-ops .att-month th.we { color: #c0392b; } .lm-ops .att-month tbody th { text-align: start; white-space: nowrap; }
