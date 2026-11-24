@@ -674,8 +674,43 @@
     return (j.items || []).slice(0, 5).map((x) => ({ kind: x.kind === 'todo' ? 'todo' : 'appointment', title: String(x.title || '').slice(0, 80), date: /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') ? x.date : '', time: /^\d{1,2}:\d{2}$/.test(x.time || '') ? x.time.padStart(5, '0') : '', place: String(x.place || '').slice(0, 60) }));
   }
 
+  /* 관계 분석: 대화에서 신호·추세를 뽑습니다 (앞/뒤 절반 비교) */
+  function relationMetrics(ms) {
+    const ins = ms.filter((m) => m.dir === 'in'), outs = ms.filter((m) => m.dir === 'out');
+    const half = Math.floor(ms.length / 2);
+    const A = ms.slice(0, half), B = ms.slice(half);
+    const med = (arr) => { if (!arr.length) return null; const x = arr.slice().sort((a, b) => a - b); return Math.round(x[Math.floor(x.length / 2)]); };
+    const gapsOf = (list) => { const g = []; for (let i = 1; i < list.length; i++) if (list[i].dir === 'in' && list[i - 1].dir === 'out' && list[i].ts - list[i - 1].ts < 12 * 3600000) g.push((list[i].ts - list[i - 1].ts) / 60000); return g; };
+    const lenOf = (list) => { const l = list.filter((m) => m.dir === 'in'); return l.length ? Math.round(l.reduce((a, m) => a + [...(m.text || '')].length, 0) / l.length) : null; };
+    const rate = (list, rx) => { const l = list.filter((m) => m.dir === 'in'); return l.length ? l.filter((m) => rx.test(m.text || '')).length / l.length : 0; };
+    const cnt = (rx) => ins.filter((m) => rx.test(m.text || '') || rx.test(m.translation || '')).length;
+    const days = new Set(ms.map((m) => ymd(new Date(m.ts)))).size;
+    const span = ms.length ? Math.max(1, Math.round((ms[ms.length - 1].ts - ms[0].ts) / 86400000)) : 0;
+    const firstOfDay = {}; ms.forEach((m) => { const d = ymd(new Date(m.ts)); if (!firstOfDay[d]) firstOfDay[d] = m.dir; });
+    const fv = Object.values(firstOfDay);
+    return {
+      n: ms.length, nin: ins.length, nout: outs.length, days, span,
+      replyA: med(gapsOf(A)), replyB: med(gapsOf(B)),
+      lenA: lenOf(A), lenB: lenOf(B),
+      emoA: rate(A, EMOJI_RX), emoB: rate(B, EMOJI_RX),
+      qRate: rate(ms, RX.question),
+      initiative: fv.length ? fv.filter((x) => x === 'in').length / fv.length : 0,
+      affection: cnt(RX.affection), invite: cnt(RX.invite), busy: cnt(RX.busy), negative: cnt(RX.negative), thanks: cnt(RX.thanks), positive: cnt(RX.positive), money: cnt(RX.money),
+      silent: ms.length ? Math.floor((Date.now() - ms[ms.length - 1].ts) / 86400000) : null,
+      lastDir: ms.length ? ms[ms.length - 1].dir : null,
+    };
+  }
+  async function aiRelation(p) {
+    const sys = 'You are a careful relationship and communication coach for cross-language chats. Base everything on the actual messages; separate evidence from interpretation. Never encourage pressure, deception or asking for money. Respond in strict JSON.';
+    const hist = (p.messages || []).slice(-40).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ' [' + new Date(m.ts).toISOString().slice(0, 16) + ']: ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
+    const user = ['Write in ' + LANGS[p.uiLang].llm + '.', 'Relationship goal: ' + p.relation + '. Stages in order: ' + p.stages.join(' > ') + '. Current stage set by user: ' + p.current + '.', 'Contact: ' + p.contact.nickname + ' (' + LANGS[p.contact.lang].llm + (p.age ? ', about ' + p.age + ' years old' : '') + ').', 'Measured: ' + JSON.stringify(p.metrics), 'Chat:', hist || '(none)', '',
+      'Return JSON {"stage":"one of the stage names above that the chat actually shows","why":["3-5 concrete reasons citing behaviour in the chat"],"signals":[{"tone":"good|warn|neutral","title":"short","detail":"what exactly they did and what it likely means"}] (4-7 items),"next":[{"title":"short action","detail":"how and when to do it, with a sample line in the user language"}] (3-5),"avoid":[{"say":"what not to say or do now","why":"why it would hurt at this stage"}] (3-5)}'].join('\n');
+    const out = await callLLM(sys, user, true);
+    return typeof out === 'string' ? extractJson(out) : out;
+  }
+
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
-    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, relationMetrics, aiRelation, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
