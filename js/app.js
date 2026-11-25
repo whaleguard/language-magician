@@ -176,6 +176,14 @@
 
   const WIDE = window.matchMedia('(min-width: 1100px)');
   WIDE.addEventListener('change', () => render());
+  // 팀장이 상담 중일 때 맨 위: 관리 화면으로 돌아가기
+  const LB_T = { ko: ['팀장 · 내 상담 화면', '🧭 팀장 관리 화면'], zh: ['组长 · 我的咨询画面', '🧭 组长管理画面'], ja: ['リーダー · 自分の相談画面', '🧭 リーダー管理画面'], vi: ['Trưởng nhóm · Màn hình tư vấn', '🧭 Màn hình quản lý'], en: ['Leader · My chats', '🧭 Leader console'] };
+  function leadBar() {
+    const u = Store.me(); if (!u || !u.leaderOf || Store.viewingAs()) return;
+    const T = LB_T[uiLang] || LB_T.ko; const tm = Store.teamById(u.leaderOf);
+    $app.insertAdjacentHTML('afterbegin', `<div class="lead-bar"><span>👤 ${esc(T[0])}${tm ? ' · ' + esc(tm.name) : ''}</span><a class="btn sm" href="#/admin/dashboard" id="lead-back">${esc(T[1])}</a></div>`);
+    document.body.classList.add('has-lead');
+  }
   function viewAsBanner() {
     const v = Store.viewingAs(); if (!v) return '';
     return `<div class="viewas-bar">👁 <b>${esc(v.nickname)}</b> <span>(${esc(v.id)})</span> 회원 화면 보기 중 · 읽기 전용, 변경 내용은 저장되지 않아요 <button type="button" id="viewas-exit">관리자로 돌아가기</button></div>`;
@@ -268,11 +276,13 @@
         <aside class="ws-side">${sideHtml()}</aside>
       </div>`;
       if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
+      document.body.classList.remove('has-lead'); leadBar();
       return;
     }
     document.body.classList.remove('is-wide');
     $app.innerHTML = `<div class="screen">${active !== 'inbox' ? inboxBanner() : ''}${inner}</div>${opts && opts.noNav ? '' : `<nav class="bottom" aria-label="main">${navM.map(([k, ic, lb]) => `<button type="button" data-go="#/${k}" ${active === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${t(lb)}</span></button>`).join('')}</nav>`}`;
     if (Store.viewingAs()) { $app.insertAdjacentHTML('afterbegin', viewAsBanner()); document.body.classList.add('viewas'); }
+    document.body.classList.remove('has-lead'); leadBar();
   }
 
   /* 데스크탑 오른쪽 패널: 대화 중인 상대 목록 + 선택한 상대 정보 */
@@ -415,7 +425,7 @@
   }
   // 내 자리가 아니게 되면(초기화·다른 자리 로그인) 즉시 로그아웃
   function seatGuard() {
-    const u = Store.me(); if (!u || !u.agent || Store.viewingAs() || /^#\/admin/.test(location.hash)) return false;
+    const u = Store.me(); if (!u || !u.agent || u.leaderOf || Store.viewingAs() || /^#\/admin/.test(location.hash)) return false;
     const st = Store.seatState(u.id);
     if (st === 'free') { if (Store.Sync.enabled() && !Store.Sync.lastOk) return false; Store.bindSeat(u.id); return false; }
     if (st === 'ok') return false;
@@ -424,6 +434,8 @@
   window.addEventListener('lm-sync', () => { if (seatGuard()) return; setTimeout(() => { if (!typing()) popNotices(); }, 300); });
   setTimeout(() => { try { seatGuard(); } catch (e) { /* noop */ } }, 2500);
   setTimeout(() => { try { popNotices(); } catch (e) { /* noop */ } }, 1500);
+  // 예약 발송된 지시가 도착 시각이 되면 바로 표시
+  setInterval(() => { try { const u = Store.me(); if (!u || /^#\/admin/.test(location.hash)) return; if (Store.dueSince(u.id)) { if (!typing()) { render(); popNotices(); } } } catch (e) { /* noop */ } }, 5000);
   function renderAgentLogin() {
     document.body.classList.remove('is-admin');
     $app.innerHTML = `<div class="screen"><header class="top row"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span></header>

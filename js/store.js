@@ -101,6 +101,65 @@
     if (u.type === 'guest') { u.type = 'member'; if (/^Guest /.test(u.nickname)) u.nickname = u.loginId; }
     save(); return u;
   }
+  /* ---------- 상담 넘기기 (팀장·회사·관리자) ---------- */
+  // 넘긴(또는 지운) 연락처는 삭제 표시로 모든 기기에서 정리 — 예전 기기가 옛 내용을 다시 올려도 되살아나지 않음
+  function stripMoved(u) {
+    if (!u || !u.contacts) return false; const del = new Set(db._del || []); if (!del.size) return false;
+    const b = u.contacts.length + (u.messages || []).length;
+    u.contacts = u.contacts.filter((c) => !del.has(c.id));
+    u.messages = (u.messages || []).filter((m) => !m.contactId || !del.has(m.contactId));
+    u.promises = (u.promises || []).filter((x) => !x.contactId || !del.has(x.contactId));
+    u.anniversaries = (u.anniversaries || []).filter((x) => !x.contactId || !del.has(x.contactId));
+    return b !== u.contacts.length + u.messages.length;
+  }
+  // 받는 사람 기기: 넘겨받은 상담이 내 연락처에 없으면 채워 넣음 (지시 메시지에 담긴 내용으로)
+  function applyHandoffs(u) {
+    if (!u) return false; const del = new Set(db._del || []); let ch = false;
+    (db.notices || []).forEach((n) => {
+      const h = n.handoff; if (!h || n.userId !== u.id || !h.contact || del.has(h.contact.id)) return;
+      if (u.contacts.some((c) => c.id === h.contact.id)) return;
+      u.contacts.push(h.contact);
+      const have = new Set((u.messages || []).map((m) => m.id));
+      (h.messages || []).forEach((m) => { if (!have.has(m.id)) u.messages.push(m); });
+      u.messages.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      (h.promises || []).forEach((x) => u.promises.push(x)); (h.anniversaries || []).forEach((x) => (u.anniversaries = u.anniversaries || []).push(x));
+      u.updatedAt = Date.now(); ch = true;
+    });
+    if (ch) persist();
+    return ch;
+  }
+  function transferContact(fromU, contactId, toUid, by) {
+    const to = db.users[toUid]; if (!fromU || !to || fromU.id === to.id) return null;
+    const c = (fromU.contacts || []).find((x) => x.id === contactId); if (!c) return null;
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    const nid = uid('c_');
+    const nc = Object.assign(clone(c), { id: nid, handover: { fromId: fromU.id, from: fromU.nickname, by: by || '', at: Date.now() } });
+    const ms = (fromU.messages || []).filter((m) => m.contactId === contactId).map((m) => Object.assign(clone(m), { id: uid('m_'), contactId: nid }));
+    const ps = (fromU.promises || []).filter((x) => x.contactId === contactId).map((x) => Object.assign(clone(x), { id: uid('p_'), contactId: nid }));
+    const an = (fromU.anniversaries || []).filter((x) => x.contactId === contactId).map((x) => Object.assign(clone(x), { id: uid('a_'), contactId: nid }));
+    to.contacts.push(nc); to.messages = (to.messages || []).concat(ms).sort((a, b) => (a.ts || 0) - (b.ts || 0)); to.promises = (to.promises || []).concat(ps); to.anniversaries = (to.anniversaries || []).concat(an); to.updatedAt = Date.now();
+    markDel(contactId); markDel(fromU.id + '_' + contactId); db.custs = (db.custs || []).filter((x) => x.id !== fromU.id + '_' + contactId); stripMoved(fromU); fromU.updatedAt = Date.now();
+    const nm = (c.nickname || '') + (c.app ? ' · ' + c.app : '');
+    sendNotice({ userId: to.id, kind: 'notice', from: 'leader', fromName: by || '팀장', teamId: (teamOf(to.id) || {}).id || '', text: `${fromU.nickname}님이 맡던 「${nm}」 상담을 넘겨받았습니다. 지난 대화와 고객 정보가 연락처에 들어 있습니다.`, lang: 'ko', handoff: { contact: nc, messages: ms, promises: ps, anniversaries: an } });
+    sendNotice({ userId: fromU.id, kind: 'notice', from: 'leader', fromName: by || '팀장', teamId: (teamOf(fromU.id) || {}).id || '', text: `「${nm}」 상담을 ${to.nickname}님에게 넘겼습니다. 이 대화는 이제 내 목록에서 빠집니다.`, lang: 'ko' });
+    persist();
+    [fromU, to].forEach((u) => { if (u.srv && !u.demo) Sync.upsert('user:' + u.id, u).catch(() => {}); });
+    Sync.pushShared();
+    return nid;
+  }
+  function transferAll(fromU, toUid, by) { if (!fromU) return 0; const ids = (fromU.contacts || []).map((c) => c.id); let n = 0; ids.forEach((id) => { if (transferContact(fromU, id, toUid, by)) n++; }); return n; }
+  // 팀장도 상담: 팀마다 팀장 전용 상담 계정(로그인 아이디 없음 — 팀장 로그인으로만 들어감)
+  function leaderAgent(teamId) {
+    const t = teamById(teamId); if (!t) return null;
+    let u = t.leaderUid && db.users[t.leaderUid];
+    if (!u) {
+      u = Object.values(db.users).find((x) => x && x.leaderOf === teamId) || null;
+      if (!u) { u = createAgent({ nickname: (t.leaderName || '팀장') + ' 팀장', lang: 'ko', teamId, loginId: '' }); u.loginId = ''; }
+      u.leaderOf = teamId; u.updatedAt = Date.now(); t.leaderUid = u.id; t.updatedAt = Date.now(); persist(); Sync.pushShared();
+    }
+    if (t.leaderName && u.nickname !== t.leaderName + ' 팀장') { u.nickname = t.leaderName + ' 팀장'; u.updatedAt = Date.now(); persist(); }
+    return u;
+  }
   function findAgentLocal(loginId, pin) { const id = normId(loginId); return Object.values(db.users).find((u) => u.loginId && u.loginId.toLowerCase() === id && (pin == null || String(u.pin).trim() === String(pin).trim())); }
   function agentLoginAs(u) { if (db.users[u.id]) Object.assign(db.users[u.id], u); else db.users[u.id] = u; db.currentUserId = u.id; persist(); }
   // 상담원 자리 고정: 처음 로그인한 PC(브라우저)에서만 열림. 팀장·관리자가 '자리 초기화'하면 새 자리에서 다시 등록
@@ -142,7 +201,8 @@
     const u = db.users[userId]; if (!u || !contact) return [];
     const tm = teamOf(userId); if (!tm) return [];
     const mine = custEntry(u, contact);
-    return (db.custs || []).filter((x) => x.agentId !== userId && (x.orgId ? x.orgId === (tm.orgId || '') : x.teamId === tm.id) && (x.key === mine.key || (x.fps || []).some((f) => mine.fps.includes(f))))
+    const del = new Set(db._del || []);
+    return (db.custs || []).filter((x) => x.agentId !== userId && !del.has(x.contactId) && !del.has(x.id) && (x.orgId ? x.orgId === (tm.orgId || '') : x.teamId === tm.id) && (x.key === mine.key || (x.fps || []).some((f) => mine.fps.includes(f))))
       .map((x) => { const d = dupDecision(mine.id, x.id); return { agentId: x.agentId, agentName: x.agentName, contactId: x.contactId, nick: x.nick, app: x.app, lastTs: x.lastTs, why: x.key === mine.key ? 'nick' : 'msg', same: (x.fps || []).filter((f) => mine.fps.includes(f)).length, decided: d ? (d.same ? 'same' : 'diff') : '', owner: d && d.owner ? ((db.users[d.owner] || {}).nickname || ((db.custs || []).find((y) => y.agentId === d.owner) || {}).agentName || d.owner) : '', ownerId: d ? d.owner : '' }; })
       .filter((x) => x.decided !== 'diff');
   }
@@ -389,7 +449,7 @@
     if (msgIds && msgIds.length) { const set = new Set(msgIds); const b = u.messages.length; u.messages = u.messages.filter((m) => !set.has(m.id)); n = b - u.messages.length; }
     else if (contactId !== undefined) {
       const b = u.messages.length;
-      if (contactId) { u.contacts = u.contacts.filter((c) => c.id !== contactId); u.messages = u.messages.filter((m) => m.contactId !== contactId); u.promises = (u.promises || []).filter((x) => x.contactId !== contactId); u.anniversaries = (u.anniversaries || []).filter((x) => x.contactId !== contactId); }
+      if (contactId) { markDel(contactId); markDel(u.id + '_' + contactId); u.contacts = u.contacts.filter((c) => c.id !== contactId); u.messages = u.messages.filter((m) => m.contactId !== contactId); u.promises = (u.promises || []).filter((x) => x.contactId !== contactId); u.anniversaries = (u.anniversaries || []).filter((x) => x.contactId !== contactId); }
       else u.messages = u.messages.filter((m) => m.contactId);
       n = b - u.messages.length;
     }
@@ -440,12 +500,20 @@
   function sendNotice(o) {
     ensureTeamArrays();
     const n = { id: uid('n_'), userId: o.userId, needReply: !!o.needReply, due: o.due || '', trFail: !!o.trFail, kind: o.kind || 'instruction', from: o.from || 'admin', fromName: o.fromName || '관리자', teamId: o.teamId || '', text: o.text, lang: o.lang || 'ko', tr: o.tr || {}, ts: Date.now(), readAt: null, demo: !!o.demo };
-    if (o.fromId) n.fromId = o.fromId; if (o.kind === 'chat') n.updatedAt = n.ts;
+    if (o.fromId) n.fromId = o.fromId; if (o.kind === 'chat') n.updatedAt = n.ts; if (o.sendAt && o.sendAt > n.ts) { n.sendAt = o.sendAt; n.updatedAt = n.ts; try { n.fromKey = sessionStorage.getItem('lm_admin_role') || 'admin'; } catch (e) { /* noop */ } } if (o.batch) n.batch = o.batch; if (o.handoff) n.handoff = o.handoff;
     db.notices.push(n); persist(); Sync.pushShared(); return n;
   }
   // 답장 필요한 지시 중 아직 답장이 없는 것
   function pendingReply(userId) { const ns = noticesOf(userId).filter((n) => n.kind !== 'chat'); return ns.filter((n, i) => n.from !== 'member' && n.needReply && !ns.slice(i + 1).some((x) => x.from === 'member')); }
-  function noticesOf(userId) { ensureTeamArrays(); return db.notices.filter((n) => n.userId === userId).sort((a, b) => a.ts - b.ts); }
+  // 예약(지연) 발송: 보낸 쪽 관리 화면에서만 보이고, 받는 사람에게는 발송 시각이 지나야 보임
+  const isDue = (n) => !n.sendAt || n.sendAt <= Date.now();
+  const adminView = () => typeof location !== 'undefined' && /^#\/admin/.test(location.hash) && !viewAs;
+  function noticesOf(userId) { ensureTeamArrays(); const adm = adminView(); let me = ''; try { me = sessionStorage.getItem('lm_admin_role') || 'admin'; } catch (e) { /* noop */ } return db.notices.filter((n) => n.userId === userId && (isDue(n) || (adm && n.fromKey === me))).sort((a, b) => Math.max(a.ts, a.sendAt || 0) - Math.max(b.ts, b.sendAt || 0)); }
+  function pendingBatches() { ensureTeamArrays(); const m = {}; let me = ''; try { me = sessionStorage.getItem('lm_admin_role') || 'admin'; } catch (e) { /* noop */ } db.notices.forEach((n) => { if (n.sendAt && !isDue(n) && n.fromKey === me) { const k = n.batch || n.id; (m[k] = m[k] || { batch: k, sendAt: n.sendAt, text: n.text, kind: n.kind, fromName: n.fromName, ids: [], users: [] }); m[k].ids.push(n.id); m[k].users.push(n.userId); } }); return Object.values(m).sort((a, b) => a.sendAt - b.sendAt); }
+  function sendBatchNow(batch) { const now = Date.now(); let c = 0; db.notices.forEach((n) => { if ((n.batch || n.id) === batch && n.sendAt && n.sendAt > now) { n.sendAt = now; n.ts = now; n.updatedAt = now; c++; } }); if (c) { persist(); Sync.pushShared(); } return c; }
+  // 새로 발송 시각이 된 내 지시가 있는지 (받는 화면이 주기적으로 확인)
+  let dueSeen = Date.now();
+  function dueSince(userId) { const now = Date.now(); const hit = (db.notices || []).some((n) => n.userId === userId && n.sendAt && n.sendAt > dueSeen - 1000 && n.sendAt <= now); dueSeen = now; return hit; }
   function unreadNotices(userId) { return noticesOf(userId).filter((n) => n.kind !== 'chat' && n.from !== 'member' && !n.readAt).length; }
   function markNoticesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from !== 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persistAny(); Sync.pushShared(); } return ch; }
   function markRepliesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from === 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persist(); Sync.pushShared(); } }
@@ -759,9 +827,10 @@
           const loc = db.users[id]; const remSig = this.sig(d);
           if (loc && this.sig(loc) === remSig) { hs[row.key] = remSig; return; }
           const localDirty = loc && hs[row.key] && hs[row.key] !== this.sig(loc);
-          if (!loc || !localDirty || (d.updatedAt || 0) >= (loc.updatedAt || 0)) { db.users[id] = d; hs[row.key] = remSig; changed++; }
+          if (!loc || !localDirty || (d.updatedAt || 0) >= (loc.updatedAt || 0)) { db.users[id] = d; stripMoved(d); hs[row.key] = remSig; changed++; }
         }
       });
+      try { if (meId && db.users[meId]) { if (stripMoved(db.users[meId])) changed++; if (applyHandoffs(db.users[meId])) changed++; } } catch (e) { /* noop */ }
       this.saveHs();
       if (changed) { ['reports', 'audit', 'quality'].forEach((k) => { if (db[k]) db[k].sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0)); }); if (db.audit && db.audit.length > 3000) db.audit.length = 3000; }
       if (changed) { try { db._rev = (db._rev || 0) + 1; localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* noop */ } try { window.dispatchEvent(new CustomEvent('lm-sync', { detail: changed })); } catch (e) { /* noop */ } }
@@ -842,7 +911,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, removeUser, removeUserConvo, purgeNotices, removeLeader, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, mergeContactInfo, setContactInfo, INFO_KEYS, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, removeUser, removeUserConvo, purgeNotices, removeLeader, leaderAgent, transferContact, transferAll, stripMoved, pendingBatches, sendBatchNow, dueSince, isDue, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, mergeContactInfo, setContactInfo, INFO_KEYS, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };

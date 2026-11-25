@@ -334,3 +334,21 @@ nav.bottom .hq-nav { top: 1px; right: 4px; width: 15px; height: 15px; font-size:
 .crm-bulk { float: right; display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
 .crm-ck { width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px; }
 @media (max-width: 640px) { .crm-bulk { float: none; display: flex; margin-top: 6px; } }
+/* 팀장: 내 상담 화면 ↔ 관리 화면 */
+.lead-bar { position: relative; z-index: 100; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; box-sizing: border-box; padding: 6px 14px; background: #0e2a47; color: #fff; font-size: 13px; font-weight: 600; }
+.lead-bar .btn { background: #fff; color: #0e2a47; border: 0; min-height: 30px; padding: 4px 12px; font-weight: 800; white-space: nowrap; }
+.lead-bar .btn:hover { background: #e7f1fb; }
+body.has-lead .ws { height: calc(100dvh - 40px) !important; }
+body.has-lead .ws > :is(.ws-rail, .ws-main, .ws-side) { height: calc(100dvh - 40px) !important; }
+.to-work { background: #07c160 !important; color: #fff !important; border: 0 !important; font-weight: 800; white-space: nowrap; }
+.to-work:hover { background: #06ad56 !important; }
+@media (max-width: 600px) { .lead-bar { font-size: 12px; padding: 6px 10px; } .lead-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+/* 발송 대기(취소 가능) */
+.nt-pending { display: grid; gap: 8px; margin: 10px 0 4px; }
+.nt-pend { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: #fff8e6; border: 1px solid #f3d48a; color: #5c4400; font-size: 13.5px; }
+.nt-pend-t { min-width: 0; overflow-wrap: anywhere; }
+.nt-pend b { color: #b45309; }
+.lm-msg.pend { opacity: .7; }
+.nt-delay select { min-width: 92px; }
+.ho-box summary { cursor: pointer; font-weight: 700; color: #036da3; }
+.ho-inline { padding: 8px 10px; border-radius: 10px; background: #eef6fc; border: 1px solid #cfe3f3; }

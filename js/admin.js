@@ -75,7 +75,7 @@
   function nav(active) {
     const rl = role();
     const lp = leaderPeers(); const lpIds = new Set(lp.map((x) => x.id));
-    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.kind !== 'chat' && !n.readAt && ((isLeader() && lpIds.has(n.userId)) ? n.from !== 'member' : (n.from === 'member' && (lpIds.has(n.userId) || users().some((u) => u.id === n.userId))))).length : 0;
+    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.kind !== 'chat' && Store.isDue(n) && !n.readAt && ((isLeader() && lpIds.has(n.userId)) ? n.from !== 'member' : (n.from === 'member' && (lpIds.has(n.userId) || users().some((u) => u.id === n.userId))))).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
     const items = rl.type === 'hqp'
       ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
@@ -95,7 +95,7 @@
     const gUnread = (g) => g === 'people' && unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '';
     return `<header class="top between wrap">
       <a class="brand" href="#/admin/dashboard"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 ${rl.type === 'leader' ? '팀장 콘솔' : rl.type === 'org' ? '거래처 관리' : rl.type === 'hqp' ? '본사 · 일반고객 관리' : rl.type === 'hqb' ? '본사 · 기업고객 관리' : '본사 · 최종 관리자'}${rl.type === 'leader' ? ` <span class="badge">${esc(rl.team.name)} · ${esc(rl.name)}</span>` : rl.type === 'org' ? ` <span class="badge">${esc(rl.org.name)} · ${esc(rl.name)}</span>` : (rl.type === 'hqp' || rl.type === 'hqb') ? ` <span class="badge">${esc(rl.name)}</span>` : ''}</a>
-      <nav class="admin-menu" aria-label="관리자 메뉴">${groups.map((g) => { const first = items.find(([k]) => (GROUP[k] || 'home') === g); return `<a href="#/admin/${first[0]}" ${ag === g ? 'aria-current="page"' : ''}>${GL[g]}${gUnread(g)}</a>`; }).join('')}<a href="#/home" class="muted">앱으로</a><button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
+      <nav class="admin-menu" aria-label="관리자 메뉴">${groups.map((g) => { const first = items.find(([k]) => (GROUP[k] || 'home') === g); return `<a href="#/admin/${first[0]}" ${ag === g ? 'aria-current="page"' : ''}>${GL[g]}${gUnread(g)}</a>`; }).join('')}${rl.type === 'leader' ? '<button type="button" class="btn sm to-work" data-to-work="1">💬 내 상담 화면</button>' : '<a href="#/home" class="muted">앱으로</a>'}<button type="button" class="link muted" id="adm-logout" style="min-height:0">로그아웃</button></nav>
     </header>${sub.length > 1 ? `<nav class="admin-sub" aria-label="하위 메뉴">${sub.map(([k, l]) => `<a href="#/admin/${k}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>` : ''}`;
   }
   function page(active, inner) {
@@ -181,7 +181,7 @@
     const hm = (ts) => { if (!ts) return '—'; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const tile = (n, l, tone, href) => `<a class="mo-tile ${tone || ''}" href="${href}"><b>${n}</b><span>${l}</span></a>`;
     $app.innerHTML = `<div class="screen admin mo-ops" lang="ko">
-      <header class="mo-head"><div><b>상담매직 · 운영 한눈에</b><span>${esc(rl.type === 'leader' ? rl.team.name : rl.type === 'org' ? rl.org.name : rl.type === 'hqp' ? '일반고객' : rl.type === 'hqb' ? '기업고객' : '전체')} · ${hm(Date.now())} 기준</span></div><button type="button" class="link" id="adm-logout">로그아웃</button></header>
+      <header class="mo-head"><div><b>상담매직 · 운영 한눈에</b><span>${esc(rl.type === 'leader' ? rl.team.name : rl.type === 'org' ? rl.org.name : rl.type === 'hqp' ? '일반고객' : rl.type === 'hqb' ? '기업고객' : '전체')} · ${hm(Date.now())} 기준</span></div><span class="row" style="gap:8px">${rl.type === 'leader' ? '<button type="button" class="btn sm to-work" data-to-work="1">💬 내 상담</button>' : ''}<button type="button" class="link" id="adm-logout">로그아웃</button></span></header>
       <div class="mo-tiles">
         ${staffMode ? tile(C('on') + C('idle'), '접속 중', 'good', '#/admin/dashboard?f=on') + tile(C('idle'), `${th}분 무응답`, C('idle') ? 'warn' : '', '#/admin/dashboard?f=idle') + tile(list.reduce((a, x) => a + x.overdue, 0), '답장 지연', list.some((x) => x.overdue) ? 'warn' : '', '#/admin/dashboard?f=alert') : tile(us.length, '회원', '', '#/admin/users')}
         ${tile(unreadR, '미확인 답장', unreadR ? 'warn' : '', '#/admin/notices?f=waiting')}${tile(openRep, '미처리 신고', openRep ? 'warn' : '', '#/admin/reports')}${tile(todayMsgs, '오늘 메시지', '', '#/admin/monitor')}
@@ -238,7 +238,7 @@
     const queue = [
       [open.length, '미처리 신고', open.length ? '가장 오래된 건 ' + oldest(open, (x) => x.createdAt) : '', '#/admin/reports', 'attention'],
       [risk7.length, '미검토 위험 표시 대화', risk7.length ? '가장 오래된 건 ' + oldest(risk7, (x) => x.m.ts) : '', '#/admin/monitor?risk=1', 'attention'],
-      (() => { const lp = leaderPeers(); const un = (Store.db.notices || []).filter((n) => n.kind !== 'chat' && !n.readAt && lp.some((x) => x.id === n.userId) && (isLeader() ? n.from !== 'member' : n.from === 'member')); return [un.length, isLeader() ? '회사에서 온 메시지' : '팀장 답장·보고', un.length ? un.slice(-1)[0].text.slice(0, 30) : '', '#/admin/notices?u=' + encodeURIComponent(un.length ? un.slice(-1)[0].userId : (lp[0] || {}).id || ''), 'attention']; })(),
+      (() => { const lp = leaderPeers(); const un = (Store.db.notices || []).filter((n) => n.kind !== 'chat' && Store.isDue(n) && !n.readAt && lp.some((x) => x.id === n.userId) && (isLeader() ? n.from !== 'member' : n.from === 'member')); return [un.length, isLeader() ? '회사에서 온 메시지' : '팀장 답장·보고', un.length ? un.slice(-1)[0].text.slice(0, 30) : '', '#/admin/notices?u=' + encodeURIComponent(un.length ? un.slice(-1)[0].userId : (lp[0] || {}).id || ''), 'attention']; })(),
       (() => { let g = []; try { g = Store.duplicateCustomers(us.filter((x) => !x.demo)).filter((x) => !x.decided); } catch (e) { g = []; } return [g.length, '같은 고객 중복 상담 확인', g.length ? g.slice(0, 2).map((x) => APPN(x[0].app) + ' / ' + x[0].nick).join(', ') : '', '#/admin/monitor?dup=1', 'attention']; })(),
       (() => { const ids = new Set(us.map((u) => u.id)); const cp = Store.db.audit.filter((a) => a.action === 'capture' && a.ts >= now - 7 * DAY && (isSuper() || ids.has(a.target))); return [cp.length, '화면 캡처 시도 (7일)', cp.length ? '최근 ' + ago(cp[0].ts) + ' · ' + (cp[0].member || cp[0].operator || '') : '', '#/admin/audit?act=capture', 'attention']; })(),
       [bannedRecent.length, '차단 회원의 최근 기록', banned.length ? '차단 회원 ' + banned.length + '명' : '', '#/admin/users?type=banned', 'info'],
@@ -450,12 +450,32 @@
         </div>
       </div></article>`;
   }
+  // 상담 넘기기: 받을 수 있는 사람 (팀장=자기 팀원+본인, 회사=회사 상담원, 본사=같은 팀 또는 전체 상담원)
+  function handoffTargets(u) {
+    const rl = role(); const ids = new Set();
+    const addTeam = (tm) => { (tm.members || []).forEach((id) => ids.add(id)); if (tm.leaderUid) ids.add(tm.leaderUid); };
+    if (rl.type === 'leader') addTeam(rl.team);
+    else if (rl.type === 'org') Store.teamsOfOrg(rl.org.id).forEach(addTeam);
+    else { const t = Store.teamOf(u.id); if (t) addTeam(t); else Object.values(Store.db.users).forEach((x) => { if (x && x.agent) ids.add(x.id); }); }
+    const out = Array.from(ids).map((id) => Store.db.users[id]).filter((x) => x && x.id !== u.id && x.status !== 'banned');
+    if (rl.type === 'leader' && !rl.team.leaderUid) out.push({ id: '__me', nickname: (rl.team.leaderName || '팀장') + ' 팀장 (나)' });
+    return out;
+  }
+  const hoOpts = (u) => handoffTargets(u).map((x) => `<option value="${esc(x.id)}">${esc(x.nickname)}${x.leaderOf ? ' (팀장 본인)' : ''} · ${esc(x.id === '__me' ? '' : x.id)}</option>`).join('');
+  function resolveTarget(v) { if (v === '__me') { const rl = role(); const la = rl.type === 'leader' ? Store.leaderAgent(rl.team.id) : null; return la ? la.id : ''; } return v; }
+  function byName() { const rl = role(); return rl.type === 'leader' ? (rl.team.leaderName || '팀장') + ' 팀장' : rl.type === 'org' ? (rl.org.adminName || '회사 관리자') + ' (회사)' : '본사 관리자'; }
+  function handoffBox(u) {
+    if (!u || !(u.agent || Store.teamOf(u.id)) || !(u.contacts || []).length) return '';
+    const opts = hoOpts(u); if (!opts) return '';
+    return `<details class="card ho-box"><summary>↪ 대화 넘기기 <span class="small muted">(휴가·병가·퇴사 등)</span></summary><div class="stack-sm"><p class="small muted">${esc(u.nickname)}의 상담 ${u.contacts.length}건과 지난 대화·고객 정보를 다른 사람에게 옮깁니다. 받은 사람 연락처에 그대로 들어가고, 두 사람 모두에게 알림이 갑니다.</p><div class="row wrap" style="gap:6px"><select class="field sel-sm" id="ho-all-to">${opts}</select><button class="btn sm" type="button" data-ho-all="${esc(u.id)}">모든 대화 넘기기</button></div></div></details>`;
+  }
   function delBox(u) {
+    if (u.leaderOf) return '<p class="small muted">팀장 본인 상담 계정입니다 (팀장 로그인 → 「💬 내 상담 화면」으로 사용). 팀장 계정을 지우면 함께 쓸 수 없게 됩니다.</p>';
     const what = u.agent ? '상담원 계정' : '회원 계정';
     return `<details class="card danger del-box"><summary style="color:var(--danger)">🗑 ${what} 삭제</summary><div class="stack-sm"><p class="small"><strong>${esc(u.nickname)} / ${esc(u.id)}</strong>${u.loginId ? ' · 아이디 ' + esc(u.loginId) : ''}</p><p class="small muted">계정과 이 계정의 모든 대화·연락처·약속이 모든 PC와 서버에서 지워지고 되돌릴 수 없습니다. 로그인 중이면 바로 로그아웃됩니다. 삭제 기록은 감사로그에 남습니다.</p><input class="field" data-del-confirm="${u.id}" placeholder="확인을 위해 닉네임 「${esc(u.nickname)}」 입력"><button class="btn danger-btn full" type="button" data-del-user="${u.id}">${esc(u.nickname)} ${what} 삭제</button></div></details>`;
   }
   function banBox(u) {
-    return delBox(u) + (u.status === 'banned'
+    return handoffBox(u) + delBox(u) + (u.status === 'banned'
       ? `<button class="btn secondary" type="button" data-unban="${u.id}">차단 해제</button>`
       : `<details class="card danger"><summary style="color:var(--danger)">앱 이용 차단</summary><div class="stack-sm"><p class="small"><strong>조치 대상:</strong> ${esc(u.nickname)} / ${esc(u.id)}</p><textarea class="field" data-ban-reason="${u.id}" rows="3" placeholder="확인된 위반 행위와 관련 기록을 입력하세요."></textarea><button class="btn danger-btn full" type="button" data-ban="${u.id}">${esc(u.nickname)} 이용 차단</button></div></details>`);
   }
@@ -465,6 +485,14 @@
     Store.audit({ action: 'delete', target: u.id, member: u.nickname, reason: why || ((u.agent ? '상담원' : '회원') + ' 계정 삭제') });
   }
   function bindBan() {
+    $app.querySelectorAll('[data-ho-all]').forEach((b) => b.addEventListener('click', () => {
+      const u = findUser(b.dataset.hoAll); if (!u) return; const to = resolveTarget((document.getElementById('ho-all-to') || {}).value || ''); const tu = Store.db.users[to];
+      if (!tu) { LM.toast('받을 사람을 찾을 수 없습니다'); return; }
+      if (!confirm(`${u.nickname}의 상담 ${u.contacts.length}건을 모두 ${tu.nickname}에게 넘길까요?`)) return;
+      if (Store.db.users[u.id] !== u) Store.db.users[u.id] = u;
+      const n = Store.transferAll(u, to, byName()); Store.audit({ action: 'settings', target: u.id, member: u.nickname, reason: '대화 전체 넘기기 ' + n + '건 → ' + tu.nickname + ' (' + to + ')' });
+      LM.toast(`${n}건을 ${tu.nickname}에게 넘겼습니다`); LM.render();
+    }));
     $app.querySelectorAll('[data-del-user]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.delUser; const u = findUser(id); if (!u) return;
       const v = (($app.querySelector(`[data-del-confirm="${id}"]`) || {}).value || '').trim();
@@ -549,7 +577,7 @@
           ${noContactMsgs.length ? `<button class="sel-item" type="button" data-pick-c="" aria-selected="${!cid}"><span class="avatar sm">?</span><span class="grow"><strong>연락처 미지정</strong><br><span class="tiny muted">${noContactMsgs.length}건</span></span></button>` : ''}
           ${!contacts.length && !noContactMsgs.length ? '<p class="small muted">대화가 없습니다.</p>' : ''}</div></div>
         <div class="card stack-lg" style="min-width:0">
-          ${u ? `<div class="stack-xs"><div class="between wrap"><h2>대화 기록</h2><div class="row wrap" style="gap:6px;flex-wrap:wrap">${viewAsBtn(u)}<a class="btn secondary sm" href="#/admin/notices?u=${u.id}">✉ 메시지</a>${ms.length ? `<button class="btn danger-btn sm" type="button" id="mon-del-convo">🗑 이 대화 전체 삭제</button>` : ''}</div></div><p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
+          ${u ? `<div class="stack-xs"><div class="between wrap"><h2>대화 기록</h2><div class="row wrap" style="gap:6px;flex-wrap:wrap">${viewAsBtn(u)}<a class="btn secondary sm" href="#/admin/notices?u=${u.id}">✉ 메시지</a>${c && (u.agent || Store.teamOf(u.id)) && hoOpts(u) ? `<button class="btn secondary sm" type="button" id="mon-ho">↪ 담당 넘기기</button>${role().type === 'leader' && !u.leaderOf ? '<button class="btn sm" type="button" id="mon-pull">⬇ 내 상담으로 가져오기</button>' : ''}` : ''}${ms.length ? `<button class="btn danger-btn sm" type="button" id="mon-del-convo">🗑 이 대화 전체 삭제</button>` : ''}</div></div>${c && (u.agent || Store.teamOf(u.id)) ? `<div class="row wrap ho-inline" id="mon-ho-box" hidden style="gap:6px"><span class="small">받을 사람</span><select class="field sel-sm" id="mon-ho-to">${hoOpts(u)}</select><button class="btn sm" type="button" id="mon-ho-go">이 상담 넘기기</button></div>` : ''}<p><strong>${c ? esc(APPN(c.app) + ' / ' + c.nickname) : '연락처 미지정'}</strong></p><p class="small muted">${esc(u.nickname)} · ${esc(u.id)} · ${ms.length}건${ms.length ? ' · 최근 ' + fmt(ms[ms.length - 1].ts) : ''}${c ? ' · ' + REL[c.relation || 'friend'] + ' / ' + esc(STAGE_KO[I18N.STAGES[c.relation || 'friend'][c.stage || 0]]) : ''}</p></div>
           ${granted ? convoHtml(u, c, ms) : `<div class="card stack-sm notice"><label class="label" for="mon-reason">열람 사유 (필수 · 감사로그에 기록됩니다)</label><select class="field" id="mon-reason"><option value="">사유 선택</option><option>번역·조언 품질 검토</option><option>신고 또는 위험 대화 조사</option><option>사용자 문의 대응</option><option>서비스 개선을 위한 대화 패턴 분석</option></select><button class="btn full" type="button" id="mon-grant">사유 기록 후 대화 열람</button></div>`}` : '<p class="muted">회원을 선택하세요.</p>'}
         </div>
       </div>`);
@@ -566,6 +594,12 @@
       monitor(r);
     });
     bindConvo(u, c, ms);
+    {
+      const doHo = (toV) => { const to = resolveTarget(toV); const tu = Store.db.users[to]; if (!to || !tu) { LM.toast('받을 사람을 찾을 수 없습니다'); return; } if (!confirm(`「${c.nickname}」 상담을 ${tu.nickname}에게 넘길까요?\n지난 대화·고객 정보가 함께 옮겨지고, ${u.nickname}의 목록에서는 빠집니다.`)) return; if (Store.db.users[u.id] !== u) Store.db.users[u.id] = u; const nid = Store.transferContact(u, c.id, to, byName()); if (!nid) { LM.toast('넘기지 못했습니다'); return; } Store.audit({ action: 'settings', target: u.id, member: u.nickname, contact: APPN(c.app) + ' / ' + c.nickname, reason: '상담 넘기기 → ' + tu.nickname + ' (' + to + ')' }); LM.toast(`${tu.nickname}에게 넘겼습니다`); location.hash = '#/admin/monitor?u=' + encodeURIComponent(to) + '&c=' + encodeURIComponent(nid); };
+      const hb = document.getElementById('mon-ho'); if (hb) hb.addEventListener('click', () => { const bx = document.getElementById('mon-ho-box'); if (bx) bx.hidden = !bx.hidden; });
+      const hg = document.getElementById('mon-ho-go'); if (hg) hg.addEventListener('click', () => doHo(document.getElementById('mon-ho-to').value));
+      const pl = document.getElementById('mon-pull'); if (pl) pl.addEventListener('click', () => { const rl = role(); const la = Store.leaderAgent(rl.team.id); if (la) doHo(la.id); });
+    }
     { const dc = document.getElementById('mon-del-convo'); if (dc) dc.addEventListener('click', () => { const nm = c ? APPN(c.app) + ' / ' + c.nickname : '연락처 미지정'; if (!confirm(`${u.nickname}의 「${nm}」 대화 ${ms.length}건${c ? '과 연락처·약속' : ''}을 영구 삭제할까요? 되돌릴 수 없습니다.`)) return; const n = Store.removeUserConvo(u, c ? c.id : '', null); Store.audit({ action: 'delete', target: u.id, member: u.nickname, contact: nm, reason: '대화 삭제 · ' + n + '건' }); LM.toast(`대화 ${n}건을 삭제했습니다`); location.hash = base + '&u=' + u.id; monitor(Object.assign({}, r, { q: Object.assign({}, r.q, { c: undefined }) })); }); }
     $app.querySelectorAll('[data-mdel]').forEach((b) => b.addEventListener('click', () => { const m = ms.find((x) => x.id === b.dataset.mdel); if (!m || !confirm('이 메시지를 영구 삭제할까요?\n\n' + String(m.text || '').slice(0, 80))) return; Store.removeUserConvo(u, null, [m.id]); Store.audit({ action: 'delete', target: u.id, member: u.nickname, contact: c ? APPN(c.app) + ' / ' + c.nickname : '미지정', reason: '메시지 삭제 · ' + String(m.text || '').slice(0, 30) }); LM.toast('삭제했습니다'); monitor(r); }));
     bindBan();
@@ -834,6 +868,22 @@
   /* ---------- 메시지: 관리자·팀장 → 회원(상담원) 지시·경고, 회원 언어로 자동 번역 ---------- */
   const KIND = { instruction: ['지시', 'info'], notice: ['공지', 'neutral'], warning: ['경고', 'attention'], reply: ['답장', 'good'] };
   const NO = (id) => Store.noticesOf(id).filter((n) => n.kind !== 'chat');
+  // 전체·공지 메시지 발송 지연(취소 가능)
+  const delaySel = (id, def) => `<label class="small row nt-delay" style="gap:4px">발송 <select class="field sel-sm" id="${id}">${[['0', '바로'], ['30', '30초 후'], ['60', '1분 후'], ['180', '3분 후'], ['600', '10분 후'], ['at', '시간 지정']].map(([v, l]) => `<option value="${v}" ${String(def) === v ? 'selected' : ''}>${l}</option>`).join('')}</select><input class="field sel-sm" type="datetime-local" id="${id}-at" hidden></label>`;
+  function delayAt(id) { const v = (document.getElementById(id) || {}).value || '0'; if (v === 'at') { const t = new Date((document.getElementById(id + '-at') || {}).value || '').getTime(); return t > Date.now() ? t : 0; } const sec = Number(v) || 0; return sec ? Date.now() + sec * 1000 : 0; }
+  function bindDelay(id) { const se = document.getElementById(id); if (!se) return; const at = document.getElementById(id + '-at'); se.addEventListener('change', () => { if (at) at.hidden = se.value !== 'at'; }); }
+  function pendingHtml() {
+    const ps = Store.pendingBatches(); if (!ps.length) return '';
+    return `<div class="nt-pending">${ps.map((b) => `<div class="nt-pend" data-batch="${esc(b.batch)}"><span class="nt-pend-t">⏳ 발송 대기 <b data-left="${b.sendAt}">${Math.max(0, Math.ceil((b.sendAt - Date.now()) / 1000))}초</b> · ${b.users.length}명 · ${esc(String(b.text).slice(0, 40))}</span><span class="row" style="gap:6px"><button type="button" class="btn sm secondary" data-send-now="${esc(b.batch)}">지금 보내기</button><button type="button" class="btn sm danger-btn" data-cancel-batch="${esc(b.batch)}">발송 취소</button></span></div>`).join('')}</div>`;
+  }
+  function bindPending(rerender) {
+    const fmtLeft = (ms) => { const s0 = Math.max(0, Math.ceil(ms / 1000)); return s0 >= 60 ? Math.floor(s0 / 60) + '분 ' + (s0 % 60) + '초' : s0 + '초'; };
+    $app.querySelectorAll('[data-send-now]').forEach((b) => b.addEventListener('click', () => { const n = Store.sendBatchNow(b.dataset.sendNow); Store.audit({ action: 'notice', target: b.dataset.sendNow, reason: '대기 메시지 즉시 발송 · ' + n + '명' }); LM.toast('지금 보냈습니다'); rerender(); }));
+    $app.querySelectorAll('[data-cancel-batch]').forEach((b) => b.addEventListener('click', () => { const bt = Store.pendingBatches().find((x) => x.batch === b.dataset.cancelBatch); if (!bt) return; if (!confirm(`대기 중인 메시지 ${bt.users.length}건 발송을 취소할까요?\n\n${String(bt.text).slice(0, 80)}`)) return; Store.purgeNotices(bt.ids); Store.audit({ action: 'notice', target: bt.batch, reason: '발송 취소 · ' + bt.users.length + '명 · ' + String(bt.text).slice(0, 40) }); LM.toast('발송을 취소했습니다'); rerender(); }));
+    clearInterval(window.__ntPendT);
+    if (!$app.querySelector('[data-left]')) return;
+    window.__ntPendT = setInterval(() => { const els = $app.querySelectorAll('[data-left]'); if (!els.length) { clearInterval(window.__ntPendT); return; } let due = false; els.forEach((el) => { const ms = Number(el.dataset.left) - Date.now(); el.textContent = fmtLeft(ms) + ' 후 발송'; if (ms <= 0) due = true; }); if (due) { clearInterval(window.__ntPendT); rerender(); } }, 1000);
+  }
   function noticesPage(r) {
     const us = users();
     const peers = leaderPeers(); const amLeader = isLeader();
@@ -851,14 +901,18 @@
     const STL = { unread: ['미열람', 'attention'], waiting: ['읽음·답장 대기', 'info'], done: ['답장 완료', 'good'], read: ['읽음', 'neutral'], none: ['', 'neutral'] };
     const sel = r.q.u ? findUser(r.q.u) : null;
     const rl = role();
-    let thread = '<p class="ops-empty">왼쪽에서 받을 사람을 고르세요. 한국어로 쓰면 받는 사람이 앱에서 고른 언어로 번역돼 도착합니다.</p>';
+    const allLbl = rl.type === 'leader' ? '팀원 전체' : rl.type === 'org' ? '회사 상담원 전체' : '목록의 전체 회원';
+    let thread = `<div class="lm-msg-head"><h2>📢 ${allLbl}에게 보내기</h2><p class="ops-muted">개인에게 보내려면 왼쪽에서 사람을 고르세요. 전체 메시지는 기본 1분 뒤 발송되고, 그 전에 취소할 수 있습니다.</p></div>
+        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="notice">공지</option><option value="instruction">지시</option><option value="warning">경고</option></select><label class="small row" style="gap:4px"><input type="checkbox" id="nt-need"> 답장 필요</label><label class="small row" style="gap:4px">마감 <input class="field sel-sm" type="datetime-local" id="nt-due"></label>${delaySel('nt-delay', 60)}<span class="ops-muted">한국어로 쓰면 각자 언어로 번역돼 전달됩니다</span></div>
+          <textarea class="field" id="nt-text" rows="3" placeholder="예: 오늘 오후 3시에 전체 회의가 있습니다." required></textarea>
+          <div class="between wrap"><input type="checkbox" id="nt-all" checked hidden><span class="ops-muted">받는 사람 ${list.length}명</span><button class="btn" type="submit">전체에게 보내기</button></div></form>`;
     if (sel && sel.peer) {
       // 회사·본사 ↔ 팀장 대화
       if (sel.peer === 'company') Store.markNoticesRead(sel.id); else Store.markRepliesRead(sel.id);
       const ns = NO(sel.id); const t = sel.team;
       thread = `<div class="lm-msg-head"><h2>${esc(sel.peer === 'company' ? '회사 관리자' : (t.leaderName || '팀장') + ' 팀장')} <span class="ops-muted">${esc(t.name)}</span></h2><p class="ops-muted">${sel.peer === 'company' ? '회사 관리자가 보낸 지시·공지에 답장하거나 먼저 보고할 수 있습니다.' : '팀장에게 지시·공지를 보내고 답장·읽음을 확인합니다.'}</p></div>
         <div class="lm-msg-thread" id="nt-thread">${ns.map((n) => { const mine = isMine(n, sel); const k = KIND[n.kind] || KIND.instruction; return `<div class="lm-msg ${mine ? 'out' : 'in'}"><div class="lm-msg-meta">${n.kind !== 'reply' ? `<span class="ops-tag" data-tone="${k[1]}">${k[0]}</span> ` : ''}${n.needReply ? '<span class="ops-tag" data-tone="info">답장 필요</span> ' : ''}${n.due ? `<span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span> ` : ''}${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc(n.text)}</p></div>${mine ? `<div class="lm-msg-meta">${n.readAt ? '✓ 읽음 ' + fmt(n.readAt) : '안 읽음'}</div>` : ''}</div>`; }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
-        <form class="lm-msg-compose" id="nt-peer"><div class="row wrap" style="gap:8px">${sel.peer === 'leader' ? '<label class="label" for="np-kind">종류</label><select class="field sel-sm" id="np-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:6px"><input type="checkbox" id="np-need"> 답장 필요</label><label class="small row" style="gap:6px">마감 <input class="field sel-sm" type="datetime-local" id="np-due"></label>' : ''}</div>
+        <form class="lm-msg-compose" id="nt-peer"><div class="row wrap" style="gap:8px">${sel.peer === 'leader' ? '<label class="label" for="np-kind">종류</label><select class="field sel-sm" id="np-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:6px"><input type="checkbox" id="np-need"> 답장 필요</label><label class="small row" style="gap:6px">마감 <input class="field sel-sm" type="datetime-local" id="np-due"></label>' + delaySel('np-delay', 0) : ''}</div>
           <textarea class="field" id="np-text" rows="3" placeholder="${sel.peer === 'company' ? '예: 오늘 환불 문의 12건 모두 처리했습니다.' : '예: 이번 주 금요일까지 팀원 근태 확인 부탁드립니다.'}" required></textarea>
           <div class="between wrap">${sel.peer === 'leader' && peerRows.length > 1 ? '<label class="small row" style="gap:6px"><input type="checkbox" id="np-all"> 모든 팀장에게 보내기</label>' : '<span></span>'}<button class="btn" type="submit">보내기</button></div></form>`;
     } else if (sel) {
@@ -871,15 +925,15 @@
           const k = KIND[n.kind] || KIND.instruction;
           if (mine) {
             const trT = n.tr && n.tr[L];
-            return `<div class="lm-msg out"><div class="lm-msg-meta"><span class="ops-tag" data-tone="${k[1]}">${k[0]}</span>${n.needReply ? ' <span class="ops-tag" data-tone="info">답장 필요</span>' : ''}${n.due ? ` <span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span>` : ''} ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble ${n.kind === 'warning' ? 'warn' : ''}"><p>${esc(n.text)}</p>${L !== n.lang ? `<p class="lm-msg-tr" lang="${esc(L)}">→ ${esc(LN(L))}: ${trT ? esc(trT) : n.trFail ? '<span class="ops-tag" data-tone="attention">번역 실패 · 원문(한국어)으로 전달됨</span>' : '<span class="ops-muted">번역 중…</span>'}</p>` : ''}</div><div class="lm-msg-read">${n.readAt ? `✓✓ 읽음 ${fmt(n.readAt)}` : '✓ 전달됨 · 아직 안 읽음'}</div></div>`;
+            return `<div class="lm-msg out${n.sendAt && !Store.isDue(n) ? ' pend' : ''}"><div class="lm-msg-meta">${n.sendAt && !Store.isDue(n) ? '<span class="ops-tag" data-tone="attention">⏳ 발송 대기</span> ' : ''}<span class="ops-tag" data-tone="${k[1]}">${k[0]}</span>${n.needReply ? ' <span class="ops-tag" data-tone="info">답장 필요</span>' : ''}${n.due ? ` <span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span>` : ''} ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble ${n.kind === 'warning' ? 'warn' : ''}"><p>${esc(n.text)}</p>${L !== n.lang ? `<p class="lm-msg-tr" lang="${esc(L)}">→ ${esc(LN(L))}: ${trT ? esc(trT) : n.trFail ? '<span class="ops-tag" data-tone="attention">번역 실패 · 원문(한국어)으로 전달됨</span>' : '<span class="ops-muted">번역 중…</span>'}</p>` : ''}</div><div class="lm-msg-read">${n.readAt ? `✓✓ 읽음 ${fmt(n.readAt)}` : '✓ 전달됨 · 아직 안 읽음'}</div></div>`;
           }
           return `<div class="lm-msg in"><div class="lm-msg-meta"><span class="ops-tag" data-tone="good">답장</span> ${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc((n.tr && n.tr.ko) || n.text)}</p>${n.lang !== 'ko' ? `<p class="lm-msg-tr" lang="${esc(n.lang)}">원문(${esc(LN(n.lang))}): ${esc(n.text)}</p>` : ''}</div></div>`;
         }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
-        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:4px"><input type="checkbox" id="nt-need"> 답장 필요</label><label class="small row" style="gap:4px">마감 <input class="field sel-sm" type="datetime-local" id="nt-due"></label><span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
+        <form class="lm-msg-compose" id="nt-form"><div class="row wrap" style="gap:8px"><label class="label" for="nt-kind">종류</label><select class="field sel-sm" id="nt-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:4px"><input type="checkbox" id="nt-need"> 답장 필요</label><label class="small row" style="gap:4px">마감 <input class="field sel-sm" type="datetime-local" id="nt-due"></label>${delaySel('nt-delay', 0)}<span class="ops-muted">한국어로 쓰면 ${esc(LN(L))}로 번역돼 전달됩니다</span></div>
           <textarea class="field" id="nt-text" rows="3" placeholder="예: 오늘 오후 문의는 환불 규정을 먼저 안내해 주세요." required></textarea>
           <div class="between wrap"><label class="small row" style="gap:6px"><input type="checkbox" id="nt-all"> ${rl.type === 'leader' ? '팀원 전체' : rl.type === 'org' ? '회사 상담원 전체' : '목록의 전체 회원'}에게 보내기 (각자 언어로)</label><button class="btn" type="submit">보내기</button></div></form>`;
     }
-    page('notices', `<div class="stack-sm"><h1>메시지 <span class="ops-muted" style="font-size:14px">지시·공지·경고</span></h1><p class="muted">${rl.type === 'leader' ? '팀원' : '회원·상담원'}에게 한국어로 보내면 받는 사람이 고른 언어로 번역돼 앱에 도착합니다. 읽음 여부와 답장(한국어 번역)이 여기 표시됩니다.</p></div>
+    page('notices', `<div class="stack-sm"><h1>메시지 <span class="ops-muted" style="font-size:14px">지시·공지·경고</span></h1><p class="muted">${rl.type === 'leader' ? '팀원' : '회원·상담원'}에게 한국어로 보내면 받는 사람이 고른 언어로 번역돼 앱에 도착합니다. 읽음 여부와 답장(한국어 번역)이 여기 표시됩니다.</p></div>${pendingHtml()}
       <div class="lm-msg-layout">
         <aside class="card lm-msg-list"><form id="nt-q" role="search"><input class="field" name="q" type="search" placeholder="닉네임·ID 검색" value="${esc(r.q.q || '')}"></form>
           <div class="nt-filter">${[['all', '전체', rows.length], ['unread', '미열람', cnt('unread')], ['waiting', '답장 대기', cnt('waiting')], ['done', '답장 완료', cnt('done')]].map(([k, l, n]) => `<a href="#/admin/notices?f=${k}${sel ? '&u=' + sel.id : ''}" class="${fl === k ? 'on' : ''}">${l} <b>${n}</b></a>`).join('')}</div>
@@ -889,6 +943,8 @@
       </div>`);
     const qf = document.getElementById('nt-q'); if (qf) qf.addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/notices?q=' + encodeURIComponent(new FormData(qf).get('q') || ''); });
     const th = document.getElementById('nt-thread'); if (th) th.scrollTop = th.scrollHeight;
+    bindDelay('nt-delay'); bindDelay('np-delay'); bindPending(() => noticesPage(r));
+    [['nt-all', 'nt-delay'], ['np-all', 'np-delay']].forEach(([cb, dl]) => { const c = document.getElementById(cb), d = document.getElementById(dl); if (c && d && !c.hidden) c.addEventListener('change', () => { if (c.checked && d.value === '0') d.value = '60'; else if (!c.checked && d.value === '60') d.value = '0'; }); });
     const pf = document.getElementById('nt-peer');
     if (pf) pf.addEventListener('submit', (e) => {
       e.preventDefault(); const text = document.getElementById('np-text').value.trim(); if (!text) return;
@@ -899,10 +955,11 @@
         const all = document.getElementById('np-all') && document.getElementById('np-all').checked;
         const tg = all ? peerRows.map((x) => x.u) : [sel];
         const fromName = rl2.type === 'org' ? (rl2.org.adminName || '회사 관리자') + ' (회사)' : (rl2.type === 'hqp' || rl2.type === 'hqb') ? '본사 ' + (rl2.name || '관리자') : '본사 관리자';
-        tg.forEach((u) => Store.sendNotice({ userId: u.id, kind: document.getElementById('np-kind').value, needReply: document.getElementById('np-need').checked, due: document.getElementById('np-due').value, from: rl2.type === 'org' ? 'org' : 'admin', fromName, teamId: u.team.id, text, lang: 'ko' }));
+        const sendAt = delayAt('np-delay'); const batch = sendAt ? 'b_' + Date.now().toString(36) : '';
+        tg.forEach((u) => Store.sendNotice({ sendAt, batch, userId: u.id, kind: document.getElementById('np-kind').value, needReply: document.getElementById('np-need').checked, due: document.getElementById('np-due').value, from: rl2.type === 'org' ? 'org' : 'admin', fromName, teamId: u.team.id, text, lang: 'ko' }));
         Store.audit({ action: 'notice', target: tg.map((u) => u.id).join(','), member: tg.length > 1 ? '팀장 ' + tg.length + '명' : tg[0].nickname, reason: '팀장에게 메시지 발송' });
       }
-      LM.toast('보냈습니다'); noticesPage(r);
+      const pend = Store.pendingBatches().length; LM.toast(pend && document.getElementById('np-delay') && document.getElementById('np-delay').value !== '0' ? '발송 대기 중 — 그 전에 취소할 수 있습니다' : '보냈습니다'); noticesPage(r);
     });
     // 번역이 없는 메시지 채우기
     if (sel) NO(sel.id).forEach((n) => { const L = sel.lang || 'ko'; if (n.from !== 'member' && L !== n.lang && !(n.tr && n.tr[L])) Engine.translate(n.text, L, n.lang).then((o) => { Store.setNoticeTr(n.id, L, o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); if (n.from === 'member' && n.lang !== 'ko' && !(n.tr && n.tr.ko)) Engine.translate(n.text, 'ko', n.lang).then((o) => { Store.setNoticeTr(n.id, 'ko', o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); });
@@ -910,19 +967,21 @@
     if (f) f.addEventListener('submit', async (e) => {
       e.preventDefault(); const text = document.getElementById('nt-text').value.trim(); if (!text) return;
       const kind = document.getElementById('nt-kind').value; const all = document.getElementById('nt-all').checked;
-      const targets = all ? list.map((x) => x.u) : [sel];
+      const targets = (all ? (rl.type === 'leader' || rl.type === 'org' ? rows : list).map((x) => x.u).filter((u) => !u.leaderOf) : [sel]).filter(Boolean);
+      if (!targets.length) { LM.toast('받을 사람이 없습니다'); return; }
+      const sendAt = delayAt('nt-delay'); const batch = sendAt ? 'b_' + Date.now().toString(36) : '';
       const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
       // 번역을 기다리지 않고 바로 보냄 → 언어별 번역은 뒤에서 채움 (받는 쪽 화면도 빠진 번역을 스스로 채움)
       const byLang = {};
       for (const u of targets) {
         const L = u.lang || 'ko'; const tr = {};
         const t = Store.teamOf(u.id);
-        const n = Store.sendNotice({ userId: u.id, kind, needReply: document.getElementById('nt-need').checked, due: document.getElementById('nt-due').value, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : (rl.type === 'hqp' || rl.type === 'hqb') ? '본사 ' + (rl.name || '관리자') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
+        const n = Store.sendNotice({ sendAt, batch, userId: u.id, kind, needReply: document.getElementById('nt-need').checked, due: document.getElementById('nt-due').value, from: rl.type === 'leader' ? 'leader' : rl.type === 'org' ? 'org' : 'admin', fromName: rl.type === 'leader' ? (rl.team.leaderName || '팀장') : (rl.type === 'hqp' || rl.type === 'hqb') ? '본사 ' + (rl.name || '관리자') : rl.type === 'org' ? (rl.org.adminName || rl.org.name) + ' (' + rl.org.name + ')' : '관리자', teamId: t ? t.id : '', text, lang: 'ko', tr });
         if (L !== 'ko' && n) (byLang[L] = byLang[L] || []).push(n.id);
       }
       Object.keys(byLang).forEach((L) => { Engine.translate(text, L, 'ko').then((o) => { if (o && o.text) byLang[L].forEach((id) => Store.setNoticeTr(id, L, o.text)); }).catch(() => {}); });
       Store.audit({ action: 'notice', target: targets.map((u) => u.id).join(','), member: targets.length > 1 ? targets.length + '명' : targets[0].nickname, reason: (KIND[kind] || KIND.instruction)[0] + ' 메시지 발송' });
-      LM.toast(targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');
+      LM.toast(sendAt ? `${targets.length}명 · ${Math.round((sendAt - Date.now()) / 1000)}초 뒤 발송 — 그 전에 취소할 수 있습니다` : targets.length > 1 ? `${targets.length}명에게 각자 언어로 보냈습니다` : '보냈습니다');
       noticesPage(r);
     });
   }
@@ -1123,7 +1182,15 @@ ${agentForm(sel)}` : '<p class="ops-empty">팀이 없습니다. 왼쪽에서 만
 
   function viewAsBtn(u) { return `<button class="btn secondary sm" type="button" data-viewas="${esc(u.id)}">👁 이 사람 화면 보기 (한국어)</button>`; }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-viewas]'); if (!b) return; const id = b.dataset.viewas; const u = Store.db.users[id]; Store.audit({ action: 'view', target: id, member: u ? u.nickname : id, contact: '회원 화면 전체', convId: '-', reason: '회원 화면으로 보기' }); Store.startViewAs(id); location.href = 'app.html#/chat'; location.reload(); });
-  document.addEventListener('click', (e) => { if (e.target.closest('#adm-logout')) { authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); Store.db.admin.operator = 'admin'; location.hash = '#/admin'; login(); } });
+  // 팀장: 관리 화면 ↔ 내 상담 화면
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-to-work]')) return;
+    const rl = role(); if (rl.type !== 'leader') return;
+    const u = Store.leaderAgent(rl.team.id); if (!u) return;
+    Store.agentLoginAs(u); Store.audit({ action: 'login', target: u.id, member: u.nickname, reason: '팀장 상담 화면 전환' });
+    location.hash = '#/chat';
+  });
+  document.addEventListener('click', (e) => { if (e.target.closest('#adm-logout')) { try { const me0 = Store.me(); if (me0 && me0.leaderOf) Store.logout(); } catch (x) { /* noop */ } authed = false; sessionStorage.removeItem('lm_admin_ok'); sessionStorage.removeItem('lm_admin_role'); Store.db.admin.operator = 'admin'; location.hash = '#/admin'; login(); } });
   window.Admin = {
     render(r) {
       if (!authed) return login();

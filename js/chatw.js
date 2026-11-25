@@ -19,7 +19,7 @@
     try {
       if (Store.viewingAs && Store.viewingAs()) return null;
       if (new URLSearchParams(location.search).has('pop')) return null;
-      const adm = /^#\/admin/.test(location.hash) && sessionStorage.getItem('lm_admin_ok') === '1';
+      const lme = Store.me && Store.me(); const adm = (/^#\/admin/.test(location.hash) || !!(lme && lme.leaderOf)) && sessionStorage.getItem('lm_admin_ok') === '1';
       if (adm) {
         const r = sessionStorage.getItem('lm_admin_role') || 'admin';
         if (r.startsWith('leader:')) { const t = Store.teamById(r.slice(7)); return t ? { kind: 'leader', lang: 'ko', team: t, name: (t.leaderName || '팀장') + ' 팀장' } : null; }
