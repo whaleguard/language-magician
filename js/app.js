@@ -397,7 +397,7 @@
     const u = Store.me(); if (!u || Store.viewingAs() || POP || /^#\/(admin|inbox)/.test(location.hash)) return;
     if (document.getElementById('sheet')) return;
     let seen = []; try { seen = JSON.parse(localStorage.getItem('lm_popped_' + u.id) || '[]'); } catch (e) { seen = []; }
-    const list = Store.noticesOf(u.id).filter((n) => n.from !== 'member' && !n.readAt && !seen.includes(n.id));
+    const list = Store.noticesOf(u.id).filter((n) => n.kind !== 'chat' && n.from !== 'member' && !n.readAt && !seen.includes(n.id));
     if (!list.length) return;
     const n = list[list.length - 1]; const my = u.lang || uiLang;
     const body = (n.tr && (n.tr[my] || n.tr[uiLang])) || n.text;
@@ -1837,7 +1837,7 @@
   function renderInbox() {
     const u = Store.me();
     const viewing = !!Store.viewingAs();
-    const ns = Store.noticesOf(u.id);
+    const ns = Store.noticesOf(u.id).filter((n) => n.kind !== 'chat');
     const pend = Store.pendingReply(u.id);
     const hmTs = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const items = ns.map((n) => {

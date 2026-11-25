@@ -75,7 +75,7 @@
   function nav(active) {
     const rl = role();
     const lp = leaderPeers(); const lpIds = new Set(lp.map((x) => x.id));
-    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => !n.readAt && ((isLeader() && lpIds.has(n.userId)) ? n.from !== 'member' : (n.from === 'member' && (lpIds.has(n.userId) || users().some((u) => u.id === n.userId))))).length : 0;
+    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.kind !== 'chat' && !n.readAt && ((isLeader() && lpIds.has(n.userId)) ? n.from !== 'member' : (n.from === 'member' && (lpIds.has(n.userId) || users().some((u) => u.id === n.userId))))).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
     const items = rl.type === 'hqp'
       ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
@@ -238,7 +238,7 @@
     const queue = [
       [open.length, '미처리 신고', open.length ? '가장 오래된 건 ' + oldest(open, (x) => x.createdAt) : '', '#/admin/reports', 'attention'],
       [risk7.length, '미검토 위험 표시 대화', risk7.length ? '가장 오래된 건 ' + oldest(risk7, (x) => x.m.ts) : '', '#/admin/monitor?risk=1', 'attention'],
-      (() => { const lp = leaderPeers(); const un = (Store.db.notices || []).filter((n) => !n.readAt && lp.some((x) => x.id === n.userId) && (isLeader() ? n.from !== 'member' : n.from === 'member')); return [un.length, isLeader() ? '회사에서 온 메시지' : '팀장 답장·보고', un.length ? un.slice(-1)[0].text.slice(0, 30) : '', '#/admin/notices?u=' + encodeURIComponent(un.length ? un.slice(-1)[0].userId : (lp[0] || {}).id || ''), 'attention']; })(),
+      (() => { const lp = leaderPeers(); const un = (Store.db.notices || []).filter((n) => n.kind !== 'chat' && !n.readAt && lp.some((x) => x.id === n.userId) && (isLeader() ? n.from !== 'member' : n.from === 'member')); return [un.length, isLeader() ? '회사에서 온 메시지' : '팀장 답장·보고', un.length ? un.slice(-1)[0].text.slice(0, 30) : '', '#/admin/notices?u=' + encodeURIComponent(un.length ? un.slice(-1)[0].userId : (lp[0] || {}).id || ''), 'attention']; })(),
       (() => { let g = []; try { g = Store.duplicateCustomers(us.filter((x) => !x.demo)).filter((x) => !x.decided); } catch (e) { g = []; } return [g.length, '같은 고객 중복 상담 확인', g.length ? g.slice(0, 2).map((x) => APPN(x[0].app) + ' / ' + x[0].nick).join(', ') : '', '#/admin/monitor?dup=1', 'attention']; })(),
       (() => { const ids = new Set(us.map((u) => u.id)); const cp = Store.db.audit.filter((a) => a.action === 'capture' && a.ts >= now - 7 * DAY && (isSuper() || ids.has(a.target))); return [cp.length, '화면 캡처 시도 (7일)', cp.length ? '최근 ' + ago(cp[0].ts) + ' · ' + (cp[0].member || cp[0].operator || '') : '', '#/admin/audit?act=capture', 'attention']; })(),
       [bannedRecent.length, '차단 회원의 최근 기록', banned.length ? '차단 회원 ' + banned.length + '명' : '', '#/admin/users?type=banned', 'info'],
@@ -809,12 +809,13 @@
 
   /* ---------- 메시지: 관리자·팀장 → 회원(상담원) 지시·경고, 회원 언어로 자동 번역 ---------- */
   const KIND = { instruction: ['지시', 'info'], notice: ['공지', 'neutral'], warning: ['경고', 'attention'], reply: ['답장', 'good'] };
+  const NO = (id) => Store.noticesOf(id).filter((n) => n.kind !== 'chat');
   function noticesPage(r) {
     const us = users();
     const peers = leaderPeers(); const amLeader = isLeader();
     // 팀장 화면의 '회사 관리자' 스레드에서는 방향이 반대: 회사가 보낸 것(from≠member)이 받은 메시지
     const isMine = (n, u) => (u && u.peer === 'company') ? n.from === 'member' : n.from !== 'member';
-    const rowOf = (u) => { const ns = Store.noticesOf(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => !isMine(n, u) && !n.readAt).length, unreadM: ns.filter((n) => isMine(n, u) && !n.readAt).length }; };
+    const rowOf = (u) => { const ns = NO(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => !isMine(n, u) && !n.readAt).length, unreadM: ns.filter((n) => isMine(n, u) && !n.readAt).length }; };
     const peerRows = peers.map(rowOf);
     const rows = us.map(rowOf)
       .sort((a, b) => (b.unreadR - a.unreadR) || ((b.last ? b.last.ts : 0) - (a.last ? a.last.ts : 0)) || a.u.nickname.localeCompare(b.u.nickname));
@@ -830,7 +831,7 @@
     if (sel && sel.peer) {
       // 회사·본사 ↔ 팀장 대화
       if (sel.peer === 'company') Store.markNoticesRead(sel.id); else Store.markRepliesRead(sel.id);
-      const ns = Store.noticesOf(sel.id); const t = sel.team;
+      const ns = NO(sel.id); const t = sel.team;
       thread = `<div class="lm-msg-head"><h2>${esc(sel.peer === 'company' ? '회사 관리자' : (t.leaderName || '팀장') + ' 팀장')} <span class="ops-muted">${esc(t.name)}</span></h2><p class="ops-muted">${sel.peer === 'company' ? '회사 관리자가 보낸 지시·공지에 답장하거나 먼저 보고할 수 있습니다.' : '팀장에게 지시·공지를 보내고 답장·읽음을 확인합니다.'}</p></div>
         <div class="lm-msg-thread" id="nt-thread">${ns.map((n) => { const mine = isMine(n, sel); const k = KIND[n.kind] || KIND.instruction; return `<div class="lm-msg ${mine ? 'out' : 'in'}"><div class="lm-msg-meta">${n.kind !== 'reply' ? `<span class="ops-tag" data-tone="${k[1]}">${k[0]}</span> ` : ''}${n.needReply ? '<span class="ops-tag" data-tone="info">답장 필요</span> ' : ''}${n.due ? `<span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span> ` : ''}${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc(n.text)}</p></div>${mine ? `<div class="lm-msg-meta">${n.readAt ? '✓ 읽음 ' + fmt(n.readAt) : '안 읽음'}</div>` : ''}</div>`; }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
         <form class="lm-msg-compose" id="nt-peer"><div class="row wrap" style="gap:8px">${sel.peer === 'leader' ? '<label class="label" for="np-kind">종류</label><select class="field sel-sm" id="np-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:6px"><input type="checkbox" id="np-need"> 답장 필요</label><label class="small row" style="gap:6px">마감 <input class="field sel-sm" type="datetime-local" id="np-due"></label>' : ''}</div>
@@ -838,7 +839,7 @@
           <div class="between wrap">${sel.peer === 'leader' && peerRows.length > 1 ? '<label class="small row" style="gap:6px"><input type="checkbox" id="np-all"> 모든 팀장에게 보내기</label>' : '<span></span>'}<button class="btn" type="submit">보내기</button></div></form>`;
     } else if (sel) {
       Store.markRepliesRead(sel.id);
-      const ns = Store.noticesOf(sel.id);
+      const ns = NO(sel.id);
       const L = sel.lang || 'ko';
       thread = `<div class="lm-msg-head between wrap"><div><h2>${esc(sel.nickname)} <span class="ops-muted">${esc(sel.id)}</span></h2><p class="ops-muted">받는 언어: <b>${esc(LN(L))}</b>${(() => { const t = Store.teamOf(sel.id); return t ? ' · ' + esc(t.name) : ''; })()} · ${esc((Store.PLANS[Store.planOf(sel)] || {}).name || '')}</p></div><div class="row" style="gap:6px">${viewAsBtn(sel)}<a class="btn secondary sm" href="#/admin/monitor?u=${sel.id}">대화 보기</a></div></div>
         <div class="lm-msg-thread" id="nt-thread">${ns.map((n) => {
@@ -880,7 +881,7 @@
       LM.toast('보냈습니다'); noticesPage(r);
     });
     // 번역이 없는 메시지 채우기
-    if (sel) Store.noticesOf(sel.id).forEach((n) => { const L = sel.lang || 'ko'; if (n.from !== 'member' && L !== n.lang && !(n.tr && n.tr[L])) Engine.translate(n.text, L, n.lang).then((o) => { Store.setNoticeTr(n.id, L, o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); if (n.from === 'member' && n.lang !== 'ko' && !(n.tr && n.tr.ko)) Engine.translate(n.text, 'ko', n.lang).then((o) => { Store.setNoticeTr(n.id, 'ko', o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); });
+    if (sel) NO(sel.id).forEach((n) => { const L = sel.lang || 'ko'; if (n.from !== 'member' && L !== n.lang && !(n.tr && n.tr[L])) Engine.translate(n.text, L, n.lang).then((o) => { Store.setNoticeTr(n.id, L, o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); if (n.from === 'member' && n.lang !== 'ko' && !(n.tr && n.tr.ko)) Engine.translate(n.text, 'ko', n.lang).then((o) => { Store.setNoticeTr(n.id, 'ko', o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); });
     const f = document.getElementById('nt-form');
     if (f) f.addEventListener('submit', async (e) => {
       e.preventDefault(); const text = document.getElementById('nt-text').value.trim(); if (!text) return;

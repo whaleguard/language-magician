@@ -404,12 +404,13 @@
   function sendNotice(o) {
     ensureTeamArrays();
     const n = { id: uid('n_'), userId: o.userId, needReply: !!o.needReply, due: o.due || '', trFail: !!o.trFail, kind: o.kind || 'instruction', from: o.from || 'admin', fromName: o.fromName || '관리자', teamId: o.teamId || '', text: o.text, lang: o.lang || 'ko', tr: o.tr || {}, ts: Date.now(), readAt: null, demo: !!o.demo };
+    if (o.fromId) n.fromId = o.fromId; if (o.kind === 'chat') n.updatedAt = n.ts;
     db.notices.push(n); persist(); Sync.pushShared(); return n;
   }
   // 답장 필요한 지시 중 아직 답장이 없는 것
-  function pendingReply(userId) { const ns = noticesOf(userId); return ns.filter((n, i) => n.from !== 'member' && n.needReply && !ns.slice(i + 1).some((x) => x.from === 'member')); }
+  function pendingReply(userId) { const ns = noticesOf(userId).filter((n) => n.kind !== 'chat'); return ns.filter((n, i) => n.from !== 'member' && n.needReply && !ns.slice(i + 1).some((x) => x.from === 'member')); }
   function noticesOf(userId) { ensureTeamArrays(); return db.notices.filter((n) => n.userId === userId).sort((a, b) => a.ts - b.ts); }
-  function unreadNotices(userId) { return noticesOf(userId).filter((n) => n.from !== 'member' && !n.readAt).length; }
+  function unreadNotices(userId) { return noticesOf(userId).filter((n) => n.kind !== 'chat' && n.from !== 'member' && !n.readAt).length; }
   function markNoticesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from !== 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persistAny(); Sync.pushShared(); } return ch; }
   function markRepliesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from === 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persist(); Sync.pushShared(); } }
   function replyNotice(userId, text, lang, tr) { const n = sendNotice({ userId, kind: 'reply', from: 'member', fromName: (db.users[userId] || {}).nickname || '', text, lang, tr }); return n; }
@@ -693,6 +694,8 @@
         if (col) {
           if ((db._del || []).includes(id)) return;
           db[col] = db[col] || []; const i = db[col].findIndex((x) => x.id === id); const loc = i >= 0 ? db[col][i] : null;
+          // 단체 채팅 읽음·숨김은 여러 PC 기록을 합침
+          if (col === 'notices' && loc && (loc.readBy || loc.hide || d.readBy || d.hide)) { const rb = Object.assign({}, d.readBy || {}, loc.readBy || {}); const hd = Object.assign({}, d.hide || {}, loc.hide || {}); if (Object.keys(rb).length) d.readBy = rb; if (Object.keys(hd).length) d.hide = hd; if (!loc.readAt && d.readAt) loc.readAt = d.readAt; else if (loc.readAt && !d.readAt) d.readAt = loc.readAt; }
           const locSig = loc ? this.sig(loc) : ''; const remSig = this.sig(d);
           if (locSig === remSig) { hs[row.key] = remSig; return; }
           const localDirty = loc && hs[row.key] && hs[row.key] !== locSig;
