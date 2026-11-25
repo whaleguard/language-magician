@@ -19,3 +19,10 @@ create or replace function public.lm_touch() returns trigger language plpgsql as
 drop trigger if exists lm_kv_touch on public.lm_kv;
 create trigger lm_kv_touch before insert or update on public.lm_kv for each row execute function public.lm_touch();
 -- 키 종류: org:/team:/staff:/notice:/user:/del:<id>
+
+-- AI 키 금고 (anon은 읽기 불가, 저장은 lm_set_secret RPC로만, AI 함수는 service_role로 읽음)
+create table if not exists public.lm_secret (name text primary key, value text not null, updated_at timestamptz not null default now());
+alter table public.lm_secret enable row level security;
+revoke all on public.lm_secret from anon, authenticated;
+grant select, insert, update, delete on public.lm_secret to service_role;
+-- lm_set_secret(p_name, p_value), lm_secret_status() : security definer 함수 (적용됨)
