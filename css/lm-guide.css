@@ -82,3 +82,9 @@ code { font: 600 .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   .g-part { break-before: page; margin-top: 0; }
   .g-part span, .g-steps li::before, .g-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.g-first { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 14px; }
+.g-first div { border: 1px solid var(--g-line); border-radius: 10px; padding: 12px 14px; background: #fbfdff; }
+.g-first dt { font-size: 13px; color: var(--g-sky); font-weight: 800; }
+.g-first dd { margin-top: 4px; font-weight: 600; word-break: break-all; }
+.g-brand, .g-btn { white-space: nowrap; }
+@media (max-width: 480px) { .g-btn { padding: 0 10px; font-size: 13px; min-height: 36px; } .g-brand { font-size: 15px; } .g-brand img { height: 20px; } }

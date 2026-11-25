@@ -48,7 +48,12 @@
     return Object.values(map);
   }
   function reports() { const all = (serverShared && serverShared.reports ? serverShared.reports.concat(Store.db.reports.filter((r) => r.demo)) : Store.db.reports).filter((r) => !isLive() || !r.demo); if (isSuper()) return all; const ids = new Set(users().map((u) => u.id)); return all.filter((x) => ids.has(x.userId)); }
-  function findUser(id) { return users().find((u) => u.id === id); }
+  // 회사·본사 ↔ 팀장 메시지: 팀장은 'L:팀ID' 받는 사람으로 취급 (팀장 쪽 답장은 from:'member')
+  function leaderPeers() {
+    if (isLeader()) { const t = role().team; return t ? [{ id: 'L:' + t.id, nickname: '🏢 회사 관리자', lang: 'ko', peer: 'company', team: t }] : []; }
+    return scopedTeams().map((t) => ({ id: 'L:' + t.id, nickname: (t.leaderName || '팀장') + ' 팀장', sub: t.name, lang: 'ko', peer: 'leader', team: t }));
+  }
+  function findUser(id) { if (String(id).startsWith('L:')) return leaderPeers().find((x) => x.id === id) || null; return users().find((u) => u.id === id); }
   function msgsOf(u, cid) { return u.messages.filter((m) => m.contactId === cid).sort((a, b) => a.ts - b.ts); }
 
   function memberStats(u) {
@@ -69,7 +74,8 @@
 
   function nav(active) {
     const rl = role();
-    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => n.from === 'member' && !n.readAt && users().some((u) => u.id === n.userId)).length : 0;
+    const lp = leaderPeers(); const lpIds = new Set(lp.map((x) => x.id));
+    const unreadR = Store.db.notices ? Store.db.notices.filter((n) => !n.readAt && ((isLeader() && lpIds.has(n.userId)) ? n.from !== 'member' : (n.from === 'member' && (lpIds.has(n.userId) || users().some((u) => u.id === n.userId))))).length : 0;
     const msgL = '메시지' + (unreadR ? ` <span class="nav-dot">${unreadR}</span>` : '');
     const items = rl.type === 'hqp'
       ? [['dashboard', '일반고객 현황'], ['users', '일반 회원'], ['monitor', '회원 대화'], ['notices', msgL], ['reports', '신고 처리'], ['quality', '개선 메모'], ['audit', '열람·캡처 기록'], ['ai', 'AI 사용량']]
@@ -232,6 +238,7 @@
     const queue = [
       [open.length, '미처리 신고', open.length ? '가장 오래된 건 ' + oldest(open, (x) => x.createdAt) : '', '#/admin/reports', 'attention'],
       [risk7.length, '미검토 위험 표시 대화', risk7.length ? '가장 오래된 건 ' + oldest(risk7, (x) => x.m.ts) : '', '#/admin/monitor?risk=1', 'attention'],
+      (() => { const lp = leaderPeers(); const un = (Store.db.notices || []).filter((n) => !n.readAt && lp.some((x) => x.id === n.userId) && (isLeader() ? n.from !== 'member' : n.from === 'member')); return [un.length, isLeader() ? '회사에서 온 메시지' : '팀장 답장·보고', un.length ? un.slice(-1)[0].text.slice(0, 30) : '', '#/admin/notices?u=' + encodeURIComponent(un.length ? un.slice(-1)[0].userId : (lp[0] || {}).id || ''), 'attention']; })(),
       (() => { let g = []; try { g = Store.duplicateCustomers(us.filter((x) => !x.demo)).filter((x) => !x.decided); } catch (e) { g = []; } return [g.length, '같은 고객 중복 상담 확인', g.length ? g.slice(0, 2).map((x) => APPN(x[0].app) + ' / ' + x[0].nick).join(', ') : '', '#/admin/monitor?dup=1', 'attention']; })(),
       (() => { const ids = new Set(us.map((u) => u.id)); const cp = Store.db.audit.filter((a) => a.action === 'capture' && a.ts >= now - 7 * DAY && (isSuper() || ids.has(a.target))); return [cp.length, '화면 캡처 시도 (7일)', cp.length ? '최근 ' + ago(cp[0].ts) + ' · ' + (cp[0].member || cp[0].operator || '') : '', '#/admin/audit?act=capture', 'attention']; })(),
       [bannedRecent.length, '차단 회원의 최근 기록', banned.length ? '차단 회원 ' + banned.length + '명' : '', '#/admin/users?type=banned', 'info'],
@@ -804,7 +811,12 @@
   const KIND = { instruction: ['지시', 'info'], notice: ['공지', 'neutral'], warning: ['경고', 'attention'], reply: ['답장', 'good'] };
   function noticesPage(r) {
     const us = users();
-    const rows = us.map((u) => { const ns = Store.noticesOf(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => n.from === 'member' && !n.readAt).length, unreadM: ns.filter((n) => n.from !== 'member' && !n.readAt).length }; })
+    const peers = leaderPeers(); const amLeader = isLeader();
+    // 팀장 화면의 '회사 관리자' 스레드에서는 방향이 반대: 회사가 보낸 것(from≠member)이 받은 메시지
+    const isMine = (n, u) => (u && u.peer === 'company') ? n.from === 'member' : n.from !== 'member';
+    const rowOf = (u) => { const ns = Store.noticesOf(u.id); const last = ns[ns.length - 1]; return { u, ns, last, unreadR: ns.filter((n) => !isMine(n, u) && !n.readAt).length, unreadM: ns.filter((n) => isMine(n, u) && !n.readAt).length }; };
+    const peerRows = peers.map(rowOf);
+    const rows = us.map(rowOf)
       .sort((a, b) => (b.unreadR - a.unreadR) || ((b.last ? b.last.ts : 0) - (a.last ? a.last.ts : 0)) || a.u.nickname.localeCompare(b.u.nickname));
     const q = (r.q.q || '').toLowerCase();
     rows.forEach((x) => { const pend = Store.pendingReply(x.u.id); x.st = x.unreadM ? 'unread' : pend.length ? 'waiting' : x.ns.some((n) => n.from === 'member') ? 'done' : x.ns.length ? 'read' : 'none'; x.pend = pend; });
@@ -815,7 +827,16 @@
     const sel = r.q.u ? findUser(r.q.u) : null;
     const rl = role();
     let thread = '<p class="ops-empty">왼쪽에서 받을 사람을 고르세요. 한국어로 쓰면 받는 사람이 앱에서 고른 언어로 번역돼 도착합니다.</p>';
-    if (sel) {
+    if (sel && sel.peer) {
+      // 회사·본사 ↔ 팀장 대화
+      if (sel.peer === 'company') Store.markNoticesRead(sel.id); else Store.markRepliesRead(sel.id);
+      const ns = Store.noticesOf(sel.id); const t = sel.team;
+      thread = `<div class="lm-msg-head"><h2>${esc(sel.peer === 'company' ? '회사 관리자' : (t.leaderName || '팀장') + ' 팀장')} <span class="ops-muted">${esc(t.name)}</span></h2><p class="ops-muted">${sel.peer === 'company' ? '회사 관리자가 보낸 지시·공지에 답장하거나 먼저 보고할 수 있습니다.' : '팀장에게 지시·공지를 보내고 답장·읽음을 확인합니다.'}</p></div>
+        <div class="lm-msg-thread" id="nt-thread">${ns.map((n) => { const mine = isMine(n, sel); const k = KIND[n.kind] || KIND.instruction; return `<div class="lm-msg ${mine ? 'out' : 'in'}"><div class="lm-msg-meta">${n.kind !== 'reply' ? `<span class="ops-tag" data-tone="${k[1]}">${k[0]}</span> ` : ''}${n.needReply ? '<span class="ops-tag" data-tone="info">답장 필요</span> ' : ''}${n.due ? `<span class="ops-tag">마감 ${esc(n.due.replace('T', ' '))}</span> ` : ''}${esc(n.fromName)} · ${fmt(n.ts)}</div><div class="lm-msg-bubble"><p>${esc(n.text)}</p></div>${mine ? `<div class="lm-msg-meta">${n.readAt ? '✓ 읽음 ' + fmt(n.readAt) : '안 읽음'}</div>` : ''}</div>`; }).join('') || '<p class="ops-empty">아직 주고받은 메시지가 없습니다.</p>'}</div>
+        <form class="lm-msg-compose" id="nt-peer"><div class="row wrap" style="gap:8px">${sel.peer === 'leader' ? '<label class="label" for="np-kind">종류</label><select class="field sel-sm" id="np-kind"><option value="instruction">지시</option><option value="notice">공지</option><option value="warning">경고</option></select><label class="small row" style="gap:6px"><input type="checkbox" id="np-need"> 답장 필요</label><label class="small row" style="gap:6px">마감 <input class="field sel-sm" type="datetime-local" id="np-due"></label>' : ''}</div>
+          <textarea class="field" id="np-text" rows="3" placeholder="${sel.peer === 'company' ? '예: 오늘 환불 문의 12건 모두 처리했습니다.' : '예: 이번 주 금요일까지 팀원 근태 확인 부탁드립니다.'}" required></textarea>
+          <div class="between wrap">${sel.peer === 'leader' && peerRows.length > 1 ? '<label class="small row" style="gap:6px"><input type="checkbox" id="np-all"> 모든 팀장에게 보내기</label>' : '<span></span>'}<button class="btn" type="submit">보내기</button></div></form>`;
+    } else if (sel) {
       Store.markRepliesRead(sel.id);
       const ns = Store.noticesOf(sel.id);
       const L = sel.lang || 'ko';
@@ -837,11 +858,27 @@
       <div class="lm-msg-layout">
         <aside class="card lm-msg-list"><form id="nt-q" role="search"><input class="field" name="q" type="search" placeholder="닉네임·ID 검색" value="${esc(r.q.q || '')}"></form>
           <div class="nt-filter">${[['all', '전체', rows.length], ['unread', '미열람', cnt('unread')], ['waiting', '답장 대기', cnt('waiting')], ['done', '답장 완료', cnt('done')]].map(([k, l, n]) => `<a href="#/admin/notices?f=${k}${sel ? '&u=' + sel.id : ''}" class="${fl === k ? 'on' : ''}">${l} <b>${n}</b></a>`).join('')}</div>
+          ${peerRows.length ? `<p class="nt-sec">${amLeader ? '회사와 주고받기' : '팀장에게 보내기'}</p><ul class="nt-peers">${peerRows.map((x) => `<li><a class="lm-msg-row ${sel && sel.id === x.u.id ? 'on' : ''}" href="#/admin/notices?u=${encodeURIComponent(x.u.id)}"><span class="grow"><strong>${esc(x.u.nickname)}</strong>${x.u.sub ? ` <span class="ops-muted">${esc(x.u.sub)}</span>` : ''}<br><span class="ops-muted ellipsis">${x.last ? esc(x.last.text.slice(0, 40)) : '메시지 없음'}</span></span>${x.unreadR ? `<span class="nav-dot">${x.unreadR}</span>` : ''}</a></li>`).join('')}</ul><p class="nt-sec">${amLeader ? '팀원' : '상담원'}</p>` : ''}
           <ul>${list.map((x) => `<li><a class="lm-msg-row ${sel && sel.id === x.u.id ? 'on' : ''}" href="#/admin/notices?u=${x.u.id}"><span class="grow"><strong>${esc(x.u.nickname)}</strong> <span class="ops-muted">${esc(LN(x.u.lang || 'ko'))}</span><br><span class="ops-muted ellipsis">${x.last ? esc(((x.last.from === 'member' ? '↩ ' : '') + ((x.last.from === 'member' && x.last.tr && x.last.tr.ko) || x.last.text)).slice(0, 40)) : '메시지 없음'}</span></span>${x.unreadR ? `<span class="nav-dot">${x.unreadR}</span>` : ''}${STL[x.st][0] ? `<span class="ops-tag" data-tone="${STL[x.st][1]}">${STL[x.st][0]}</span>` : ''}</a></li>`).join('') || '<li class="ops-muted" style="padding:8px">대상이 없습니다.</li>'}</ul></aside>
         <section class="card lm-msg-main">${thread}</section>
       </div>`);
     const qf = document.getElementById('nt-q'); if (qf) qf.addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/admin/notices?q=' + encodeURIComponent(new FormData(qf).get('q') || ''); });
     const th = document.getElementById('nt-thread'); if (th) th.scrollTop = th.scrollHeight;
+    const pf = document.getElementById('nt-peer');
+    if (pf) pf.addEventListener('submit', (e) => {
+      e.preventDefault(); const text = document.getElementById('np-text').value.trim(); if (!text) return;
+      const rl2 = role();
+      if (sel.peer === 'company') {
+        Store.sendNotice({ userId: sel.id, kind: 'reply', from: 'member', fromName: (rl2.team.leaderName || '팀장') + ' 팀장', teamId: rl2.team.id, text, lang: 'ko' });
+      } else {
+        const all = document.getElementById('np-all') && document.getElementById('np-all').checked;
+        const tg = all ? peerRows.map((x) => x.u) : [sel];
+        const fromName = rl2.type === 'org' ? (rl2.org.adminName || '회사 관리자') + ' (회사)' : (rl2.type === 'hqp' || rl2.type === 'hqb') ? '본사 ' + (rl2.name || '관리자') : '본사 관리자';
+        tg.forEach((u) => Store.sendNotice({ userId: u.id, kind: document.getElementById('np-kind').value, needReply: document.getElementById('np-need').checked, due: document.getElementById('np-due').value, from: rl2.type === 'org' ? 'org' : 'admin', fromName, teamId: u.team.id, text, lang: 'ko' }));
+        Store.audit({ action: 'notice', target: tg.map((u) => u.id).join(','), member: tg.length > 1 ? '팀장 ' + tg.length + '명' : tg[0].nickname, reason: '팀장에게 메시지 발송' });
+      }
+      LM.toast('보냈습니다'); noticesPage(r);
+    });
     // 번역이 없는 메시지 채우기
     if (sel) Store.noticesOf(sel.id).forEach((n) => { const L = sel.lang || 'ko'; if (n.from !== 'member' && L !== n.lang && !(n.tr && n.tr[L])) Engine.translate(n.text, L, n.lang).then((o) => { Store.setNoticeTr(n.id, L, o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); if (n.from === 'member' && n.lang !== 'ko' && !(n.tr && n.tr.ko)) Engine.translate(n.text, 'ko', n.lang).then((o) => { Store.setNoticeTr(n.id, 'ko', o.text); if (location.hash.includes('notices')) noticesPage(r); }).catch(() => {}); });
     const f = document.getElementById('nt-form');
