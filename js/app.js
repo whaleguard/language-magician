@@ -2594,6 +2594,8 @@
 
   /* ================= 시작 ================= */
   window.LM = { t, esc, icon, toast, sheet, closeSheet, go, render, fmtTs, fmtDate, appName, langName, avatar, who, whoText };
+  // 관리자가 계정을 삭제해 로그아웃된 경우 안내
+  try { if (sessionStorage.getItem('lm_deleted')) { sessionStorage.removeItem('lm_deleted'); const L = (navigator.language || 'ko').slice(0, 2); setTimeout(() => toast({ ko: '관리자가 이 계정을 삭제해 로그아웃되었습니다.', zh: '管理员已删除此账号，您已退出登录。', ja: '管理者がこのアカウントを削除したため、ログアウトしました。', vi: 'Quản trị viên đã xóa tài khoản này. Bạn đã bị đăng xuất.', en: 'This account was deleted by an administrator. You have been signed out.' }[L] || 'This account was deleted by an administrator.'), 400); } } catch (e) { /* noop */ }
   Store.onChange(() => {});
   render();
   Engine.setPlanResolver(() => { if (/^#\/admin/.test(location.hash)) return { plan: 'business', admin: true }; const u = Store.me(); if (!u) return { plan: 'free' }; const tm = Store.teamOf(u.id); const og = tm && tm.orgId ? Store.orgById(tm.orgId) : null; return { plan: Store.planOf(u), byo: !!(og && og.allowOwnKey) }; });

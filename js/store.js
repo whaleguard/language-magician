@@ -49,7 +49,7 @@
     });
     // 같은 팀을 다른 창에서 수정했으면 최신 것을 사용
     ['teams', 'orgs'].forEach((k) => (stored[k] || []).forEach((x) => { const m = (db[k] || []).find((y) => y.id === x.id); if (m && (x.updatedAt || 0) > (m.updatedAt || 0)) Object.assign(m, x); }));
-    db._del = Array.from(del).slice(-500);
+    db._del = Array.from(del).slice(-5000);
   }
   function persist() {
     if (viewAs) return; // 회원 화면 보기 중에는 저장하지 않음
@@ -373,6 +373,42 @@
   function staffById(id) { return staff().find((x) => x.id === id); }
   function staffLogin(loginId, pin) { const id = normId(loginId); return staff().find((x) => x.loginId && x.loginId.toLowerCase() === id && String(x.pin).trim() === String(pin || '').trim()); }
   function addStaff(o) { const x = { id: uid('s_'), type: o.type === 'business' ? 'business' : 'personal', name: o.name || '', loginId: String(o.loginId || '').trim(), pin: String(o.pin || '1234') }; staff().push(x); persist(); Sync.pushShared(); return x; }
+  /* ---------- 삭제 (관리자·회사·팀장) ---------- */
+  // 회원·상담원 계정 삭제: 모든 PC에서 사라지도록 삭제 표시 + 서버 행 제거
+  function removeUser(id) {
+    ensureTeamArrays(); markDel(id);
+    db.teams.forEach((t) => { if ((t.members || []).includes(id)) { t.members = t.members.filter((x) => x !== id); t.updatedAt = Date.now(); } });
+    db.binds = (db.binds || []).filter((b) => b.userId !== id && b.agentId !== id);
+    db.notices = (db.notices || []).filter((n) => n.userId !== id || n.kind === 'chat');
+    delete db.users[id]; if (db.currentUserId === id) db.currentUserId = null;
+    persist(); Sync.pushShared(); Sync.remove('user:' + id); Sync.remove('ban:' + id);
+  }
+  // 회원의 상담 대화 삭제 (연락처 하나 전체 또는 메시지 몇 개). u는 관리자 화면이 가진 회원 객체
+  function removeUserConvo(u, contactId, msgIds) {
+    if (!u) return 0; let n = 0;
+    if (msgIds && msgIds.length) { const set = new Set(msgIds); const b = u.messages.length; u.messages = u.messages.filter((m) => !set.has(m.id)); n = b - u.messages.length; }
+    else if (contactId !== undefined) {
+      const b = u.messages.length;
+      if (contactId) { u.contacts = u.contacts.filter((c) => c.id !== contactId); u.messages = u.messages.filter((m) => m.contactId !== contactId); u.promises = (u.promises || []).filter((x) => x.contactId !== contactId); u.anniversaries = (u.anniversaries || []).filter((x) => x.contactId !== contactId); }
+      else u.messages = u.messages.filter((m) => m.contactId);
+      n = b - u.messages.length;
+    }
+    u.updatedAt = Date.now();
+    if (db.users[u.id] && db.users[u.id] !== u) db.users[u.id] = u;
+    persist();
+    if (u.srv && !u.demo) Sync.upsert('user:' + u.id, u).catch(() => {});
+    return n;
+  }
+  // 채팅·메시지(공지) 영구 삭제 — 모든 사람 화면에서 사라짐
+  function purgeNotices(ids) {
+    const set = new Set(ids || []); if (!set.size) return 0;
+    set.forEach((id) => markDel(id)); const b = (db.notices || []).length;
+    db.notices = (db.notices || []).filter((n) => !set.has(n.id));
+    persist(); Sync.pushShared(); set.forEach((id) => Sync.remove('notice:' + id));
+    return b - db.notices.length;
+  }
+  // 팀장 계정만 삭제 (팀·팀원은 유지)
+  function removeLeader(teamId) { const t = teamById(teamId); if (!t) return; t.loginId = ''; t.pin = ''; t.leaderName = ''; t.updatedAt = Date.now(); persist(); Sync.pushShared(); }
   function removeStaff(id) { markDel(id); db.staff = staff().filter((x) => x.id !== id); persist(); Sync.pushShared(); }
   // 기업(상담회사) — 기업 관리자 → 팀장 → 상담원
   function orgs() { ensureTeamArrays(); return db.orgs; }
@@ -686,7 +722,7 @@
       rows.forEach((row) => {
         this[ck] = row.updated_at; this._since = row.updated_at;
         const [kind, ...rest] = row.key.split(':'); const id = rest.join(':'); const d = row.data;
-        if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); Object.keys(COLK).forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; changed++; } hs[row.key] = '1'; return; }
+        if (kind === 'del') { if (!(db._del || []).includes(d.id)) { db._del = (db._del || []).concat(d.id); Object.keys(COLK).forEach((col) => { db[col] = (db[col] || []).filter((x) => x.id !== d.id); }); if (db.users[d.id] && db.users[d.id].srv && d.id !== meId) delete db.users[d.id]; if (d.id === meId && db.users[meId] && db.users[meId].srv) { delete db.users[meId]; db.currentUserId = null; this._selfDeleted = true; } changed++; } hs[row.key] = '1'; return; }
         if (kind === 'cfg' && id === 'ops') { try { const cur = JSON.parse(localStorage.getItem('lm_ops') || '{}'); if ((d.updatedAt || 0) >= (cur.updatedAt || 0)) { localStorage.setItem('lm_ops', JSON.stringify(d)); if (cur.live !== d.live) changed++; } hs[row.key] = this.sig(d); } catch (e) { /* noop */ } return; }
         if (kind === 'cfg' && id === 'anon') { try { if (d && d.k) localStorage.setItem('lm_proxy_auth', d.k); } catch (e) { /* noop */ } hs[row.key] = '1'; return; }
         if (kind === 'cfg' && id === 'hqai') { try { const cur = JSON.parse(localStorage.getItem('lm_hq_ai') || '{}'); if ((d.updatedAt || 0) >= (cur.updatedAt || 0) || !cur.proxy) { const nx = Object.assign({}, cur, { provider: d.provider, model: d.model, proxy: d.proxy, freeAi: d.freeAi, updatedAt: d.updatedAt }); localStorage.setItem('lm_hq_ai', JSON.stringify(nx)); } hs[row.key] = this.sig(d); } catch (e) { /* noop */ } return; }
@@ -703,6 +739,7 @@
           return;
         }
         if (kind === 'user') {
+          if ((db._del || []).includes(id)) return; // 삭제된 계정
           if (!adminCtx && id !== meId) return; // 회원 기기에는 다른 회원 데이터를 받지 않음
           const loc = db.users[id]; const remSig = this.sig(d);
           if (loc && this.sig(loc) === remSig) { hs[row.key] = remSig; return; }
@@ -713,6 +750,7 @@
       this.saveHs();
       if (changed) { ['reports', 'audit', 'quality'].forEach((k) => { if (db[k]) db[k].sort((a, b) => (b.ts || b.createdAt || 0) - (a.ts || a.createdAt || 0)); }); if (db.audit && db.audit.length > 3000) db.audit.length = 3000; }
       if (changed) { try { db._rev = (db._rev || 0) + 1; localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* noop */ } try { window.dispatchEvent(new CustomEvent('lm-sync', { detail: changed })); } catch (e) { /* noop */ } }
+      if (this._selfDeleted) { this._selfDeleted = false; try { sessionStorage.setItem('lm_deleted', '1'); } catch (e) { /* noop */ } setTimeout(() => location.reload(), 100); }
       this.lastOk = Date.now(); this.err = '';
       if (rows.length >= 1000) return changed + await this.pull();
       // 서버에서 사라진 항목(서버 초기화 등)은 다시 올림: 올린 기록을 지워 다음 저장 때 재전송
@@ -738,6 +776,10 @@
       this.pull().then(() => this.flush());
       setInterval(tick, 6000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) this.pull(); });
+    },
+    async remove(key) {
+      if (!this.enabled()) return false;
+      try { const r = await fetch(this.base() + '?key=eq.' + encodeURIComponent(key), { method: 'DELETE', headers: this.headers() }); return r.ok; } catch (e) { return false; }
     },
     async upsert(key, data) {
       if (!this.enabled()) return false;
@@ -785,7 +827,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, mergeContactInfo, setContactInfo, INFO_KEYS, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, removeUser, removeUserConvo, purgeNotices, removeLeader, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, mergeContactInfo, setContactInfo, INFO_KEYS, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };
