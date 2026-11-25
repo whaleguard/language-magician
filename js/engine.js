@@ -600,6 +600,15 @@
   }
 
   /* ---------------- AI 종합 분석(키가 있을 때) ---------------- */
+  // AI가 없을 때도 대화에서 연락처·주문번호 등을 뽑아 고객 카드에 저장
+  function extractProfile(text) {
+    const t = String(text || ''); const o = {};
+    const em = t.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/); if (em) o.email = em[0];
+    const ph = t.match(/(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,4}\)?[\s-]?)\d{3,4}[\s-]?\d{4}/); if (ph && ph[0].replace(/\D/g, '').length >= 9 && ph[0].replace(/\D/g, '').length <= 15) o.phone = ph[0].trim();
+    const od = t.match(/(?:주문\s*번호|주문번호|예약\s*번호|订单号?|订单编号|單號|注文番号|予約番号|order\s*(?:no\.?|number|#)?|booking\s*(?:no\.?|#)|mã\s*đơn(?:\s*hàng)?)\s*[:：#]?\s*([A-Za-z0-9-]{4,24})/i); if (od) o.orderNo = od[1];
+    const nm = t.match(/(?:제\s*이름은|저는|我叫|我是|私は|my name is|i am|i'm|tên (?:tôi|em|mình) là)\s*([\p{L}]{1,12})/iu); if (nm && !/^(학생|직장인|一个|学生|a|an|the)$/i.test(nm[1])) o.name = nm[1];
+    return o;
+  }
   async function aiAnalyze(p) {
     const sys = 'You help a foreign user understand and reply to chat messages from their friend in another language. Be warm, practical and culturally aware. Never help deceive, pressure, or extract money or personal data. Distinguish facts stated in the message from your inferences. Respond in strict JSON only.';
     const hist = (p.history || []).slice(-12).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ' [' + new Date(m.ts).toISOString().slice(0, 16) + ']: ' + m.text).join('\n');
@@ -620,9 +629,11 @@
       ' "situation": "1-2 sentences in UI language: what is happening now / what they want",',
       ' "facts": ["stated facts, UI language"], "inferences": ["your inferences, UI language"],',
       ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x6 — six clearly different approaches (e.g. accept, warm, ask back, playful/light, careful/polite, change topic), never two alike],',
+      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep name, phone, email and orderNo exactly as written in the original message (do not translate or transliterate the name). Leave empty when not stated; never guess.',
       ' "culture": "one culture tip in UI language or empty",',
       ' "coach": "one next-step relationship tip in UI language",',
       ' "avoid": "one thing to avoid saying, UI language"}',
+      'IMPORTANT: every label, meaning, nuance, situation, facts, inferences, culture, coach, avoid and profile note MUST be written in ' + LANGS[p.uiLang].llm + '. Only "text" of replies is in the contact language.',
     ].join('\n');
     const txt = await callLLM(sys, user, true);
     return extractJson(txt);
@@ -712,7 +723,7 @@
   }
 
   global.Engine = {
-    LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
+    LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze, extractProfile,
     extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, relationMetrics, aiRelation, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

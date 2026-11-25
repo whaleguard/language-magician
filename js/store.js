@@ -69,6 +69,25 @@
     const t = o.teamId && teamById(o.teamId); if (t) { t.members = (t.members || []).concat(id); t.updatedAt = Date.now(); }
     persist(); return u;
   }
+  // 대화에서 인식한 고객 정보를 연락처 카드에 저장 (사용자가 직접 넣은 값은 덮지 않음)
+  const INFO_KEYS = ['name', 'age', 'gender', 'country', 'city', 'phone', 'email', 'birthday', 'job', 'orderNo', 'likes', 'note'];
+  function mergeContactInfo(cid, prof, mid, src) {
+    const u = me(); if (!u || viewAs || !prof) return 0; const c = u.contacts.find((x) => x.id === cid); if (!c) return 0;
+    c.info = c.info || {}; let n = 0; const now = Date.now();
+    INFO_KEYS.forEach((k) => {
+      let v = prof[k]; if (Array.isArray(v)) v = v.filter(Boolean).join(', '); v = String(v == null ? '' : v).trim(); if (!v || v.length > 120) return;
+      const cur = c.info[k]; if (cur && cur.locked) return;
+      if (k === 'likes' && cur && cur.v) { const set = new Set(cur.v.split(/,\s*/).concat(v.split(/,\s*/))); v = Array.from(set).slice(0, 12).join(', '); }
+      if (cur && cur.v === v) return;
+      c.info[k] = { v, ts: now, mid: mid || '', src: src || 'ai' }; n++;
+      // 기본 프로필 칸이 비어 있으면 같이 채움
+      if (k === 'age' && !c.age && /^\d{1,3}$/.test(v)) c.age = v;
+      if (k === 'birthday' && !c.birthday && /^\d{4}-\d{2}-\d{2}$/.test(v)) c.birthday = v;
+      if (k === 'country' && !c.country) c.country = v;
+    });
+    if (n) save(); return n;
+  }
+  function setContactInfo(cid, k, v) { const u = me(); if (!u || viewAs) return; const c = u.contacts.find((x) => x.id === cid); if (!c) return; c.info = c.info || {}; if (!String(v || '').trim()) delete c.info[k]; else c.info[k] = { v: String(v).trim().slice(0, 120), ts: Date.now(), src: 'user', locked: true }; save(); }
   // 일반 회원도 아이디·비밀번호를 만들면 DB에 저장돼 어느 기기에서든 「계정 로그인」으로 이어서 사용
   function setCredentials(loginId, pin) {
     const u = me(); if (!u || viewAs) return null;
@@ -98,6 +117,7 @@
   function custEntry(u, c) {
     const tm = teamOf(u.id); const ms = (u.messages || []).filter((m) => m.contactId === c.id);
     const fps = Array.from(new Set(ms.filter((m) => m.dir === 'in').slice(-15).map((m) => fpOf(m.text)).filter(Boolean)));
+    const inf = c.info || {}; const idf = [inf.phone && 'p' + fpOf('tel' + String(inf.phone.v).replace(/\D/g, '').slice(-9)), inf.email && 'e' + fpOf('mail' + String(inf.email.v).toLowerCase())].filter(Boolean); idf.forEach((x) => fps.push(x));
     const last = ms.length ? ms[ms.length - 1].ts : (c.createdAt || 0);
     return { id: u.id + '_' + c.id, agentId: u.id, agentName: u.nickname, contactId: c.id, teamId: tm ? tm.id : '', orgId: tm ? tm.orgId || '' : '', app: c.app || '', nick: c.nickname || '', key: (c.app || '') + ':' + normNick(c.nickname), fps, lastTs: last, n: ms.length, photo: c.photo || '' };
   }
@@ -762,7 +782,7 @@
     save, persist, onChange, me, uid, createUser, upgradeToMember, logout,
     addContact, updateContact, removeContact, contact, messagesOf, addMessage, startViewAs, stopViewAs, viewingAs, learnFromMessage, relearnAll,
     addPromise, updatePromise, removePromise, addAnniv, removeAnniv,
-    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
+    staff, staffById, staffLogin, addStaff, removeStaff, PLANS, FEATURES, planOf, can, orgs, orgById, createOrg, updateOrg, removeOrg, orgLogin, teamsOfOrg, teams, teamById, teamOf, createTeam, updateTeam, removeTeam, leaderLogin, normId, whoHasId, createAgent, findAgentLocal, agentLoginAs, setCredentials, mergeContactInfo, setContactInfo, INFO_KEYS, sharedCustomers, duplicateCustomers, refreshCusts, decideDup, dupDecision, deviceId, deviceLabel, bindOf, seatState, bindSeat, resetSeat, sendNotice, noticesOf, pendingReply, unreadNotices, markNoticesRead, markRepliesRead, replyNotice, setNoticeTr,
     attBeat, attEnd, dkey,
     addReport, audit, addQuality, loadSamples, ensureDemoMembers, clearDemo, wipe, Sync,
   };

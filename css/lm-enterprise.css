@@ -199,3 +199,12 @@ form.row > .btn, .row > .btn { white-space: nowrap; flex-shrink: 0; }
   #st-cred .row > .field { flex: 1 1 120px; max-width: none !important; }
   .tm-agent .row > .field, .tm-agent .row > select { flex: 1 1 140px; max-width: none !important; }
 }
+/* 고객 정보 카드 */
+.info-card .info-dl { margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.info-card .info-row { display: grid; grid-template-columns: 84px 1fr 22px; gap: 6px; align-items: start; font-size: 13px; }
+.info-card dt { color: var(--muted, #6b7280); font-size: 12px; padding-top: 1px; }
+.info-card dd { margin: 0; word-break: break-all; font-weight: 600; }
+.info-card .icon-x { border: 0; background: transparent; color: #9ca3af; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.info-card .icon-x:hover { color: #dc2626; }
+.info-card .tiny-b { font-size: 10px; padding: 0 5px; font-weight: 500; }
+.info-card .info-add { margin-top: 8px; }

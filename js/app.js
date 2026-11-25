@@ -298,6 +298,7 @@
         <div class="row wrap" style="gap:6px"><span class="badge">${esc(t('rel_' + (c.relation || 'friend')))} · ${esc(STAGE_NAMES[uiLang][stageKey])}</span>${c.metAt ? `<span class="badge gray">${esc(t('c_days_met', { n: daysBetween(c.metAt, td) + 1 }))}</span>` : ''}</div>
         ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
       </div>
+      ${infoCard(c)}
       ${(() => { const rf = recentFacts(c.id, 5); return rf.length ? `<div class="ws-card"><span class="ws-h">↺ ${t('mem_recent')}</span><div class="facts">${rf.map((f) => `<div class="fact-row"><span class="tiny muted">${esc(fmtDate(f.day))}</span>${factChip(f)}</div>`).join('')}</div></div>` : ''; })()}
       ${pf.count >= 3 ? `<div class="ws-card"><span class="ws-h">${t('c_analysis')}</span>
         <div class="ws-kv"><span>${t('st_formal')}</span><b>${t(pf.formality === 'polite' ? 'formal_polite' : 'formal_casual')}</b></div>
@@ -953,6 +954,8 @@
         res.provider = 'ai';
       } catch (e) { ai = null; }
     }
+    // 대화에서 고객 정보 인식 → 연락처 카드에 자동 저장
+    if (c && !Store.viewingAs()) { try { const pr = Object.assign({}, Engine.extractProfile(text), (ai && ai.profile) || {}); Object.keys(pr).forEach((k) => { if (!pr[k] || (Array.isArray(pr[k]) && !pr[k].length)) delete pr[k]; }); const n = Store.mergeContactInfo(c.id, pr, opts && opts.existing ? opts.existing.id : '', ai && ai.profile ? 'ai' : 'rx'); if (n) res.infoSaved = Object.keys(pr); } catch (e) { /* noop */ } }
     const trn = ai && ai.translation ? { text: ai.translation } : await tr(text, ML, from);
     res.translation = trn.text;
     const both = text + '\n' + res.translation;
@@ -1043,6 +1046,7 @@
       if (target === 'ko') { const ms2 = koMirrorStyle(c); replies = replies.map((r, i) => (i === 0 && toneCtx(c).toneKey === 'basic') || /비즈니스|商务|ビジネス|Business|Kinh doanh/.test(r.label) ? r : Object.assign({}, r, { text: koMirror(r.text, ms2) }, RL === 'ko' ? { meaning: koMirror(r.meaning, ms2), src: koMirror(r.src, ms2) } : {})); }
     }
     res.replies = replies;
+    if (res.infoSaved && res.infoSaved.length) setTimeout(() => toast(inL('saved').replace('{f}', res.infoSaved.map((k) => inL(k)).join(' · ')), 3500), 400);
     res.target = target;
     res.culture = ai && ai.culture ? ai.culture : cultureTipFor(c);
     res.coach = ai && ai.coach ? ai.coach : null;
@@ -1464,6 +1468,23 @@
   const SHO_T = { me: { ko: '팀장 확인: 내가 담당', zh: '组长确认：由我负责', ja: 'リーダー確認：自分が担当', vi: 'Trưởng nhóm xác nhận: tôi phụ trách', en: 'Leader confirmed: you own this' }, other: { ko: '팀장 확인: {n} 담당 · 응대 자제', zh: '组长确认：{n} 负责 · 请勿接待', ja: 'リーダー確認：{n}が担当・対応控え', vi: 'Trưởng nhóm xác nhận: {n} phụ trách · đừng trả lời', en: 'Leader confirmed: {n} owns this · hold off' }, title: { ko: '팀장이 같은 고객으로 확인하고 담당자를 지정했습니다', zh: '组长已确认同一客户并指定负责人', ja: 'リーダーが同じ顧客と確認し担当を指定', vi: 'Trưởng nhóm đã xác nhận cùng khách và chỉ định người phụ trách', en: 'Your leader confirmed it is the same customer and set an owner' } };
   const DW_T = { ko: '⚠ 같은 앱·닉네임 고객을 {n}도 상담 중입니다. 팀장에게 확인 요청이 올라갑니다', zh: '⚠ {n} 也在接待同一应用、同一昵称的客户，已通知组长确认', ja: '⚠ 同じアプリ・ニックネームの顧客を{n}も対応中です。リーダーに確認依頼が届きます', vi: '⚠ {n} cũng đang tư vấn khách cùng ứng dụng và biệt danh. Đã báo trưởng nhóm kiểm tra', en: '⚠ {n} is already handling a customer with the same app and nickname. Your leader will be asked to check' };
   function dupWarn(c) { try { const u = Store.me(); const l = Store.sharedCustomers(u.id, c); if (l.length && !l.some((x) => x.decided)) toast((DW_T[uiLang] || DW_T.en).replace('{n}', Array.from(new Set(l.map((x) => x.agentName))).join(', ')), 6000); } catch (e) { /* noop */ } }
+  const INFO_L = {
+    ko: { t: '고객 정보', s: '대화에서 자동 인식·저장', name: '이름', age: '나이', gender: '성별', country: '국가', city: '지역', phone: '전화', email: '이메일', birthday: '생일', job: '직업', orderNo: '주문·예약번호', likes: '관심·선호', note: '메모', add: '직접 추가', saved: '🪪 고객 정보 저장: {f}', del: '삭제', auto: '자동', none: '대화에서 이름·연락처·주문번호 등이 나오면 여기에 자동 저장됩니다' },
+    zh: { t: '客户信息', s: '从对话中自动识别并保存', name: '姓名', age: '年龄', gender: '性别', country: '国家', city: '地区', phone: '电话', email: '邮箱', birthday: '生日', job: '职业', orderNo: '订单/预约号', likes: '兴趣/偏好', note: '备注', add: '手动添加', saved: '🪪 已保存客户信息：{f}', del: '删除', auto: '自动', none: '对话中出现姓名、联系方式、订单号等时会自动保存在这里' },
+    ja: { t: '顧客情報', s: '会話から自動認識・保存', name: '名前', age: '年齢', gender: '性別', country: '国', city: '地域', phone: '電話', email: 'メール', birthday: '誕生日', job: '職業', orderNo: '注文・予約番号', likes: '興味・好み', note: 'メモ', add: '手動で追加', saved: '🪪 顧客情報を保存：{f}', del: '削除', auto: '自動', none: '会話に名前・連絡先・注文番号などが出るとここに自動保存されます' },
+    vi: { t: 'Thông tin khách', s: 'Tự nhận diện và lưu từ hội thoại', name: 'Tên', age: 'Tuổi', gender: 'Giới tính', country: 'Quốc gia', city: 'Khu vực', phone: 'Điện thoại', email: 'Email', birthday: 'Sinh nhật', job: 'Nghề nghiệp', orderNo: 'Mã đơn/đặt chỗ', likes: 'Sở thích', note: 'Ghi chú', add: 'Thêm thủ công', saved: '🪪 Đã lưu thông tin khách: {f}', del: 'Xóa', auto: 'Tự động', none: 'Tên, liên hệ, mã đơn… xuất hiện trong hội thoại sẽ tự lưu ở đây' },
+    en: { t: 'Customer info', s: 'Auto-detected from the chat', name: 'Name', age: 'Age', gender: 'Gender', country: 'Country', city: 'City', phone: 'Phone', email: 'Email', birthday: 'Birthday', job: 'Job', orderNo: 'Order / booking no.', likes: 'Interests', note: 'Note', add: 'Add manually', saved: '🪪 Customer info saved: {f}', del: 'Delete', auto: 'auto', none: 'Names, contacts and order numbers mentioned in the chat are saved here automatically' },
+  };
+  const inL = (k) => (INFO_L[uiLang] || INFO_L.en)[k] || k;
+  function infoCard(c) {
+    const inf = c.info || {}; const keys = Store.INFO_KEYS.filter((k) => inf[k] && inf[k].v);
+    const ro = Store.viewingAs();
+    return `<div class="ws-card info-card"><div class="between"><span class="ws-h">🪪 ${esc(inL('t'))}</span><span class="tiny muted">${esc(inL('s'))}</span></div>
+      ${keys.length ? `<dl class="info-dl">${keys.map((k) => `<div class="info-row"><dt>${esc(inL(k))}</dt><dd>${esc(inf[k].v)}${inf[k].src !== 'user' ? ` <span class="badge gray tiny-b">${esc(inL('auto'))}</span>` : ''}</dd>${ro ? '' : `<button type="button" class="icon-x" data-info-del="${k}" aria-label="${esc(inL('del'))}">×</button>`}</div>`).join('')}</dl>` : `<p class="tiny muted">${esc(inL('none'))}</p>`}
+      ${ro ? '' : `<form class="row info-add" data-info-add="${c.id}" style="gap:6px"><select class="field sm" name="k" style="max-width:120px">${Store.INFO_KEYS.map((k) => `<option value="${k}">${esc(inL(k))}</option>`).join('')}</select><input class="field sm" name="v" placeholder="${esc(inL('add'))}" style="flex:1;min-width:0"><button class="btn sm secondary" type="submit">+</button></form>`}</div>`;
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-info-del]'); if (!b) return; const cid = (location.hash.match(/#\/chat\/([^?/]+)/) || [])[1]; if (cid) { Store.setContactInfo(cid, b.dataset.infoDel, ''); render(); } });
+  document.addEventListener('submit', (e) => { const f = e.target.closest('[data-info-add]'); if (!f) return; e.preventDefault(); const fd = new FormData(f); if (String(fd.get('v') || '').trim()) { Store.setContactInfo(f.dataset.infoAdd, fd.get('k'), fd.get('v')); render(); } });
   function sharedBadge(c) {
     const u = Store.me(); if (!u || !c) return '';
     let list = []; try { list = Store.sharedCustomers(u.id, c); } catch (e) { list = []; }
