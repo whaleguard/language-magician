@@ -1866,9 +1866,10 @@
       e.preventDefault(); const text = document.getElementById('ib-text').value.trim(); if (!text) return;
       if (viewing) { toast(t('ib_sent')); return; }
       const btn = f.querySelector('button'); btn.disabled = true;
-      const from = Engine.detect(text) || uiLang; let tr = {};
-      if (from !== 'ko') { try { tr.ko = (await Engine.translate(text, 'ko', from)).text; } catch (x) {} }
-      Store.replyNotice(u.id, text, from, tr); toast(t('ib_sent')); renderInbox();
+      const from = Engine.detect(text) || uiLang;
+      // 바로 보내고 한국어 번역은 뒤에서 채움 (팀장 화면도 빠진 번역을 스스로 채움)
+      const n = Store.replyNotice(u.id, text, from, {}); toast(t('ib_sent')); renderInbox();
+      if (from !== 'ko' && n) Engine.translate(text, 'ko', from).then((o) => { if (o && o.text) Store.setNoticeTr(n.id, 'ko', o.text); }).catch(() => {});
     });
   }
 

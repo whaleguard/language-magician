@@ -450,7 +450,7 @@
   function markNoticesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from !== 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persistAny(); Sync.pushShared(); } return ch; }
   function markRepliesRead(userId) { const now = Date.now(); let ch = false; noticesOf(userId).forEach((n) => { if (n.from === 'member' && !n.readAt) { n.readAt = now; ch = true; } }); if (ch) { persist(); Sync.pushShared(); } }
   function replyNotice(userId, text, lang, tr) { const n = sendNotice({ userId, kind: 'reply', from: 'member', fromName: (db.users[userId] || {}).nickname || '', text, lang, tr }); return n; }
-  function setNoticeTr(id, lang, text) { const n = (db.notices || []).find((x) => x.id === id); if (n) { n.tr = n.tr || {}; n.tr[lang] = text; persistAny(); } }
+  function setNoticeTr(id, lang, text) { const n = (db.notices || []).find((x) => x.id === id); if (n) { n.tr = Object.assign({}, n.tr || {}, { [lang]: text }); if (n.trFail) n.trFail = false; n.updatedAt = Date.now(); persistAny(); } }
   // 회원 화면 보기 중에도 읽음 표시 등은 저장하지 않음
   function persistAny() { persist(); }
 
@@ -682,7 +682,7 @@
     sig(o) { const str = JSON.stringify(o); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return h + ':' + str.length; },
     hs() { if (!this._hs) { try { this._hs = JSON.parse(localStorage.getItem('lm_sync_h') || '{}'); } catch (e) { this._hs = {}; } } return this._hs; },
     saveHs() { try { localStorage.setItem('lm_sync_h', JSON.stringify(this.hs())); } catch (e) { /* noop */ } },
-    schedule() { if (!this.enabled() || viewAs) return; clearTimeout(this._ft); this._ft = setTimeout(() => this.flush(), 700); },
+    schedule() { if (!this.enabled() || viewAs) return; this._dirty = true; clearTimeout(this._ft); this._ft = setTimeout(() => this.flush(), 700); },
     isAdminCtx() { try { return /^#\/admin/.test(location.hash) && sessionStorage.getItem('lm_admin_ok') === '1'; } catch (e) { return false; } },
     // 바뀐 것만 서버로: 거래처·팀·본사직원·지시메시지·서버계정 회원·삭제표시
     async flush() {
@@ -700,12 +700,26 @@
         for (let i = 0; i < rows.length; i += 20) {
           const part = rows.slice(i, i + 20);
           const r = await fetch(this.base(), { method: 'POST', headers: Object.assign(this.headers(), { Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify(part.map((x) => ({ key: x.key, data: x.data }))) });
-          if (!r.ok) throw new Error('push ' + r.status);
+          if (!r.ok) {
+            // 한 줄이 잘못돼 묶음 전체가 막히지 않게: 4xx면 한 줄씩 다시 보내고 안 되는 줄만 건너뜀
+            if (r.status >= 400 && r.status < 500 && part.length > 1) {
+              for (const x of part) {
+                const r1 = await fetch(this.base(), { method: 'POST', headers: Object.assign(this.headers(), { Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify([{ key: x.key, data: x.data }]) });
+                if (r1.ok) hs[x.key] = x.sg; else { this.bad = Object.assign(this.bad || {}, { [x.key]: r1.status }); }
+              }
+              continue;
+            }
+            throw new Error('push ' + r.status);
+          }
           part.forEach((x) => { hs[x.key] = x.sg; });
         }
         if (rows.length) this.saveHs();
-        this.lastOk = Date.now(); this.err = '';
-      } catch (e) { this.err = String(e.message || e); } finally { this._busy = false; }
+        this.lastOk = Date.now(); this.err = ''; this._dirty = false; this._errN = 0;
+      } catch (e) {
+        this.err = String(e.message || e); this._errN = (this._errN || 0) + 1;
+        // 보내지 못한 내용이 있다고 화면에 알림 (1분에 한 번) — 자동으로 다시 보냄
+        try { if (window.LM && LM.toast && Date.now() - (this._errToast || 0) > 60000) { this._errToast = Date.now(); const L = (document.documentElement.lang || 'ko').slice(0, 2); LM.toast(({ zh: '⚠ 服务器连接失败，消息尚未发送。会自动重试。', en: '⚠ Server connection failed — not sent yet. Retrying automatically.', vi: '⚠ Không kết nối được máy chủ, tin chưa được gửi. Sẽ tự gửi lại.', ja: '⚠ サーバーに接続できず、まだ送信されていません。自動で再送します。' })[L] || '⚠ 서버 연결 실패 — 아직 전송되지 않았습니다. 자동으로 다시 보냅니다.'); } } catch (x) { /* noop */ }
+      } finally { this._busy = false; }
     },
     // 서버 → 이 기기. 관리자 화면이면 회원 전체, 아니면 내 계정만
     async pull() {
@@ -732,6 +746,7 @@
           db[col] = db[col] || []; const i = db[col].findIndex((x) => x.id === id); const loc = i >= 0 ? db[col][i] : null;
           // 단체 채팅 읽음·숨김은 여러 PC 기록을 합침
           if (col === 'notices' && loc && (loc.readBy || loc.hide || d.readBy || d.hide)) { const rb = Object.assign({}, d.readBy || {}, loc.readBy || {}); const hd = Object.assign({}, d.hide || {}, loc.hide || {}); if (Object.keys(rb).length) d.readBy = rb; if (Object.keys(hd).length) d.hide = hd; if (!loc.readAt && d.readAt) loc.readAt = d.readAt; else if (loc.readAt && !d.readAt) d.readAt = loc.readAt; }
+          if (col === 'notices' && loc && loc.tr && Object.keys(loc.tr).length) { d.tr = Object.assign({}, loc.tr, d.tr || {}); if (d.trFail && Object.keys(d.tr).length) d.trFail = false; }
           const locSig = loc ? this.sig(loc) : ''; const remSig = this.sig(d);
           if (locSig === remSig) { hs[row.key] = remSig; return; }
           const localDirty = loc && hs[row.key] && hs[row.key] !== locSig;
@@ -772,10 +787,10 @@
     },
     start() {
       if (this._started || !this.enabled()) return; this._started = true;
-      const tick = () => { if (document.hidden) return; this.pull(); };
+      const tick = () => { if (this._dirty || this.err) this.flush(); if (document.hidden) return; this.pull(); };
       this.pull().then(() => this.flush());
       setInterval(tick, 6000);
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) this.pull(); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) this.pull(); else if (this._dirty) this.flush(); });
     },
     async remove(key) {
       if (!this.enabled()) return false;

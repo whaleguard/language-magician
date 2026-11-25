@@ -117,9 +117,11 @@
     if (has && allowed) return { source: 'hq', provider: hq.provider || 'openai', model: hq.model || '', key: hq.proxy ? 'proxy' : hq.key, proxy: hq.proxy || '' };
     return { source: has ? 'locked' : 'none' };
   }
+  // 응답이 없으면 무한정 기다리지 않도록 시간 제한
+  function tfetch(u, ms, o) { if (typeof ms === 'object') { const t = o; o = ms; ms = t; } const ac = typeof AbortController === 'function' ? new AbortController() : null; const tm = ac ? setTimeout(() => ac.abort(), ms || 30000) : 0; return fetch(u, Object.assign({}, o || {}, ac ? { signal: ac.signal } : {})).finally(() => clearTimeout(tm)); }
   async function viaProxy(cfg, payload) {
     let pa = ''; try { pa = localStorage.getItem('lm_proxy_auth') || ''; } catch (e) { pa = ''; }
-    const r = await fetch(cfg.proxy, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, pa && /supabase\.co\//.test(cfg.proxy) ? { apikey: pa, Authorization: 'Bearer ' + pa } : {}), body: JSON.stringify(Object.assign({ provider: cfg.provider, model: cfg.model }, payload)) });
+    const r = await tfetch(cfg.proxy, 45000, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, pa && /supabase\.co\//.test(cfg.proxy) ? { apikey: pa, Authorization: 'Bearer ' + pa } : {}), body: JSON.stringify(Object.assign({ provider: cfg.provider, model: cfg.model }, payload)) });
     if (!r.ok) throw new Error('proxy-' + r.status);
     const j = await r.json();
     reportUsage(cfg.provider === 'openai' ? 'openai' : 'anthropic', j.model || cfg.model || (cfg.provider === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-5-5'), j.usage && (j.usage.input || j.usage.prompt_tokens || j.usage.input_tokens), j.usage && (j.usage.output || j.usage.completion_tokens || j.usage.output_tokens));
@@ -130,10 +132,10 @@
     const cfg = aiConfig(); if (!cfg.key) throw new Error('no-key');
     if (cfg.proxy) return viaProxy(cfg, { system: '', user: prompt, image: { data: b64, mime: mime || 'image/png' } });
     if (cfg.provider === 'openai') {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:' + (mime || 'image/png') + ';base64,' + b64 } }] }] }) });
+      const r = await tfetch('https://api.openai.com/v1/chat/completions', 45000, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:' + (mime || 'image/png') + ';base64,' + b64 } }] }] }) });
       if (!r.ok) throw new Error('vision'); const j = await r.json(); reportUsage('openai', cfg.model || 'gpt-4o-mini', j.usage && j.usage.prompt_tokens, j.usage && j.usage.completion_tokens); return j.choices[0].message.content || '';
     }
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mime || 'image/png', data: b64 } }, { type: 'text', text: prompt }] }] }) });
+    const r = await tfetch('https://api.anthropic.com/v1/messages', 45000, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: cfg.model || 'claude-haiku-5-5', max_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mime || 'image/png', data: b64 } }, { type: 'text', text: prompt }] }] }) });
     if (!r.ok) throw new Error('vision'); const j = await r.json(); reportUsage('anthropic', cfg.model || 'claude-haiku-5-5', j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens); return (j.content || []).map((x) => x.text || '').join('');
   }
 
@@ -145,7 +147,7 @@
     if (!cfg.key) throw new Error('no-key');
     if (cfg.proxy) return viaProxy(cfg, { system, user, json: !!wantJson });
     if (cfg.provider === 'openai') {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      const r = await tfetch('https://api.openai.com/v1/chat/completions', 45000, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key },
         body: JSON.stringify({
@@ -160,7 +162,7 @@
       reportUsage('openai', cfg.model || 'gpt-4o-mini', j.usage && j.usage.prompt_tokens, j.usage && j.usage.completion_tokens);
       return j.choices[0].message.content;
     }
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await tfetch('https://api.anthropic.com/v1/messages', 45000, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,7 +209,7 @@
       const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(p)
         + '&langpair=' + encodeURIComponent((LANGS[from] || {}).mm || from) + '|' + encodeURIComponent((LANGS[to] || {}).mm || to)
         + '&de=help%40languagemagician.app';
-      const r = await fetch(url);
+      const r = await tfetch(url, {}, 12000);
       if (!r.ok) throw new Error('mt-' + r.status);
       const j = await r.json();
       let t = (j.responseData && j.responseData.translatedText) || '';
@@ -629,7 +631,7 @@
       ' "situation": "1-2 sentences in UI language: what is happening now / what they want",',
       ' "facts": ["stated facts, UI language"], "inferences": ["your inferences, UI language"],',
       ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x6 — six clearly different approaches (e.g. accept, warm, ask back, playful/light, careful/polite, change topic), never two alike],',
-      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep phone, email and orderNo exactly as written. For name: the original spelling exactly as written, and if its script differs from the UI language add the UI-language reading in parentheses, e.g. "王丽 (왕리)". Leave empty when not stated; never guess.',
+      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep phone, email and orderNo exactly as written. For name: the original spelling exactly as written, and if its script differs from the UI language add the UI-language reading in parentheses, e.g. "王丽 (왕리)". Leave empty when not stated; never guess. When a name in Chinese/Japanese characters appears inside Korean text (meaning, facts, Korean replies), write it as its Hangul reading (e.g. 王丽 → 왕리), never mixed scripts like 왕丽.',
       ' "culture": "one culture tip in UI language or empty",',
       ' "coach": "one next-step relationship tip in UI language — never suggest meeting in person or offline dates; when suggesting a next step, suggest a phone call or video call first",',
       ' "avoid": "one thing to avoid saying, UI language"}',

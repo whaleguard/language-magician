@@ -135,19 +135,23 @@
   // 내 언어로 보여 줄 문장: 번역본이 있으면 번역본
   function shown(n, p, c) { const my = c.lang || 'ko'; if (n.lang === my) return n.text; return (n.tr && n.tr[my]) || n.text; }
 
+  let lastSend = { t: '', at: 0 };
   async function send(c, p, text) {
-    text = String(text || '').trim(); if (!text || busy) return; busy = true;
-    const btn = document.querySelector('.cw-send'); if (btn) btn.disabled = true;
-    try {
-      const myLang = c.lang || 'ko'; const tr = {};
-      const targets = (p.group ? p.langs : [p.peerLang || 'ko']).filter((l) => l && l !== myLang).slice(0, 6);
-      for (const to of targets) { try { tr[to] = (await Engine.translate(text, to, myLang)).text; } catch (e) { /* 번역 실패 시 원문만 */ } }
-      if (myLang !== 'ko' && !tr.ko) { try { tr.ko = (await Engine.translate(text, 'ko', myLang)).text; } catch (e) { /* noop */ } }
-      const teamId = (p.team && p.team.id) || (c.team && c.team.id) || '';
-      Store.sendNotice({ userId: p.id, kind: 'chat', fromId: viewerKey, from: p.group ? 'group' : p.side === 'member' ? 'member' : (c.kind === 'leader' ? 'leader' : c.kind === 'org' ? 'org' : 'admin'), fromName: c.name, teamId, text, lang: myLang, tr });
-      draft[cur] = '';
-      try { await Store.Sync.flush(); } catch (e) { /* noop */ }
-    } finally { busy = false; render(); }
+    text = String(text || '').trim(); if (!text) return;
+    if (lastSend.t === text && Date.now() - lastSend.at < 1500) return; // 같은 글 두 번 눌림 방지
+    lastSend = { t: text, at: Date.now() };
+    // 번역을 기다리지 않고 바로 보냄 → 번역은 뒤에서 채움 (받는 쪽도 빠진 번역은 스스로 채움)
+    const myLang = c.lang || 'ko';
+    const targets = (p.group ? p.langs : [p.peerLang || 'ko']).filter((l) => l && l !== myLang).slice(0, 6);
+    if (myLang !== 'ko' && !targets.includes('ko')) targets.push('ko');
+    const teamId = (p.team && p.team.id) || (c.team && c.team.id) || '';
+    const n = Store.sendNotice({ userId: p.id, kind: 'chat', fromId: viewerKey, from: p.group ? 'group' : p.side === 'member' ? 'member' : (c.kind === 'leader' ? 'leader' : c.kind === 'org' ? 'org' : 'admin'), fromName: c.name, teamId, text, lang: myLang, tr: {} });
+    draft[cur] = ''; render();
+    try { await Store.Sync.flush(); } catch (e) { /* noop */ }
+    const id = n && n.id; if (!id) return;
+    let got = 0;
+    await Promise.all(targets.map((to) => Engine.translate(text, to, myLang).then((o) => { if (o && o.text) { Store.setNoticeTr(id, to, o.text); got++; } }).catch(() => {})));
+    if (got) { try { await Store.Sync.flush(); } catch (e) { /* noop */ } render(); }
   }
 
   // 새 메시지 알림음
