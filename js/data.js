@@ -215,7 +215,7 @@
     TH: { ko: '검은 포장, 날카로운 물건', en: 'Black wrapping, sharp objects' },
   };
   const GIFT_MSG = {
-    birthday: { ko: '생일 축하해! 올해도 좋은 일만 가득하길 바라. 다음에 만나서 맛있는 거 먹자 🎂', zh: '生日快乐！愿你今年万事顺意。下次见面一起吃好吃的 🎂', ja: '誕生日おめでとう！今年もいいことがたくさんありますように。今度会っておいしいもの食べよう🎂', vi: 'Chúc mừng sinh nhật! Chúc bạn một năm thật nhiều niềm vui. Lần tới gặp nhau đi ăn món ngon nhé 🎂', en: 'Happy birthday! Wishing you a year full of good things. Let\'s grab something delicious next time 🎂' },
+    birthday: { ko: '생일 축하해! 올해도 좋은 일만 가득하길 바라. 이따 잠깐 통화하면서 축하해 줄게 🎂', zh: '生日快乐！愿你今年万事顺意。待会儿打个电话给你庆祝 🎂', ja: '誕生日おめでとう！今年もいいことがたくさんありますように。あとでちょっと電話してお祝いするね🎂', vi: 'Chúc mừng sinh nhật! Chúc bạn một năm thật nhiều niềm vui. Lát nữa mình gọi điện chúc mừng bạn nhé 🎂', en: 'Happy birthday! Wishing you a year full of good things. I\'ll give you a quick call later to celebrate 🎂' },
     met: { ko: '우리 처음 만난 지 벌써 {n}일이야! 그동안 고마웠어. 앞으로도 잘 부탁해 😊', zh: '我们认识已经 {n} 天了！谢谢你一直以来的陪伴，以后也请多关照 😊', ja: '出会ってもう{n}日だね！いつもありがとう。これからもよろしくね😊', vi: 'Mình quen nhau đã {n} ngày rồi! Cảm ơn bạn thời gian qua. Mong tiếp tục đồng hành nhé 😊', en: 'It\'s already been {n} days since we met! Thank you for everything. Here\'s to more 😊' },
     holiday: { ko: '{h} 축하해요! 가족들과 즐거운 시간 보내요 🎉', zh: '{h}快乐！祝你和家人度过美好的时光 🎉', ja: '{h}おめでとう！ご家族と楽しい時間を過ごしてね🎉', vi: 'Chúc mừng {h}! Chúc bạn có thời gian vui vẻ bên gia đình 🎉', en: 'Happy {h}! Enjoy the time with your family 🎉' },
     anniv: { ko: '오늘은 우리 {h}! 늘 고마워 ❤️', zh: '今天是我们的{h}！一直以来谢谢你 ❤️', ja: '今日は私たちの{h}！いつもありがとう❤️', vi: 'Hôm nay là {h} của chúng mình! Luôn cảm ơn bạn ❤️', en: 'Today is our {h}! Thank you, always ❤️' },

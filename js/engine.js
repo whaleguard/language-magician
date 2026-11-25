@@ -629,9 +629,9 @@
       ' "situation": "1-2 sentences in UI language: what is happening now / what they want",',
       ' "facts": ["stated facts, UI language"], "inferences": ["your inferences, UI language"],',
       ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x6 — six clearly different approaches (e.g. accept, warm, ask back, playful/light, careful/polite, change topic), never two alike],',
-      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep name, phone, email and orderNo exactly as written in the original message (do not translate or transliterate the name). Leave empty when not stated; never guess.',
+      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep phone, email and orderNo exactly as written. For name: the original spelling exactly as written, and if its script differs from the UI language add the UI-language reading in parentheses, e.g. "王丽 (왕리)". Leave empty when not stated; never guess.',
       ' "culture": "one culture tip in UI language or empty",',
-      ' "coach": "one next-step relationship tip in UI language",',
+      ' "coach": "one next-step relationship tip in UI language — never suggest meeting in person or offline dates; when suggesting a next step, suggest a phone call or video call first",',
       ' "avoid": "one thing to avoid saying, UI language"}',
       'IMPORTANT: every label, meaning, nuance, situation, facts, inferences, culture, coach, avoid and profile note MUST be written in ' + LANGS[p.uiLang].llm + '. Only "text" of replies is in the contact language.',
     ].join('\n');
@@ -714,7 +714,7 @@
     };
   }
   async function aiRelation(p) {
-    const sys = 'You are a careful relationship and communication coach for cross-language chats. Base everything on the actual messages; separate evidence from interpretation. Never encourage pressure, deception or asking for money. Respond in strict JSON.';
+    const sys = 'You are a careful relationship and communication coach for cross-language chats. Base everything on the actual messages; separate evidence from interpretation. Never encourage pressure, deception or asking for money. Never recommend meeting in person or offline dates as a next action; recommend a phone call or video call first instead. Respond in strict JSON.';
     const hist = (p.messages || []).slice(-40).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ' [' + new Date(m.ts).toISOString().slice(0, 16) + ']: ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
     const user = ['Write in ' + LANGS[p.uiLang].llm + '.', 'Relationship goal: ' + p.relation + '. Stages in order: ' + p.stages.join(' > ') + '. Current stage set by user: ' + p.current + '.', 'Contact: ' + p.contact.nickname + ' (' + LANGS[p.contact.lang].llm + (p.age ? ', about ' + p.age + ' years old' : '') + ').', 'Measured: ' + JSON.stringify(p.metrics), 'Chat:', hist || '(none)', '',
       'Return JSON {"stage":"one of the stage names above that the chat actually shows","why":["3-5 concrete reasons citing behaviour in the chat"],"signals":[{"tone":"good|warn|neutral","title":"short","detail":"what exactly they did and what it likely means"}] (4-7 items),"next":[{"title":"short action","detail":"how and when to do it, with a sample line in the user language"}] (3-5),"avoid":[{"say":"what not to say or do now","why":"why it would hurt at this stage"}] (3-5)}'].join('\n');
@@ -723,7 +723,7 @@
   }
 
   global.Engine = {
-    LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze, extractProfile,
+    LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
     extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, relationMetrics, aiRelation, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
