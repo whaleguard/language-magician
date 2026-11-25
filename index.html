@@ -105,6 +105,13 @@ h3 { font-size:19px; letter-spacing:-.025em }
 .plans ul { margin:12px 0 0; padding-left:18px; color:var(--muted); font-size:15px }
 .price { font-size:28px; font-weight:800; letter-spacing:-.04em; margin-top:6px }
 .shots { display:grid; gap:72px; margin-top:40px }
+.ops-grid { grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:56px }
+.shot-img.narrow { max-width:420px; justify-self:center; width:100% }
+.shot-more { display:inline-block; margin-top:14px; font-weight:700; color:var(--accent, #036da3); text-decoration:none }
+.guide-box { display:flex; gap:24px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-top:28px; padding:24px 28px; border:1px solid var(--line); border-radius:14px; background:#fff }
+.guide-box h3 { margin:0 0 6px } .guide-box p { margin:0; color:var(--muted, #566679) }
+.guide-links { display:flex; gap:8px; flex-wrap:wrap }
+@media (max-width:860px) { .ops-grid { grid-template-columns:minmax(0,1fr); margin-top:40px } .guide-box { padding:20px } .guide-links .cta { flex:1 1 calc(50% - 8px); text-align:center } }
 .shot-row { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.6fr); gap:48px; align-items:center }
 .shot-row.rev { grid-template-columns:minmax(0,1.6fr) minmax(0,.8fr) }
 .shot-row.rev .shot-copy { order:2 }
@@ -153,7 +160,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
   <div class="wrap top">
     <a class="brand" href="#top"><img class="logo-img" src="assets/lm-mark.png" alt="LM">상담매직</a>
     <nav aria-label="페이지 메뉴">
-      <a href="#how">사용 방법</a><a href="#features">기능</a><a href="#business">기업용</a><a href="#plans">요금제</a><a href="#faq">FAQ</a>
+      <a href="#how">사용 방법</a><a href="#features">기능</a><a href="#business">기업용</a><a href="#team-ops">팀 운영 기능</a><a href="#plans">요금제</a><a href="#faq">FAQ</a>
     </nav>
     <div class="head-actions">
       <select class="lang" id="lang" aria-label="앱 표시 언어"><!-- 🌐 -->
@@ -312,6 +319,53 @@ footer .brand { display:inline-flex; margin-bottom:8px }
     </div>
   </section>
 
+  <section class="band" id="team-ops" aria-labelledby="ops-title">
+    <div class="wrap">
+      <span class="biz-kicker">팀 운영 기능</span>
+      <h2 id="ops-title">상담 팀을 한 화면에서 운영하세요</h2>
+      <p class="section-copy">아래는 모두 기업용 콘솔의 실제 화면입니다. 회사·팀장·상담원이 각자 다른 PC에서 접속해도 같은 데이터로 함께 움직입니다.</p>
+      <div class="shots">
+        <article class="shot-row ">
+          <div class="shot-copy"><span class="shot-k">08 · 실시간 채팅</span><h3>위챗처럼 바로 대화하고, 각자 언어로 받습니다.</h3><p>화면 오른쪽 아래 채팅 버튼을 누르고 상대를 고르세요. 사장은 팀장·상담원에게, 팀장은 상담원에게 지시하고 상담원은 팀장에게 답합니다. 한국어로 쓰면 상담원 언어로, 상담원이 쓰면 한국어로 도착하고 원문도 함께 보입니다. 팀 전체방, 읽음 표시, 빠른 답장, 새 메시지 알림까지. 닫은 대화는 목록에 남아 다시 볼 수 있어요.</p><a class="shot-more" href="demo-tour.html#team-chat" data-tour="team-chat">▶ 채팅 데모 보기</a></div>
+          <figure class="shot-img"><img src="assets/tour/ko/73-chat-full.jpg" data-zh="assets/tour/zh/73-chat-full.jpg" alt="실시간 채팅 화면 — 회사 관리자와 팀장의 대화" loading="lazy"></figure>
+        </article>
+        <article class="shot-row rev">
+          <div class="shot-copy"><span class="shot-k">09 · 상담원 계정 · 자리 잠금</span><h3>팀장이 아이디를 만들고, 상담원은 자기 자리에서만.</h3><p>팀장이 상담원 아이디·비밀번호를 바로 만들어 줍니다. 처음 로그인한 PC가 그 상담원의 자리로 고정되어 다른 PC에서는 열리지 않고, 자리를 옮길 때는 팀장이 「자리 초기화」를 누르면 됩니다.</p></div>
+          <figure class="shot-img"><img src="assets/tour/ko/60-agents.jpg" data-zh="assets/tour/zh/60-agents.jpg" alt="상담원 계정과 자리 잠금 화면" loading="lazy"></figure>
+        </article>
+        <article class="shot-row ">
+          <div class="shot-copy"><span class="shot-k">10 · 같은 고객 중복 상담 감지</span><h3>한 고객을 두 상담원이 맡으면 바로 알립니다.</h3><p>같은 메신저·닉네임이나 같은 메시지가 겹치면 상담원 화면에 경고가 뜨고, 팀장은 프로필 사진을 나란히 비교해 「같은 고객 · 담당 지정」 또는 「다른 사람」으로 판정합니다.</p></div>
+          <figure class="shot-img"><img src="assets/tour/ko/61-dup.jpg" data-zh="assets/tour/zh/61-dup.jpg" alt="같은 고객 중복 상담 판정 화면" loading="lazy"></figure>
+        </article>
+        <article class="shot-row rev">
+          <div class="shot-copy"><span class="shot-k">11 · 대화 검색 · 캡처 기록</span><h3>모든 상담 대화를 원문·번역·한국어로 검색.</h3><p>권한 범위 안의 모든 상담원 대화를 한 번에 찾고, 누르면 그 대화의 그 줄로 이동합니다. 누가 언제 대화를 열람했는지, 화면 캡처를 시도했는지도 회사와 팀장 화면에 기록됩니다.</p></div>
+          <figure class="shot-img"><img src="assets/tour/ko/63-search.jpg" data-zh="assets/tour/zh/63-search.jpg" alt="대화 내용 검색 화면" loading="lazy"></figure>
+        </article>
+        <article class="shot-row ">
+          <div class="shot-copy"><span class="shot-k">12 · 근태 달력</span><h3>출근·접속 시간을 한 달 달력으로.</h3><p>상담원별 접속 시작·종료와 처리량을 날짜마다 표시하고, 날짜를 누르면 그날 상세 기록을 봅니다.</p></div>
+          <figure class="shot-img"><img src="assets/tour/ko/64-att-cal.jpg" data-zh="assets/tour/zh/64-att-cal.jpg" alt="근태 달력 화면" loading="lazy"></figure>
+        </article>
+        <article class="shot-row rev">
+          <div class="shot-copy"><span class="shot-k">13 · 고객 정보 자동 저장</span><h3>대화에서 나온 고객 정보는 저절로 정리됩니다.</h3><p>이름은 원문과 한국어 읽기를 함께, 나이·생일·직업·연락처 등은 대화가 쌓일수록 고객 카드에 채워집니다. 상담원이 직접 고치거나 고정할 수도 있어요.</p></div>
+          <figure class="shot-img narrow"><img src="assets/tour/ko/68-info-card.jpg" data-zh="assets/tour/zh/68-info-card.jpg" alt="고객 정보 카드 화면" loading="lazy"></figure>
+        </article>
+        <article class="shot-row ">
+          <div class="shot-copy"><span class="shot-k">14 · 직원 화면 그대로 보기</span><h3>상담원이 보는 화면을 한국어로 확인.</h3><p>관리자는 「이 사람 화면 보기」로 상담원 화면을 읽기 전용으로 열고, 외국어 대화 옆에 한국어 번역을 나란히 봅니다.</p></div>
+          <figure class="shot-img"><img src="assets/tour/ko/28-viewas.jpg" data-zh="assets/tour/zh/28-viewas.jpg" alt="직원 화면 보기 화면" loading="lazy"></figure>
+        </article>
+      </div>
+      <div class="grid ops-grid">
+        <article class="card"><h3>어느 PC에서나 같은 데이터</h3><p>팀·상담원·지시·채팅이 공용 서버로 자동 동기화됩니다.</p></article>
+        <article class="card"><h3>AI 키는 서버에 안전하게</h3><p>본사가 한 번 등록하면 모든 팀이 서버를 통해 AI 번역을 씁니다. 키는 화면에 노출되지 않습니다.</p></article>
+        <article class="card"><h3>회사 ↔ 팀장 메시지</h3><p>회사 관리자와 팀장이 지시·요청을 주고받고, 기한과 답장 필요 여부를 표시합니다.</p></article>
+      </div>
+      <div class="guide-box">
+        <div><h3>한국어·중국어 이용 안내서</h3><p>관리자용과 상담원용을 따로 준비했습니다. 계정 만들기부터 채팅까지 그림으로 안내합니다.</p></div>
+        <div class="guide-links"><a class="cta ghost" href="guide.html">관리자 안내서</a><a class="cta ghost" href="guide-zh.html" lang="zh-Hans">管理员指南</a><a class="cta ghost" href="guide-agent.html">상담원 안내서</a><a class="cta ghost" href="guide-agent-zh.html" lang="zh-Hans">咨询员指南</a></div>
+      </div>
+    </div>
+  </section>
+
   <section class="band" id="plans" aria-labelledby="plans-title">
     <div class="wrap">
       <h2 id="plans-title">요금제</h2>
@@ -323,7 +377,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
         <article class="card"><h3>프리미엄</h3><div class="price">₩9,900<small>/월</small></div><p>여러 사람과 깊게 이어가는 분께.</p>
           <ul><li>프로의 모든 기능</li><li>대화 상대 무제한</li><li>관계 코칭·사주·궁합·문화 가이드 전체</li><li>스크린샷 인식·여러 기기 동기화</li></ul></article>
         <article class="card biz"><h3>기업용</h3><div class="price">도입 문의</div><p>상담회사·외국인 고객상담 팀</p>
-          <ul><li>프리미엄의 모든 기능</li><li>팀장 계정·팀원 대화 열람·열람 기록</li><li>지시·경고 번역 전달·읽음·답장</li><li>팀 현황 대시보드·상담원 수 제한 없음</li></ul></article>
+          <ul><li>프리미엄의 모든 기능</li><li>팀장 계정·팀원 대화 열람·열람 기록</li><li>지시·경고 번역 전달·읽음·답장</li><li>팀 현황 대시보드·상담원 수 제한 없음</li><li>실시간 채팅 · 자동 번역 · 단체방</li><li>상담원 계정 · 자리 잠금 · 근태 달력</li><li>중복 고객 감지 · 대화 검색 · 캡처 기록</li></ul></article>
       </div>
     </div>
   </section>
@@ -335,6 +389,8 @@ footer .brand { display:inline-flex; margin-bottom:8px }
         <details><summary>가입 없이도 쓸 수 있나요?</summary><p>게스트로 시작할 수 있습니다. 대화 기록을 입력하기 전 운영 열람 안내와 동의를 확인합니다.</p></details>
         <details><summary>메신저 계정을 연결해야 하나요?</summary><p>메신저에서 텍스트를 복사해 가져오면 됩니다. 작성한 답장도 복사한 뒤 쓰던 메신저에서 직접 보냅니다.</p></details>
         <details><summary>앱 언어와 상대 언어를 따로 고를 수 있나요?</summary><p>앱 메뉴는 내 언어로 보고, 답장은 상대에 맞는 언어로 준비할 수 있습니다.</p></details>
+        <details><summary>팀장과 상담원은 어떻게 대화하나요?</summary><p>화면 오른쪽 아래 채팅 버튼으로 바로 대화합니다. 각자 자기 언어로 쓰면 상대 언어로 번역되어 도착하고, 원문도 함께 보입니다.</p></details>
+        <details><summary>상담원이 집이나 다른 PC에서 로그인할 수 있나요?</summary><p>처음 로그인한 PC가 그 상담원의 자리로 고정됩니다. 자리를 바꿀 때는 팀장이 「자리 초기화」를 누르면 새 PC에서 로그인할 수 있습니다.</p></details>
         <details><summary>가져온 대화는 누가 볼 수 있나요?</summary><p>권한을 받은 운영자가 앱에 제출한 대화를 관리 목적으로 열람할 수 있습니다. 열람 시 관리자·대화·시각·사유가 기록됩니다.</p></details>
       </div>
     </div>
@@ -357,7 +413,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
     <p>© 2026 주식회사 고래등</p>
   </div>
 </footer>
-<script src="js/landing-i18n.js?v=2611251243"></script>
+<script src="js/landing-i18n.js?v=2611251303"></script>
 <script>
   // 표시 언어 전환 (한국어·中文·日本語·Tiếng Việt·English) + 선택한 언어로 앱 열기
   (function () {
@@ -373,6 +429,7 @@ footer .brand { display:inline-flex; margin-bottom:8px }
       document.documentElement.lang = l === 'zh' ? 'zh-Hans' : l;
       document.title = titles[l] || titles.ko;
       document.querySelectorAll('[data-app]').forEach(function (a) { a.href = 'app.html?lang=' + l; });
+      document.querySelectorAll('img[data-zh]').forEach(function (im) { if (!im.dataset.ko) im.dataset.ko = im.getAttribute('src'); im.src = l === 'zh' ? im.dataset.zh : im.dataset.ko; });
       document.querySelectorAll('[data-tour]').forEach(function (a) { a.href = (l === 'zh' ? 'demo-tour-zh.html' : 'demo-tour.html') + (a.getAttribute('data-tour') ? '#' + a.getAttribute('data-tour') : ''); });
       try { localStorage.setItem('lm_land_lang', l); } catch (e) {}
     }
