@@ -323,3 +323,14 @@ nav.bottom .hq-nav { top: 1px; right: 4px; width: 15px; height: 15px; font-size:
 .hq-more { display: inline-block; font-size: 13px; font-weight: 700; color: #036da3; text-decoration: none; }
 .hq-more:hover { text-decoration: underline; }
 @media print { .hq, #hq-pop { display: none !important; } }
+
+/* 삭제 기능 (관리자·회사·팀장) */
+.cw-purge { border: 0; background: transparent; cursor: pointer; font-size: 16px; padding: 8px; border-radius: 6px; min-width: 34px; }
+.cw-purge:hover { background: rgba(220,38,38,.1); }
+.cw-mdel { display: none; border: 0; background: transparent; color: #c0392b; font-size: 11px; cursor: pointer; padding: 0 4px; }
+.cw-msg:hover .cw-mdel, .cw-msg:focus-within .cw-mdel { display: inline-block; }
+@media (hover: none) { .cw-mdel { display: inline-block; } }
+.del-box summary { cursor: pointer; font-weight: 700; }
+.crm-bulk { float: right; display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+.crm-ck { width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px; }
+@media (max-width: 640px) { .crm-bulk { float: none; display: flex; margin-top: 6px; } }
