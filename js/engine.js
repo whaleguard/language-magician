@@ -633,6 +633,7 @@
       ' "culture": "one culture tip in UI language or empty",',
       ' "coach": "one next-step relationship tip in UI language — never suggest meeting in person or offline dates; when suggesting a next step, suggest a phone call or video call first",',
       ' "avoid": "one thing to avoid saying, UI language"}',
+      'Do not write replies that propose meeting in person or an offline date unless THEM already proposed it — meeting is their own decision. If THEM proposed it, offer options to accept, decline, or suggest a phone/video call first.',
       'IMPORTANT: every label, meaning, nuance, situation, facts, inferences, culture, coach, avoid and profile note MUST be written in ' + LANGS[p.uiLang].llm + '. Only "text" of replies is in the contact language.',
     ].join('\n');
     const txt = await callLLM(sys, user, true);
