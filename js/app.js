@@ -28,6 +28,7 @@
   function icon(name, cls) { return `<svg class="icon ${cls || ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`; }
   function langName(l) { return (Engine.LANGS[l] || {}).name || l; }
   function appName(id) { const a = DATA.APPS.find((x) => x.id === id); return a ? a.name : (id || 'Other'); }
+  window.__lmLang = () => uiLang;
   function countryName(id) { const c = DATA.COUNTRIES.find((x) => x.id === id); return c ? (c.flag + ' ' + (c[uiLang] || c.en)) : ''; }
   function initial(name) { const s = String(name || '?').trim(); return esc([...s][0] || '?').toUpperCase(); }
   function avatar(c, size) { return c && c.photo && /^data:image\//.test(c.photo) ? `<span class="avatar ${size || ''} has-photo"><img src="${esc(c.photo)}" alt=""></span>` : `<span class="avatar ${size || ''} col-${esc(c.color || 'mint')}" lang="${esc(c.lang)}">${initial(c.nickname)}</span>`; }
