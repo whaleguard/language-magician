@@ -419,7 +419,7 @@
     free: { name: '무료', price: 0, group: 'personal' },
     pro: { name: '프로', price: 5900, group: 'personal' },
     premium: { name: '프리미엄', price: 9900, group: 'personal' },
-    business: { name: '기업용', price: null, group: 'business', install: 2000000, server: 99000, serverSeats: 30, seat: 19000 },
+    business: { name: '기업용', price: null, group: 'business', install: 2400000, server: 119000, serverSeats: 30, seat: 22800, listNote: '정가. 지인/소개가는 별도 견적서(20% 소개할인)' },
   };
   const FEATURES = {
     translate: ['free', 'pro', 'premium', 'business'],
