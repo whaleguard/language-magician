@@ -904,32 +904,65 @@
   }
 
   async function runOcr(file, target) {
+    // 하이브리드 OCR: 무료 Tesseract 먼저(비용 0·빠름) → 품질 낮을 때만 GPT 비전 폴백.
+    // 깨끗한 채팅 캡쳐는 99% 무료 OCR로 끝나고, 흐린 사진·손글씨만 GPT로 넘어간다.
     const note = document.getElementById('h-ocr');
     note.hidden = false; note.textContent = t('ocr_running');
     const cfg = Engine.aiConfig();
+    const c = helperState.contactId ? Store.contact(helperState.contactId) : null;
+    const langMap = { ko: 'kor', zh: 'chi_sim', 'zh-TW': 'chi_tra', ja: 'jpn', vi: 'vie', en: 'eng', th: 'tha', ru: 'rus', id: 'ind', es: 'spa' };
+    // OCR 안전장치: 큰 이미지는 토큰·속도 낭비 → 긴 변 1600px로 리사이즈
+    const shot = await shrinkImage(file, 1600).catch(() => file);
+
+    // 1) 무료 OCR 먼저
+    let text = '', conf = 0, ok = false;
     try {
-      let text = '';
-      const PROMPT = 'Transcribe the chat messages in this screenshot exactly, one message per line, oldest first. Prefix messages from the other person (usually left side, with avatar/name) with "THEM: " and from the phone owner (usually right side, colored bubbles) with "ME: ". Skip timestamps, dates and system notices. Output only the transcript.';
-      if (cfg.key) {
-        const b64 = await fileToB64(file);
-        text = await Engine.visionCall(b64, file.type || 'image/png', PROMPT);
-        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => /^THEM:/i.test(l) ? { dir: 'in', text: l.replace(/^THEM:\s*/i, '') } : /^ME:/i.test(l) ? { dir: 'out', text: l.replace(/^ME:\s*/i, '') } : null).filter(Boolean);
+      if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+      const langs = [langMap[c ? c.lang : 'en'] || 'eng', langMap[uiLang] || 'eng', 'eng'].filter((x, i, a) => a.indexOf(x) === i).join('+');
+      const res = await window.Tesseract.recognize(shot, langs);
+      text = (res.data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+      conf = res.data.confidence || 0;
+      if (/chi|jpn/.test(langs)) text = text.replace(/([぀-ヿ一-鿿])\s+(?=[぀-ヿ一-鿿])/g, '$1');
+      ok = text.replace(/\s/g, '').length >= 4 && conf >= 72; // 신뢰도 충분 + 글자 있음
+    } catch (e) { ok = false; }
+
+    // 2) 무료 OCR 실패/저품질 → GPT 비전 폴백 (AI 키 있을 때만)
+    if (!ok && cfg.key) {
+      try {
+        const PROMPT = 'Transcribe the chat messages in this screenshot exactly, one message per line, oldest first. Prefix messages from the other person (usually left side, with avatar/name) with "THEM: " and from the phone owner (usually right side, colored bubbles) with "ME: ". Skip timestamps, dates and system notices. Output only the transcript.';
+        const b64 = await fileToB64(shot);
+        const vtext = await Engine.visionCall(b64, (shot.type || 'image/png'), PROMPT);
+        const lines = vtext.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => /^THEM:/i.test(l) ? { dir: 'in', text: l.replace(/^THEM:\s*/i, '') } : /^ME:/i.test(l) ? { dir: 'out', text: l.replace(/^ME:\s*/i, '') } : null).filter(Boolean);
         if (lines.length >= 2) { note.textContent = t('ocr_done'); helperState.source = 'ocr'; return { lines }; }
-        if (lines.length === 1) text = lines[0].text;
-      } else {
-        if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-        const c = helperState.contactId ? Store.contact(helperState.contactId) : null;
-        const map = { ko: 'kor', zh: 'chi_sim', 'zh-TW': 'chi_tra', ja: 'jpn', vi: 'vie', en: 'eng', th: 'tha', ru: 'rus', id: 'ind', es: 'spa' };
-        const langs = [map[c ? c.lang : 'en'] || 'eng', map[uiLang] || 'eng', 'eng'].filter((x, i, a) => a.indexOf(x) === i).join('+');
-        const res = await window.Tesseract.recognize(file, langs);
-        text = (res.data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
-        if (/chi|jpn/.test(langs)) text = text.replace(/([぀-ヿ一-鿿])\s+(?=[぀-ヿ一-鿿])/g, '$1');
-      }
-      if (!text.trim()) throw new Error('empty');
+        if (lines.length === 1) { text = lines[0].text; }
+        else if (vtext.trim()) { text = vtext.trim(); }
+      } catch (e) { /* vision 실패 → 아래에서 무료 OCR 결과라도 사용 */ }
+    }
+
+    // 3) 결과 반영 (무료 OCR 결과 또는 vision 단일줄)
+    if (text.trim()) {
       target.value = text.trim(); helperState.text = text.trim();
-      note.textContent = t('ocr_done');
-      helperState.source = 'ocr';
-    } catch (e) { note.textContent = t('ocr_fail'); }
+      note.textContent = t('ocr_done'); helperState.source = 'ocr';
+    } else {
+      note.textContent = t('ocr_fail');
+    }
+  }
+  // 이미지 리사이즈(긴 변 maxPx) — OCR 비용·속도 안전장치
+  function shrinkImage(file, maxPx) {
+    return new Promise((res, rej) => {
+      if (!/^image\//.test(file.type || '')) return res(file);
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const s = Math.min(1, maxPx / Math.max(img.width, img.height));
+        if (s >= 1) { URL.revokeObjectURL(url); return res(file); }
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        cv.toBlob((b) => { URL.revokeObjectURL(url); res(b && new File([b], 'shot.png', { type: 'image/png' }) || file); }, 'image/png', 0.92);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); res(file); };
+      img.src = url;
+    });
   }
   function fileToB64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }); }
   function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }

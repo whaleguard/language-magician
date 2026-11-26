@@ -127,9 +127,18 @@
     reportUsage(cfg.provider === 'openai' ? 'openai' : 'anthropic', j.model || cfg.model || (cfg.provider === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-5-5'), j.usage && (j.usage.input || j.usage.prompt_tokens || j.usage.input_tokens), j.usage && (j.usage.output || j.usage.completion_tokens || j.usage.output_tokens));
     return String(j.text || '');
   }
+  // 호출 속도 안전장치 — 사람 손 상한(분당 3사이클)보다 넉넉히, 스크립트 폭주만 차단
+  const _calls = [];
+  function rateGuard() {
+    const now = Date.now(); const cut = now - 60000;
+    while (_calls.length && _calls[0] < cut) _calls.shift();
+    if (_calls.length >= 40) throw new Error('rate'); // 분당 40회 초과 = 비정상, 차단
+    _calls.push(now);
+  }
   // 이미지(스크린샷) 인식 — 본사 프록시·OpenAI·Claude 공통
   async function visionCall(b64, mime, prompt) {
     const cfg = aiConfig(); if (!cfg.key) throw new Error('no-key');
+    rateGuard();
     if (cfg.proxy) return viaProxy(cfg, { system: '', user: prompt, image: { data: b64, mime: mime || 'image/png' } });
     if (cfg.provider === 'openai') {
       const r = await tfetch('https://api.openai.com/v1/chat/completions', 45000, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:' + (mime || 'image/png') + ';base64,' + b64 } }] }] }) });
@@ -145,6 +154,7 @@
   async function callLLM(system, user, wantJson) {
     const cfg = aiConfig();
     if (!cfg.key) throw new Error('no-key');
+    rateGuard();
     if (cfg.proxy) return viaProxy(cfg, { system, user, json: !!wantJson });
     if (cfg.provider === 'openai') {
       const r = await tfetch('https://api.openai.com/v1/chat/completions', 45000, {
@@ -155,6 +165,7 @@
           messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
           response_format: wantJson ? { type: 'json_object' } : undefined,
           temperature: 0.3,
+          max_tokens: 1500, // 출력 토큰 상한 — 호출당 비용 예측·안전장치
         }),
       });
       if (!r.ok) throw new Error('llm-' + r.status);
