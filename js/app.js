@@ -439,11 +439,11 @@
   setInterval(() => { try { const u = Store.me(); if (!u || /^#\/admin/.test(location.hash)) return; if (Store.dueSince(u.id)) { if (!typing()) { render(); popNotices(); } } } catch (e) { /* noop */ } }, 5000);
   // 로그인 화면 왼쪽 '테스트 로그인' 패널 (설치 후 바로 체험) + 이용안내서
   const TP_T = {
-    ko: { t: '테스트 로그인', s: '클릭하면 바로 로그인됩니다 (비밀번호 모두 1234)', admin: '최종 관리자', company: '거래처 관리자', leader: '팀장', agent: '상담원', man: '이용안내서', mAdmin: '관리자용', mAgent: '상담원용' },
-    zh: { t: '测试登录', s: '点击即可直接登录（密码均为 1234）', admin: '最终管理员', company: '客户公司管理员', leader: '组长', agent: '咨询员', man: '使用指南', mAdmin: '管理员版', mAgent: '咨询员版' },
-    ja: { t: 'テストログイン', s: 'クリックで即ログイン（パスワードはすべて 1234）', admin: '最終管理者', company: '取引先管理者', leader: 'リーダー', agent: '相談員', man: '利用ガイド', mAdmin: '管理者用', mAgent: '相談員用' },
-    vi: { t: 'Đăng nhập thử', s: 'Nhấn để đăng nhập ngay (mật khẩu đều là 1234)', admin: 'Quản trị tối cao', company: 'Quản trị công ty', leader: 'Trưởng nhóm', agent: 'Nhân viên', man: 'Hướng dẫn', mAdmin: 'Quản trị', mAgent: 'Nhân viên' },
-    en: { t: 'Test login', s: 'Click to log in instantly (password is 1234 for all)', admin: 'Super admin', company: 'Company admin', leader: 'Team leader', agent: 'Agent', man: 'User guide', mAdmin: 'Admin', mAgent: 'Agent' },
+    ko: { t: '테스트 로그인', s: '클릭하면 바로 로그인됩니다 (비밀번호 모두 1234)', admin: '최종 관리자', company: '거래처 관리자', leader: '팀장', agent: '상담원', man: '이용안내서', mAdmin: '관리자용', mAgent: '상담원용', dl: '🖥 Windows 앱 다운로드' },
+    zh: { t: '测试登录', s: '点击即可直接登录（密码均为 1234）', admin: '最终管理员', company: '客户公司管理员', leader: '组长', agent: '咨询员', man: '使用指南', mAdmin: '管理员版', mAgent: '咨询员版', dl: '🖥 下载 Windows 应用' },
+    ja: { t: 'テストログイン', s: 'クリックで即ログイン（パスワードはすべて 1234）', admin: '最終管理者', company: '取引先管理者', leader: 'リーダー', agent: '相談員', man: '利用ガイド', mAdmin: '管理者用', mAgent: '相談員用', dl: '🖥 Windows アプリをダウンロード' },
+    vi: { t: 'Đăng nhập thử', s: 'Nhấn để đăng nhập ngay (mật khẩu đều là 1234)', admin: 'Quản trị tối cao', company: 'Quản trị công ty', leader: 'Trưởng nhóm', agent: 'Nhân viên', man: 'Hướng dẫn', mAdmin: 'Quản trị', mAgent: 'Nhân viên', dl: '🖥 Tải ứng dụng Windows' },
+    en: { t: 'Test login', s: 'Click to log in instantly (password is 1234 for all)', admin: 'Super admin', company: 'Company admin', leader: 'Team leader', agent: 'Agent', man: 'User guide', mAdmin: 'Admin', mAgent: 'Agent', dl: '🖥 Download Windows app' },
   };
   function testPanel(lang) {
     const L = TP_T[lang] ? lang : 'ko'; const x = TP_T[L];
@@ -451,7 +451,7 @@
     const guideA = L === 'zh' ? 'guide-zh.html' : 'guide.html'; const guideG = L === 'zh' ? 'guide-agent-zh.html' : 'guide-agent.html';
     return `<aside class="card test-panel"><div class="tp-h"><b>🧪 ${esc(x.t)}</b><span class="tiny muted">${esc(x.s)}</span></div>
       <div class="tp-list">${rows.map((r) => `<button type="button" class="tp-row" data-test="${r[0]}:${r[2]}:${r[3]}"><span class="tp-ic">${r[5]}</span><span class="tp-role">${esc(r[1])}</span><span class="tp-id">${r[2]}</span></button>`).join('')}</div>
-      <div class="tp-man"><span class="tiny muted">${esc(x.man)}</span><div class="row wrap" style="gap:6px"><a class="link tiny" href="${guideA}" target="_blank" rel="noopener">${esc(x.mAdmin)}</a><a class="link tiny" href="${guideG}" target="_blank" rel="noopener">${esc(x.mAgent)}</a></div></div></aside>`;
+      <div class="tp-man"><span class="tiny muted">${esc(x.man)}</span><div class="row wrap" style="gap:6px"><a class="link tiny" href="${guideA}" target="_blank" rel="noopener">${esc(x.mAdmin)}</a><a class="link tiny" href="${guideG}" target="_blank" rel="noopener">${esc(x.mAgent)}</a></div><a class="tp-dl" href="https://github.com/whaleguard/language-magician/releases/latest" target="_blank" rel="noopener">${esc(x.dl)}</a></div></aside>`;
   }
   function applyTestLogin(kind, formId) {
     let v; try { v = JSON.parse(sessionStorage.getItem('lm_test') || 'null'); } catch (e) { v = null; }
