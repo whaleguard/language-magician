@@ -70,7 +70,7 @@
     persist(); return u;
   }
   // 대화에서 인식한 고객 정보를 연락처 카드에 저장 (사용자가 직접 넣은 값은 덮지 않음)
-  const INFO_KEYS = ['name', 'age', 'gender', 'country', 'city', 'phone', 'email', 'birthday', 'job', 'orderNo', 'likes', 'note'];
+  const INFO_KEYS = ['name', 'age', 'gender', 'country', 'city', 'phone', 'email', 'birthday', 'blood', 'mbti', 'job', 'orderNo', 'likes', 'note'];
   function mergeContactInfo(cid, prof, mid, src) {
     const u = me(); if (!u || viewAs || !prof) return 0; const c = u.contacts.find((x) => x.id === cid); if (!c) return 0;
     c.info = c.info || {}; let n = 0; const now = Date.now();
@@ -82,7 +82,14 @@
       c.info[k] = { v, ts: now, mid: mid || '', src: src || 'ai' }; n++;
       // 기본 프로필 칸이 비어 있으면 같이 채움
       if (k === 'age' && !c.age && /^\d{1,3}$/.test(v)) c.age = v;
-      if (k === 'birthday' && !c.birthday && /^\d{4}-\d{2}-\d{2}$/.test(v)) c.birthday = v;
+      if (k === 'birthday') {
+        const full = v.match(/^(\d{4})-(\d{2})-(\d{2})$/); const md = v.match(/^(\d{1,2})-(\d{1,2})$/);
+        if (full && (!c.birthday || c.birthdayNoYear)) { c.birthday = v; c.birthdayNoYear = false; }
+        else if (md && !c.birthday) { c.birthday = '2000-' + md[1].padStart(2, '0') + '-' + md[2].padStart(2, '0'); c.birthdayNoYear = true; }
+      }
+      if (k === 'gender' && !c.gender) { if (/여|女|female|woman|girl|nữ|^f$/i.test(v)) c.gender = 'f'; else if (/남|男|male|man|boy|nam|^m$/i.test(v)) c.gender = 'm'; }
+      if (k === 'blood' && !c.blood) { const b = v.toUpperCase().match(/^(AB|A|B|O)/); if (b) c.blood = b[1]; }
+      if (k === 'mbti' && !c.mbti && /^[EI][SN][TF][JP]$/i.test(v)) c.mbti = v.toUpperCase();
       if (k === 'country' && !c.country) c.country = v;
     });
     if (n) save(); return n;

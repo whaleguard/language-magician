@@ -352,3 +352,13 @@ body.has-lead .ws > :is(.ws-rail, .ws-main, .ws-side) { height: calc(100dvh - 40
 .nt-delay select { min-width: 92px; }
 .ho-box summary { cursor: pointer; font-weight: 700; color: #036da3; }
 .ho-inline { padding: 8px 10px; border-radius: 10px; background: #eef6fc; border: 1px solid #cfe3f3; }
+/* 성향·성격 카드 */
+.persona-card .pc-dm, .persona-detail .pc-dm { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, #f4f0ff, #eef6ff); margin: 6px 0; }
+.persona-card .pc-dm b { font-size: 14.5px; color: #3b2a86; }
+.persona-detail .pc-dm.big b { font-size: 18px; color: #3b2a86; }
+.persona-card .pc-dm p, .persona-detail .pc-dm p { margin: 2px 0 0; }
+.pc-k { margin: 8px 0 2px; font-size: 12.5px; font-weight: 800; color: #036da3; }
+.pc-l { margin: 0 0 4px; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.pc-l li { margin: 1px 0; }
+.pc-age { padding: 6px 9px; border-radius: 9px; background: #fff8e6; color: #5c4400; }
+.persona-ai { border-top: 1px dashed #d8dfe8; padding-top: 10px; }

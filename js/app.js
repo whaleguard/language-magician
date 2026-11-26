@@ -310,6 +310,7 @@
         ${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? esc(c.blood) + (uiLang === 'en' ? '' : '') : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).length ? `<p class="tiny muted">${[c.age ? t('c_age') + ' ' + esc(c.age) : '', c.blood ? t('c_blood') + ' ' + esc(c.blood) : '', c.mbti ? esc(c.mbti) : '', c.birthday ? '🎂 ' + fmtDate(c.birthday) : ''].filter(Boolean).join(' · ')}</p>` : ''}
       </div>
       ${infoCard(c)}
+      ${personaCard(c, true)}
       ${(() => { const rf = recentFacts(c.id, 5); return rf.length ? `<div class="ws-card"><span class="ws-h">↺ ${t('mem_recent')}</span><div class="facts">${rf.map((f) => `<div class="fact-row"><span class="tiny muted">${esc(fmtDate(f.day))}</span>${factChip(f)}</div>`).join('')}</div></div>` : ''; })()}
       ${pf.count >= 3 ? `<div class="ws-card"><span class="ws-h">${t('c_analysis')}</span>
         <div class="ws-kv"><span>${t('st_formal')}</span><b>${t(pf.formality === 'polite' ? 'formal_polite' : 'formal_casual')}</b></div>
@@ -963,7 +964,7 @@
       try {
         const stage = STAGE_NAMES.en[STAGES[c.relation || 'friend'][c.stage || 0]];
         const tc0 = toneCtx(c); const tset = tc0.toneKey === 'basic' ? TONE6.map((k) => ({ key: k, label: t('t_' + k), prompt: TONE_PROMPT[k] })) : null;
-        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage, tone: tc0.tone, toneSet: tset, age: ageOf(c) });
+        ai = await Engine.aiAnalyze({ uiLang, contact: c, text, dir: 'in', history, stageName: stage, tone: tc0.tone, toneSet: tset, age: ageOf(c), persona: (() => { try { const d = personaData(c); if (!d || !d.s) return ''; const dm = Persona.dm(d.s.dayMaster, 'en'); return dm[0] + ' — ' + dm[1] + ' Talk tips: ' + dm[4].join('; '); } catch (e) { return ''; } })() });
         res.provider = 'ai';
       } catch (e) { ai = null; }
     }
@@ -1281,7 +1282,7 @@
   const TONES = ['basic', 'polite', 'friendly', 'cute', 'older', 'younger', 'sweet', 'business'];
   const TONE6 = ['polite', 'friendly', 'cute', 'older', 'sweet', 'business'];
   // AI 없이: 한국어 기본 답장을 말투별로 바꾸기 (간단 규칙)
-  function ageOf(c) { if (!c) return null; const a = Number(c.age); if (a > 0 && a < 120) return a; const by = Number(c.birthYear || (c.birthday && String(c.birthday).slice(0, 4))); if (by > 1900) return new Date().getFullYear() - by; return null; }
+  function ageOf(c) { if (!c) return null; const a = Number(c.age); if (a > 0 && a < 120) return a; const by = Number(c.birthYear || (c.birthday && !c.birthdayNoYear && String(c.birthday).slice(0, 4))); if (by > 1900) return new Date().getFullYear() - by; return null; }
   // 상대 나이대에 맞춘 한국어 말투 (AI 없이 쓰는 규칙)
   function koAge(x, age) {
     if (!age || !x) return x;
@@ -1482,13 +1483,103 @@
   const DW_T = { ko: '⚠ 같은 앱·닉네임 고객을 {n}도 상담 중입니다. 팀장에게 확인 요청이 올라갑니다', zh: '⚠ {n} 也在接待同一应用、同一昵称的客户，已通知组长确认', ja: '⚠ 同じアプリ・ニックネームの顧客を{n}も対応中です。リーダーに確認依頼が届きます', vi: '⚠ {n} cũng đang tư vấn khách cùng ứng dụng và biệt danh. Đã báo trưởng nhóm kiểm tra', en: '⚠ {n} is already handling a customer with the same app and nickname. Your leader will be asked to check' };
   function dupWarn(c) { try { const u = Store.me(); const l = Store.sharedCustomers(u.id, c); if (l.length && !l.some((x) => x.decided)) toast((DW_T[uiLang] || DW_T.en).replace('{n}', Array.from(new Set(l.map((x) => x.agentName))).join(', ')), 6000); } catch (e) { /* noop */ } }
   const INFO_L = {
-    ko: { t: '고객 정보', s: '대화에서 자동 인식·저장', name: '이름', age: '나이', gender: '성별', country: '국가', city: '지역', phone: '전화', email: '이메일', birthday: '생일', job: '직업', orderNo: '주문·예약번호', likes: '관심·선호', note: '메모', add: '직접 추가', saved: '🪪 고객 정보 저장: {f}', del: '삭제', auto: '자동', none: '대화에서 이름·연락처·주문번호 등이 나오면 여기에 자동 저장됩니다' },
-    zh: { t: '客户信息', s: '从对话中自动识别并保存', name: '姓名', age: '年龄', gender: '性别', country: '国家', city: '地区', phone: '电话', email: '邮箱', birthday: '生日', job: '职业', orderNo: '订单/预约号', likes: '兴趣/偏好', note: '备注', add: '手动添加', saved: '🪪 已保存客户信息：{f}', del: '删除', auto: '自动', none: '对话中出现姓名、联系方式、订单号等时会自动保存在这里' },
-    ja: { t: '顧客情報', s: '会話から自動認識・保存', name: '名前', age: '年齢', gender: '性別', country: '国', city: '地域', phone: '電話', email: 'メール', birthday: '誕生日', job: '職業', orderNo: '注文・予約番号', likes: '興味・好み', note: 'メモ', add: '手動で追加', saved: '🪪 顧客情報を保存：{f}', del: '削除', auto: '自動', none: '会話に名前・連絡先・注文番号などが出るとここに自動保存されます' },
-    vi: { t: 'Thông tin khách', s: 'Tự nhận diện và lưu từ hội thoại', name: 'Tên', age: 'Tuổi', gender: 'Giới tính', country: 'Quốc gia', city: 'Khu vực', phone: 'Điện thoại', email: 'Email', birthday: 'Sinh nhật', job: 'Nghề nghiệp', orderNo: 'Mã đơn/đặt chỗ', likes: 'Sở thích', note: 'Ghi chú', add: 'Thêm thủ công', saved: '🪪 Đã lưu thông tin khách: {f}', del: 'Xóa', auto: 'Tự động', none: 'Tên, liên hệ, mã đơn… xuất hiện trong hội thoại sẽ tự lưu ở đây' },
-    en: { t: 'Customer info', s: 'Auto-detected from the chat', name: 'Name', age: 'Age', gender: 'Gender', country: 'Country', city: 'City', phone: 'Phone', email: 'Email', birthday: 'Birthday', job: 'Job', orderNo: 'Order / booking no.', likes: 'Interests', note: 'Note', add: 'Add manually', saved: '🪪 Customer info saved: {f}', del: 'Delete', auto: 'auto', none: 'Names, contacts and order numbers mentioned in the chat are saved here automatically' },
+    ko: { t: '고객 정보', s: '대화에서 자동 인식·저장', name: '이름', age: '나이', gender: '성별', country: '국가', city: '지역', phone: '전화', email: '이메일', birthday: '생일', blood: '혈액형', mbti: 'MBTI', job: '직업', orderNo: '주문·예약번호', likes: '관심·선호', note: '메모', add: '직접 추가', saved: '🪪 고객 정보 저장: {f}', del: '삭제', auto: '자동', none: '대화에서 이름·연락처·주문번호 등이 나오면 여기에 자동 저장됩니다' },
+    zh: { t: '客户信息', s: '从对话中自动识别并保存', name: '姓名', age: '年龄', gender: '性别', country: '国家', city: '地区', phone: '电话', email: '邮箱', birthday: '生日', blood: '血型', mbti: 'MBTI', job: '职业', orderNo: '订单/预约号', likes: '兴趣/偏好', note: '备注', add: '手动添加', saved: '🪪 已保存客户信息：{f}', del: '删除', auto: '自动', none: '对话中出现姓名、联系方式、订单号等时会自动保存在这里' },
+    ja: { t: '顧客情報', s: '会話から自動認識・保存', name: '名前', age: '年齢', gender: '性別', country: '国', city: '地域', phone: '電話', email: 'メール', birthday: '誕生日', blood: '血液型', mbti: 'MBTI', job: '職業', orderNo: '注文・予約番号', likes: '興味・好み', note: 'メモ', add: '手動で追加', saved: '🪪 顧客情報を保存：{f}', del: '削除', auto: '自動', none: '会話に名前・連絡先・注文番号などが出るとここに自動保存されます' },
+    vi: { t: 'Thông tin khách', s: 'Tự nhận diện và lưu từ hội thoại', name: 'Tên', age: 'Tuổi', gender: 'Giới tính', country: 'Quốc gia', city: 'Khu vực', phone: 'Điện thoại', email: 'Email', birthday: 'Sinh nhật', blood: 'Nhóm máu', mbti: 'MBTI', job: 'Nghề nghiệp', orderNo: 'Mã đơn/đặt chỗ', likes: 'Sở thích', note: 'Ghi chú', add: 'Thêm thủ công', saved: '🪪 Đã lưu thông tin khách: {f}', del: 'Xóa', auto: 'Tự động', none: 'Tên, liên hệ, mã đơn… xuất hiện trong hội thoại sẽ tự lưu ở đây' },
+    en: { t: 'Customer info', s: 'Auto-detected from the chat', name: 'Name', age: 'Age', gender: 'Gender', country: 'Country', city: 'City', phone: 'Phone', email: 'Email', birthday: 'Birthday', blood: 'Blood type', mbti: 'MBTI', job: 'Job', orderNo: 'Order / booking no.', likes: 'Interests', note: 'Note', add: 'Add manually', saved: '🪪 Customer info saved: {f}', del: 'Delete', auto: 'auto', none: 'Names, contacts and order numbers mentioned in the chat are saved here automatically' },
   };
   const inL = (k) => (INFO_L[uiLang] || INFO_L.en)[k] || k;
+  /* ===== 성향·성격 카드 (생일·나이·혈액형·MBTI가 잡히면 자동 표시) ===== */
+  function personaData(c) {
+    if (!c || !window.Persona) return null;
+    const full = c.birthday && c.birthday.length === 10 && !c.birthdayNoYear ? c.birthday : '';
+    const s = full ? sajuOf(full, c.birthTime, c.birthLunar, c.birthLeap, c.birthTz) : null;
+    const age = ageOf(c);
+    let animal = s ? s.animal : null, animalEst = false;
+    if (!animal && age) { const y = new Date().getFullYear() - age; animal = ANIMAL_INDEX[((y - 4) % 12 + 12) % 12]; animalEst = true; }
+    const md = c.birthday && c.birthday.length === 10 ? c.birthday.slice(5) : '';
+    const sign = md ? Saju.zodiacSign(Number(md.slice(0, 2)), Number(md.slice(3))) : null;
+    const blood = /^(A|B|O|AB)$/.test(c.blood || '') ? c.blood : null;
+    const mbti = /^[EI][SN][TF][JP]$/.test(c.mbti || '') ? c.mbti : null;
+    if (!s && !animal && !sign && !blood && !mbti) return null;
+    return { s, an: s ? Persona.analyze(s) : null, age, ag: Persona.ageGroup(age), animal, animalEst, sign, blood, mbti };
+  }
+  function personaCard(c, compact) {
+    const P = window.Persona; if (!P) return '';
+    const L = P.lang(uiLang), U = P.t(uiLang); const d = personaData(c);
+    if (!d) return `<div class="ws-card persona-card"><span class="ws-h">🔮 ${esc(U.title)}</span><p class="tiny muted">${esc(U.need)}</p></div>`;
+    const chips = [d.animal ? `${esc(U.zod)} ${esc(ANIMALS[uiLang] ? ANIMALS[uiLang][ANIMAL_INDEX.indexOf(d.animal)] : d.animal)}${d.animalEst ? ' ' + esc(U.est) : ''}` : '', d.sign ? `${esc(U.sign)} ${esc((SIGN_NAMES[uiLang] || SIGN_NAMES.en)[d.sign])}` : '', d.blood ? `${esc(U.blood)} ${d.blood}` : '', d.mbti || '', d.age ? t('c_age') + ' ' + d.age : ''].filter(Boolean);
+    const dm = d.s ? P.dm(d.s.dayMaster, L) : null;
+    const li = (arr) => arr.map((x) => `<li>${esc(x)}</li>`).join('');
+    return `<div class="ws-card persona-card">
+      <div class="between"><span class="ws-h">🔮 ${esc(U.title)}</span><a class="tiny" href="#/saju/${esc(c.id)}">${esc(U.more)} →</a></div>
+      <div class="row wrap" style="gap:4px">${chips.map((x) => `<span class="badge gray">${x}</span>`).join('')}</div>
+      ${dm ? `<div class="pc-dm"><span class="tiny muted">${esc(U.dm)} · ${Saju.STEMS[d.s.dayMaster]}${uiLang === 'ko' ? '(' + Saju.STEMS_KO[d.s.dayMaster] + ')' : ''}</span><b>${esc(dm[0])}</b><p class="small">${esc(dm[1])}</p></div>
+        <p class="pc-k">💬 ${esc(U.tips)}</p><ul class="pc-l">${li(dm[4])}</ul>
+        ${compact ? '' : `<p class="pc-k">⚠ ${esc(U.avoid)}</p><ul class="pc-l">${li(dm[3])}</ul><p class="small"><span class="muted">${esc(U.likes)}:</span> ${esc(dm[5].join(' · '))}</p>`}` : `<p class="tiny muted">${esc(U.need)}</p>`}
+      ${d.blood ? `<p class="small"><span class="muted">${esc(U.blood)} ${d.blood}:</span> ${esc(P.BLOOD[L][d.blood])}</p>` : ''}
+      ${d.sign ? `<p class="small"><span class="muted">${esc((SIGN_NAMES[uiLang] || SIGN_NAMES.en)[d.sign])}:</span> ${esc(P.SIGN[L][d.sign])}</p>` : ''}
+      ${d.ag ? `<p class="small pc-age">👤 ${esc(P.AGE[L][d.ag])}</p>` : ''}
+      <p class="tiny muted">${esc(U.fun)}</p>
+    </div>`;
+  }
+  // 사주 화면용 상세 성향 (상대 생일만 있어도 표시)
+  function personaDetail(c, s) {
+    const P = window.Persona; if (!P || !s) return '';
+    const L = P.lang(uiLang), U = P.t(uiLang); const an = P.analyze(s); const dm = P.dm(s.dayMaster, L); const T = P.TG[L];
+    const li = (arr) => arr.map((x) => `<li>${esc(x)}</li>`).join('');
+    const top = an.raw.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
+    const luck = P.LUCK[L][an.useful];
+    return `<div class="card stack persona-detail">
+      <div class="between wrap"><h3>🔮 ${esc(U.title)} · ${esc(c.nickname)}</h3><span class="small muted">${esc(U.sub)}</span></div>
+      <div class="pc-dm big"><span class="small muted">${esc(U.dm)} · ${Saju.STEMS[s.dayMaster]}${uiLang === 'ko' ? '(' + Saju.STEMS_KO[s.dayMaster] + ')' : ''} · ${t('el_' + s.dayMasterEl)}</span><b>${esc(dm[0])}</b><p>${esc(dm[1])}</p></div>
+      <div class="two">
+        <div><p class="pc-k">✨ ${esc(U.str)}</p><ul class="pc-l">${li(dm[2])}</ul></div>
+        <div><p class="pc-k">⚠ ${esc(U.avoid)}</p><ul class="pc-l">${li(dm[3])}</ul></div>
+      </div>
+      <div><p class="pc-k">💬 ${esc(U.tips)}</p><ul class="pc-l">${li(dm[4])}</ul><p class="small"><span class="muted">${esc(U.likes)}:</span> ${esc(dm[5].join(' · '))}</p></div>
+      <div><p class="pc-k">📊 ${esc(U.tg)}</p><div class="mini-bars">${T.names.map((n, i) => `<div class="row"><span class="small" style="width:118px">${esc(n)}</span><div class="bar"><span style="width:${an.groups[i]}%"></span></div><span class="tiny muted" style="width:34px;text-align:end">${an.groups[i]}%</span></div>`).join('')}</div>
+        <ul class="pc-l">${li([T.hi[top[0][1]], T.hi[top[1][1]], T.lo[top[4][1]]])}</ul></div>
+      <p class="small">⚖ ${esc(P.STR[L][an.strength])}</p>
+      <div class="row wrap" style="gap:6px"><span class="badge">${esc(U.luck)}: ${t('el_' + an.useful)}</span><span class="badge gray">${esc(P.LUCK[L].h[0])} ${esc(luck[0])}</span><span class="badge gray">${esc(P.LUCK[L].h[1])} ${esc(luck[1])}</span><span class="badge gray">${esc(P.LUCK[L].h[2])} ${esc(luck[2])}</span></div>
+      <p class="small">📅 ${esc(U.year)} (${new Date().getFullYear()} ${Saju.STEMS[an.yearStem]}${Saju.BRANCHES[an.yearBranch]}): ${esc(P.YEAR[L][an.yearG])}</p>
+      <div class="persona-ai" id="pa-box">${personaAiHtml(c)}</div>
+      <p class="tiny muted">${esc(U.fun)}</p>
+    </div>`;
+  }
+  function personaAiHtml(c) {
+    const U = Persona.t(uiLang); const r = c.personaAi && c.personaAi[uiLang];
+    if (!r) return `<button type="button" class="btn secondary" id="pa-go">🤖 ${esc(U.ai)}</button>`;
+    const li = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('');
+    return `<div class="stack-sm"><p class="pc-k">🤖 ${esc(U.ai)}</p><p>${esc(r.summary || '')}</p>
+      ${r.traits ? `<ul class="pc-l">${li(r.traits)}</ul>` : ''}
+      ${r.talk ? `<p class="pc-k">💬 ${esc(U.tips)}</p><ul class="pc-l">${li(r.talk)}</ul>` : ''}
+      ${r.avoid ? `<p class="pc-k">⚠ ${esc(U.avoid)}</p><ul class="pc-l">${li(r.avoid)}</ul>` : ''}
+      ${r.topics ? `<p class="small"><span class="muted">${esc(U.likes)}:</span> ${esc((r.topics || []).join(' · '))}</p>` : ''}
+      ${r.chat_evidence && r.chat_evidence.length ? `<ul class="pc-l tiny muted">${li(r.chat_evidence)}</ul>` : ''}
+      <button type="button" class="link tiny" id="pa-go">↻ ${esc(U.ai)}</button></div>`;
+  }
+  function bindPersonaAi(c, s) {
+    const btn = document.getElementById('pa-go'); if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const box = document.getElementById('pa-box'); const U = Persona.t(uiLang);
+      if (!Engine.aiConfig().key) { toast(U.nopro); return; }
+      box.innerHTML = `<p class="small muted">⏳ ${esc(U.aiwait)}</p>`;
+      try {
+        const an = s ? Persona.analyze(s) : null;
+        const charts = s ? { pillars: s.pillars.map((p) => p.hanja), dayMaster: Saju.STEMS[s.dayMaster] + ' ' + s.dayMasterEl, elements: s.counts, tenGods: an && Object.fromEntries(Persona.TG.en.names.map((n, i) => [n, an.groups[i] + '%'])), strength: an && an.strength, useful: an && an.useful, zodiac: s.animal } : {};
+        const d = personaData(c) || {};
+        if (d.sign) charts.starSign = d.sign; if (d.blood) charts.blood = d.blood; if (d.mbti) charts.mbti = d.mbti; if (!charts.zodiac && d.animal) charts.zodiac = d.animal;
+        const out = await Engine.aiPersona({ uiLang, contactLang: c.lang, nickname: c.nickname, age: ageOf(c), gender: c.gender === 'f' ? 'female' : c.gender === 'm' ? 'male' : '', charts, messages: Store.messagesOf(c.id) });
+        if (!out || !out.summary) throw new Error('empty');
+        const pa = Object.assign({}, c.personaAi || {}, { [uiLang]: Object.assign(out, { at: Date.now() }) });
+        Store.updateContact(c.id, { personaAi: pa }); c.personaAi = pa;
+        box.innerHTML = personaAiHtml(c); bindPersonaAi(c, s);
+      } catch (e) { box.innerHTML = personaAiHtml(c); bindPersonaAi(c, s); toast(t('ai_fail')); }
+    });
+  }
+
   function infoCard(c) {
     const inf = c.info || {}; const keys = Store.INFO_KEYS.filter((k) => inf[k] && inf[k].v);
     const ro = Store.viewingAs();
@@ -1951,6 +2042,7 @@
           ${(() => { const L = c.learned || {}; const keys = ['age', 'gender', 'birthday', 'blood', 'mbti', 'job', 'city'].filter((k) => L[k]); return keys.length ? `<dl class="data-grid">${keys.map((k) => `<dt>${esc({ age: t('c_age'), gender: t('c_gender'), birthday: t('c_birthday'), blood: t('c_blood'), mbti: 'MBTI', job: t('c_job'), city: t('c_city') }[k])}</dt><dd><b>${esc(learnedVal(c, k))}</b><br><span class="tiny muted">“${esc(L[k].text || '')}” · ${esc(fmtDate(new Date(L[k].ts)))}</span></dd>`).join('')}</dl><p class="tiny muted">${t('learned_hint')}</p>` : `<p class="small muted">${t('learned_none')}</p>`; })()}
           ${[c.job ? t('c_job') + ' ' + esc(c.job) : '', c.city ? t('c_city') + ' ' + esc(c.city) : ''].filter(Boolean).length && !(c.learned && (c.learned.job || c.learned.city)) ? `<p class="small">${[c.job ? t('c_job') + ' ' + esc(c.job) : '', c.city ? t('c_city') + ' ' + esc(c.city) : ''].filter(Boolean).join(' · ')}</p>` : ''}
         </div>
+        ${personaCard(c, false).replace('ws-card persona-card', 'card stack-sm persona-card')}
         <div class="card stack">
           <h2>${t('c_dates')}</h2>
           <dl class="data-grid">
@@ -2333,6 +2425,7 @@
     const key = 'lm_anniv_notified_' + today();
     if (!localStorage.getItem(key)) {
       annivList(u).filter((a) => a.inDays === 0).forEach((a) => notify((a.c ? whoText(a.c) + ' · ' : '') + a.label, t('d_today')));
+      annivList(u).filter((a) => a.inDays === 1).forEach((a) => notify((a.c ? whoText(a.c) + ' · ' : '') + a.label, t('d_day', { n: 1 })));
       localStorage.setItem(key, '1');
     }
     if (changed) Store.save({ noSync: true });
@@ -2415,7 +2508,8 @@
       const a = sajuOf(meData.birth, meData.birthTime, meData.lunar, meData.leap, meData.tz);
       const b = sajuOf(val('c-birth'), val('c-time'), val('c-lunar') === '1', val('c-leap'), val('c-tz'));
       const out = document.getElementById('sj-out');
-      if (!a || !b) { out.innerHTML = `<div class="card notice small">${t('saju_need')}</div>`; return; }
+      if (!b) { out.innerHTML = `<div class="card notice small">${t('saju_need')}</div>`; Store.save(); return; }
+      if (!a) { out.innerHTML = `<div class="stack-lg">${personaDetail(c, b)}<div class="card notice small">${t('saju_need')}</div></div>`; bindPersonaAi(c, b); Store.save(); return; }
       const pf = Engine.profile(Store.messagesOf(c.id));
       const sA = Saju.zodiacSign(a.solar.month, a.solar.day), sB = Saju.zodiacSign(b.solar.month, b.solar.day);
       const comp = Saju.compat({ saju: a, blood: meData.blood, mbti: meData.mbti, sign: sA }, { saju: b, blood: c.blood, mbti: c.mbti, sign: sB, chatScore: pf.count >= 5 ? Math.max(30, pf.depth) : undefined });
@@ -2429,14 +2523,16 @@
           <div class="mini-bars" style="width:100%;text-align:start">${Object.keys(comp.parts).map((k) => `<div class="row"><span class="small" style="width:84px">${t('compat_' + k)}</span><div class="bar"><span style="width:${comp.parts[k]}%"></span></div><span class="tiny" style="width:24px;text-align:right">${comp.parts[k]}</span></div>`).join('')}</div></div>
         ${comp.notes.length ? `<div class="card stack-sm">${comp.notes.map((n) => `<p class="small">• ${esc(notes[n])}</p>`).join('')}</div>` : ''}
         <div class="card stack-sm"><h3>${t('compat_tip')}</h3><p>${esc(notes.tip[(a.dayMaster + b.dayMaster) % notes.tip.length])}</p></div>
+        ${personaDetail(c, b)}
         ${pillarsHtml(a, t('saju_me') + ' · ' + u.nickname)}
         ${pillarsHtml(b, c.nickname)}
         <p class="tiny muted">${t('saju_sub')}</p>
       </div>`;
+      bindPersonaAi(c, b);
       Store.save();
     };
     document.getElementById('sj-go').addEventListener('click', run);
-    if ((meI.birth) && c.birthday && c.birthday.length === 10) run();
+    if (c.birthday && c.birthday.length === 10 && !c.birthdayNoYear) run();
   }
 
   /* ================= 선물 ================= */

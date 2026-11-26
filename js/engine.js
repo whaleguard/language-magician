@@ -620,6 +620,7 @@
       'Relationship goal: ' + (p.contact.relation || 'friend') + ', stage: ' + (p.stageName || ''),
       p.toneSet && p.toneSet.length ? 'The user has no preferred tone: write exactly one reply in EACH of these tones, in this order, and use the given label: ' + p.toneSet.map((x) => x.label + ' = ' + x.prompt).join(' | ') : 'Write ALL six replies in this tone (six different contents, same tone): ' + (p.tone || 'natural, matching the relationship'),
       'Mirror the contact\'s own texting style seen in the history (their slang, abbreviations like ㅇㅇ/ㅋㅋ/好哒/りょ, cute endings like ~욤/~용, tildes, emoji frequency, length). If they write casually or cutely, the replies should too; if they write formally, stay formal.',
+      (p.persona ? 'Soft hint from the contact\'s birth chart (folklore, use lightly, never mention it): ' + p.persona : ''),
       (p.age ? 'Contact is about ' + p.age + ' years old: write replies the way people of that generation naturally text in the contact language — for teens/20s use their casual short forms and trendy endings (Korean examples: ㅇㅋ, ㄱㄱ, ㅇㅇ, ㅋㅋ, 알았어욤, 그래욤, 앗 진짜요?; Chinese: 好哒, 嗯嗯, 哈哈哈; Japanese: りょ, おけ, 笑; Vietnamese: ok nha, hihi; English: lol, omg, ok!), for 30s-40s natural everyday style, for 50+ polite and clear without slang or many emoji. Keep it natural, never forced.' : '') ,
       'Known profile (entered by user): ' + JSON.stringify({ age: p.contact.age, gender: p.contact.gender, blood: p.contact.blood, mbti: p.contact.mbti, country: p.contact.country }),
       'Recent history:\n' + (hist || '(none)'),
@@ -631,7 +632,7 @@
       ' "situation": "1-2 sentences in UI language: what is happening now / what they want",',
       ' "facts": ["stated facts, UI language"], "inferences": ["your inferences, UI language"],',
       ' "replies": [{"label": "short label in UI language", "text": "reply in contact language", "meaning": "same reply in UI language"} x6 — six clearly different approaches (e.g. accept, warm, ask back, playful/light, careful/polite, change topic), never two alike],',
-      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep phone, email and orderNo exactly as written. For name: the original spelling exactly as written, and if its script differs from the UI language add the UI-language reading in parentheses, e.g. "王丽 (왕리)". Leave empty when not stated; never guess. When a name in Chinese/Japanese characters appears inside Korean text (meaning, facts, Korean replies), write it as its Hangul reading (e.g. 王丽 → 왕리), never mixed scripts like 왕丽.',
+      ' "profile": {"name": "", "age": "", "gender": "", "country": "", "city": "", "phone": "", "email": "", "birthday": "YYYY-MM-DD or MM-DD or empty", "blood": "A|B|O|AB or empty", "mbti": "4 letters or empty", "job": "", "orderNo": "", "likes": [], "note": ""} — ONLY facts THEM explicitly stated about THEMSELVES in the new message or history (customer info for a CRM card). Keep phone, email and orderNo exactly as written. For name: the original spelling exactly as written, and if its script differs from the UI language add the UI-language reading in parentheses, e.g. "王丽 (왕리)". Leave empty when not stated; never guess. When a name in Chinese/Japanese characters appears inside Korean text (meaning, facts, Korean replies), write it as its Hangul reading (e.g. 王丽 → 왕리), never mixed scripts like 왕丽.',
       ' "culture": "one culture tip in UI language or empty",',
       ' "coach": "one next-step relationship tip in UI language — never suggest meeting in person or offline dates; when suggesting a next step, suggest a phone call or video call first",',
       ' "avoid": "one thing to avoid saying, UI language"}',
@@ -725,8 +726,18 @@
     return typeof out === 'string' ? extractJson(out) : out;
   }
 
+  // 성향·성격 상세 리포트 (사주·띠·별자리·혈액형·MBTI + 실제 대화 말투를 함께 봄)
+  async function aiPersona(p) {
+    const sys = 'You are a careful customer-communication coach who also knows Korean saju (Four Pillars), Chinese zodiac, Western astrology, blood-type and MBTI folklore. These are for fun and conversation hints only: never present them as facts, never stereotype by gender, nationality or age, never encourage pressure, deception, asking for money or meeting in person. Base communication advice mainly on the actual chat behaviour; use the charts only as soft hints. Write warmly and concretely.';
+    const hist = (p.messages || []).slice(-30).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ': ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
+    const user = ['Write every value in ' + LANGS[p.uiLang].llm + '.', 'Person: ' + p.nickname + (p.age ? ', age ' + p.age : '') + (p.gender ? ', gender ' + p.gender : '') + '.', 'Charts: ' + JSON.stringify(p.charts || {}), 'Recent chat (may be empty):\n' + (hist || '(none)'),
+      'Return JSON {"summary":"2-3 sentence portrait","traits":["4-6 personality traits, each a short phrase with one-line why"],"talk":["4 concrete ways to talk to this person, with an example sentence in their style"],"avoid":["3 things to avoid"],"topics":["4 conversation topics they may enjoy"],"care":["2 ways to show care that fit them"],"chat_evidence":["0-3 observations from the actual chat that support or contradict the chart (empty if no chat)"]}'].join('\n');
+    const out = await callLLM(sys + ' IMPORTANT: write ALL JSON values in ' + LANGS[p.uiLang].llm + ' (the reader\'s language). Example sentences to say to the person go in ' + (LANGS[p.contactLang] || LANGS.en).llm + ' followed by a ' + LANGS[p.uiLang].llm + ' translation in parentheses.', user, true);
+    return typeof out === 'string' ? extractJson(out) : out;
+  }
+
   global.Engine = {
     LANGS, detect, translate, callLLM, aiConfig, setPlanResolver, hqAi, ownAi, visionCall, aiAnalyze,
-    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, relationMetrics, aiRelation, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
+    extractWhen, extractPlace, extractProfile, dayMemory, aiDayMemory, aiTasks, relationMetrics, aiRelation, aiPersona, intents, formality, slang, isJunk, recall, profile, tokens, similarity, ymd, addDays, RX,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
