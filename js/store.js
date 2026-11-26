@@ -174,7 +174,7 @@
   function deviceLabel() { const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || ''; const os = /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Linux/.test(ua) ? 'Linux' : '기기'; const br = /Edg\//.test(ua) ? 'Edge' : /Whale\//.test(ua) ? 'Whale' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '브라우저'; return os + ' · ' + br; }
   function bindOf(userId) { db.binds = db.binds || []; return db.binds.find((b) => b.id === userId) || null; }
   // 'free'(미등록) | 'ok' | 'other'(다른 자리에 등록됨) | 'reset'(초기화됨 → 다시 로그인 필요)
-  function seatState(userId) { const b = bindOf(userId); if (!b) return 'free'; if (!b.dev) return 'reset'; return b.dev === deviceId() ? 'ok' : 'other'; }
+  function seatState(userId) { const u = db.users[userId]; if (u && u.demo) return 'ok'; const b = bindOf(userId); if (!b) return 'free'; if (!b.dev) return 'reset'; return b.dev === deviceId() ? 'ok' : 'other'; }
   function bindSeat(userId) { db.binds = db.binds || []; const b = bindOf(userId); const rec = { id: userId, dev: deviceId(), label: deviceLabel(), at: Date.now(), updatedAt: Date.now() }; if (b) Object.assign(b, rec); else db.binds.push(rec); persist(); }
   function resetSeat(userId) { db.binds = db.binds || []; const b = bindOf(userId); const rec = { id: userId, dev: '', label: '', at: 0, updatedAt: Date.now() }; if (b) Object.assign(b, rec); else db.binds.push(rec); persist(); }
   // 같은 고객을 여러 상담원이 상담하는지 찾기 위한 고객 색인 (닉네임 키 + 받은 메시지 지문)
@@ -659,6 +659,11 @@
     const t = createTeam({ orgId: og ? og.id : '', name: '외국인 고객상담 1팀', leaderName: '김팀장', loginId: 'leader1', pin: '1234', members: mine.concat(crowd), demo: true });
     const crowd2 = Object.values(db.users).filter((u) => u.demoCrowd && u.type === 'member').slice(7, 12).map((u) => u.id);
     if (crowd2.length) createTeam({ orgId: og ? og.id : '', name: '베트남어 상담 2팀', leaderName: '이팀장', loginId: 'leader2', pin: '1234', members: crowd2, demo: true });
+    // 테스트용 상담원 계정 (설치 후 바로 로그인해 체험) — 데모라 자리 잠금 없음
+    if (!Object.values(db.users).some((u) => u.demo && u.loginId === 'agent1')) {
+      const ag = createAgent({ nickname: '테스트 상담원', lang: 'ko', teamId: t.id });
+      ag.loginId = 'agent1'; ag.pin = '1234'; ag.srv = true; ag.demo = true; ag.updatedAt = Date.now();
+    }
     const first = crowd[0] && db.users[crowd[0]];
     if (first) {
       sendNotice({ userId: first.id, kind: 'instruction', from: 'leader', fromName: t.leaderName, teamId: t.id, text: '오늘 오후 문의는 환불 규정을 먼저 안내해 주세요.', lang: 'ko', tr: {}, demo: true });

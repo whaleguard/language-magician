@@ -728,11 +728,29 @@
 
   // 성향·성격 상세 리포트 (사주·띠·별자리·혈액형·MBTI + 실제 대화 말투를 함께 봄)
   async function aiPersona(p) {
-    const sys = 'You are a careful customer-communication coach who also knows Korean saju (Four Pillars), Chinese zodiac, Western astrology, blood-type and MBTI folklore. These are for fun and conversation hints only: never present them as facts, never stereotype by gender, nationality or age, never encourage pressure, deception, asking for money or meeting in person. Base communication advice mainly on the actual chat behaviour; use the charts only as soft hints. Write warmly and concretely.';
-    const hist = (p.messages || []).slice(-30).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ': ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
-    const user = ['Write every value in ' + LANGS[p.uiLang].llm + '.', 'Person: ' + p.nickname + (p.age ? ', age ' + p.age : '') + (p.gender ? ', gender ' + p.gender : '') + '.', 'Charts: ' + JSON.stringify(p.charts || {}), 'Recent chat (may be empty):\n' + (hist || '(none)'),
-      'Return JSON {"summary":"2-3 sentence portrait","traits":["4-6 personality traits, each a short phrase with one-line why"],"talk":["4 concrete ways to talk to this person, with an example sentence in their style"],"avoid":["3 things to avoid"],"topics":["4 conversation topics they may enjoy"],"care":["2 ways to show care that fit them"],"chat_evidence":["0-3 observations from the actual chat that support or contradict the chart (empty if no chat)"]}'].join('\n');
-    const out = await callLLM(sys + ' IMPORTANT: write ALL JSON values in ' + LANGS[p.uiLang].llm + ' (the reader\'s language). Example sentences to say to the person go in ' + (LANGS[p.contactLang] || LANGS.en).llm + ' followed by a ' + LANGS[p.uiLang].llm + ' translation in parentheses.', user, true);
+    const sys = 'You are an expert consultant who reads Korean saju (Four Pillars / 사주명리) deeply AND coaches cross-cultural customer communication. You also know Chinese zodiac, Western astrology, blood-type and MBTI folklore. Treat all of these as traditional/for-reference interpretation, not scientific fact — but DO give a rich, specific, confident reading (the user wants depth, not disclaimers on every line). Hard rules: never stereotype or judge by gender, nationality or age; never suggest pressure, deception, asking for money, or meeting in person (prefer phone/video calls for relationship steps); weigh the ACTUAL chat behaviour above the charts when the two disagree, and say so. Be concrete and warm; avoid vague horoscope filler — tie each point to a specific element/ten-god/pillar/shinsal or to a real line from the chat.';
+    const hist = (p.messages || []).slice(-40).map((m) => (m.dir === 'in' ? 'THEM' : 'ME') + ': ' + m.text + (m.translation ? ' [' + m.translation + ']' : '')).join('\n');
+    const contactLang = (LANGS[p.contactLang] || LANGS.en).llm;
+    const user = [
+      '*** Write EVERY value in this JSON in ' + LANGS[p.uiLang].llm + '. Do NOT write in English (unless ' + LANGS[p.uiLang].llm + ' is English). The only exception: each "talk" example sentence is in ' + contactLang + ', with its ' + LANGS[p.uiLang].llm + ' meaning in parentheses. The chart below is given in English for your understanding only — translate every term (elements, ten-gods, stars, etc.) into ' + LANGS[p.uiLang].llm + ' in your answer. ***',
+      'The chart below is already computed precisely from the birth data — interpret it, do not recompute. Read it as a whole (day master vs the other elements, what is strong/weak, the useful element, ten-god balance, special stars, current luck).',
+      'Person: ' + p.nickname + (p.age ? ', age ' + p.age : '') + (p.gender ? ', gender ' + (p.gender === 'f' ? 'female' : 'male') : '') + (p.relation ? ', relationship so far: ' + p.relation : '') + '.',
+      'Computed chart: ' + JSON.stringify(p.charts || {}),
+      'Recent chat (may be empty — if empty, read from the chart alone and say the chat is not available yet):\n' + (hist || '(none)'),
+      'Return ONLY JSON with these keys:',
+      '{"summary":"3-4 sentence vivid portrait of who this person is, grounded in the chart",',
+      '"saju_reading":"one rich paragraph interpreting the four pillars together — day master and its strength, the dominant and missing elements, what the useful element means for them, and any special star (도화/역마/화개/귀인). Plain language, no jargon dump.",',
+      '"traits":["5-6 concrete personality traits, each a short phrase + one-line why tied to the chart"],',
+      '"strengths":["3 strengths"],"cautions":["3 things that stress them or that they struggle with"],',
+      '"communication_style":"2-3 sentences on how they prefer to receive messages (tone, speed, directness)",',
+      '"talk":["5 concrete things to SAY to them, each an example sentence in ' + contactLang + ' then its meaning in parentheses"],',
+      '"avoid":["3 things to avoid saying or doing"],',
+      '"topics":["4-5 conversation topics or interests they likely enjoy"],',
+      '"gift_ideas":["3 gift ideas that fit them"],',
+      '"care":["2-3 ways to build trust / show care that fit this person"],',
+      '"timing":"1-2 sentences on their current-year/this-month fortune and what that means for approaching them now (from the luck fields in the chart)",',
+      '"chat_evidence":["0-4 observations from the ACTUAL chat that confirm or contradict the chart — empty array if no chat"]}'].join('\n');
+    const out = await callLLM(sys + ' IMPORTANT: write ALL JSON values in ' + LANGS[p.uiLang].llm + ' (the reader\'s language), EXCEPT each example sentence in "talk" which must be in ' + contactLang + ' followed by a ' + LANGS[p.uiLang].llm + ' translation in parentheses. Keep arrays within the counts asked. Return valid JSON only.', user, true);
     return typeof out === 'string' ? extractJson(out) : out;
   }
 

@@ -437,13 +437,49 @@
   setTimeout(() => { try { popNotices(); } catch (e) { /* noop */ } }, 1500);
   // 예약 발송된 지시가 도착 시각이 되면 바로 표시
   setInterval(() => { try { const u = Store.me(); if (!u || /^#\/admin/.test(location.hash)) return; if (Store.dueSince(u.id)) { if (!typing()) { render(); popNotices(); } } } catch (e) { /* noop */ } }, 5000);
+  // 로그인 화면 왼쪽 '테스트 로그인' 패널 (설치 후 바로 체험) + 이용안내서
+  const TP_T = {
+    ko: { t: '테스트 로그인', s: '클릭하면 바로 로그인됩니다 (비밀번호 모두 1234)', admin: '최종 관리자', company: '거래처 관리자', leader: '팀장', agent: '상담원', man: '이용안내서', mAdmin: '관리자용', mAgent: '상담원용' },
+    zh: { t: '测试登录', s: '点击即可直接登录（密码均为 1234）', admin: '最终管理员', company: '客户公司管理员', leader: '组长', agent: '咨询员', man: '使用指南', mAdmin: '管理员版', mAgent: '咨询员版' },
+    ja: { t: 'テストログイン', s: 'クリックで即ログイン（パスワードはすべて 1234）', admin: '最終管理者', company: '取引先管理者', leader: 'リーダー', agent: '相談員', man: '利用ガイド', mAdmin: '管理者用', mAgent: '相談員用' },
+    vi: { t: 'Đăng nhập thử', s: 'Nhấn để đăng nhập ngay (mật khẩu đều là 1234)', admin: 'Quản trị tối cao', company: 'Quản trị công ty', leader: 'Trưởng nhóm', agent: 'Nhân viên', man: 'Hướng dẫn', mAdmin: 'Quản trị', mAgent: 'Nhân viên' },
+    en: { t: 'Test login', s: 'Click to log in instantly (password is 1234 for all)', admin: 'Super admin', company: 'Company admin', leader: 'Team leader', agent: 'Agent', man: 'User guide', mAdmin: 'Admin', mAgent: 'Agent' },
+  };
+  function testPanel(lang) {
+    const L = TP_T[lang] ? lang : 'ko'; const x = TP_T[L];
+    const rows = [['admin', L === 'ko' ? '최종 관리자' : x.admin, 'admin', '1234', 'admin', '🛡'], ['admin', x.company, 'company1', '1234', 'admin', '🏢'], ['admin', x.leader, 'leader1', '1234', 'admin', '👔'], ['agent', x.agent, 'agent1', '1234', 'agent', '🎧']];
+    const guideA = L === 'zh' ? 'guide-zh.html' : 'guide.html'; const guideG = L === 'zh' ? 'guide-agent-zh.html' : 'guide-agent.html';
+    return `<aside class="card test-panel"><div class="tp-h"><b>🧪 ${esc(x.t)}</b><span class="tiny muted">${esc(x.s)}</span></div>
+      <div class="tp-list">${rows.map((r) => `<button type="button" class="tp-row" data-test="${r[0]}:${r[2]}:${r[3]}"><span class="tp-ic">${r[5]}</span><span class="tp-role">${esc(r[1])}</span><span class="tp-id">${r[2]}</span></button>`).join('')}</div>
+      <div class="tp-man"><span class="tiny muted">${esc(x.man)}</span><div class="row wrap" style="gap:6px"><a class="link tiny" href="${guideA}" target="_blank" rel="noopener">${esc(x.mAdmin)}</a><a class="link tiny" href="${guideG}" target="_blank" rel="noopener">${esc(x.mAgent)}</a></div></div></aside>`;
+  }
+  function applyTestLogin(kind, formId) {
+    let v; try { v = JSON.parse(sessionStorage.getItem('lm_test') || 'null'); } catch (e) { v = null; }
+    if (!v || v.kind !== kind) return;
+    sessionStorage.removeItem('lm_test');
+    if (kind === 'agent') { try { Store.ensureDemoMembers(); } catch (e) { /* noop */ } }
+    const f = document.getElementById(formId); if (!f) return;
+    const idf = f.querySelector('[name=id]'), pf = f.querySelector('[name=pin]'); if (!idf || !pf) return;
+    idf.value = v.id; pf.value = v.pin;
+    setTimeout(() => { try { f.requestSubmit ? f.requestSubmit() : f.querySelector('button[type=submit]').click(); } catch (e) { /* noop */ } }, 60);
+  }
+  window.LMTestPanel = testPanel; window.LMApplyTest = applyTestLogin;
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-test]'); if (!b) return; e.preventDefault();
+    const [kind, id, pin] = b.dataset.test.split(':');
+    try { sessionStorage.setItem('lm_test', JSON.stringify({ kind, id, pin })); } catch (x) { /* noop */ }
+    const target = kind === 'agent' ? '#/agent' : '#/admin';
+    if (location.hash !== target) { location.hash = target; } // hashchange가 render → applyTestLogin 호출
+    else { applyTestLogin(kind, kind === 'agent' ? 'ag-form' : 'al'); }
+  });
   function renderAgentLogin() {
     document.body.classList.remove('is-admin');
     $app.innerHTML = `<div class="screen"><header class="top row"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">${esc(t('brand'))}</span></header>
-      <div class="content stack-lg" style="max-width:440px;margin:0 auto"><form class="card stack" id="ag-form"><h1>${esc(agT('t'))}</h1><p class="small muted">${esc(agT('s'))}</p>
+      <div class="content stack-lg login-wrap">${testPanel(uiLang)}<div class="login-main"><form class="card stack" id="ag-form"><h1>${esc(agT('t'))}</h1><p class="small muted">${esc(agT('s'))}</p>
         <label class="stack-xs"><span class="label">${esc(agT('id'))}</span><input class="field" name="id" autocomplete="username" autocapitalize="off" required></label>
         <label class="stack-xs"><span class="label">${esc(agT('pw'))}</span><input class="field" name="pin" type="password" autocomplete="current-password" required></label>
-        <button class="btn full" type="submit">${esc(agT('go'))}</button></form><a class="link" href="#/home">${esc(agT('back'))}</a></div></div>`;
+        <button class="btn full" type="submit">${esc(agT('go'))}</button></form><a class="link" href="#/home">${esc(agT('back'))}</a></div></div></div>`;
+    applyTestLogin('agent', 'ag-form');
     document.getElementById('ag-form').addEventListener('submit', async (e) => {
       e.preventDefault(); const f = new FormData(e.target); const bt = e.target.querySelector('button'); bt.disabled = true; bt.textContent = agT('chk');
       let u = null; let res = null;
@@ -1503,7 +1539,11 @@
     const blood = /^(A|B|O|AB)$/.test(c.blood || '') ? c.blood : null;
     const mbti = /^[EI][SN][TF][JP]$/.test(c.mbti || '') ? c.mbti : null;
     if (!s && !animal && !sign && !blood && !mbti) return null;
-    return { s, an: s ? Persona.analyze(s) : null, age, ag: Persona.ageGroup(age), animal, animalEst, sign, blood, mbti };
+    const an = s ? Persona.analyze(s) : null;
+    const gender = c.gender === 'f' || c.gender === 'm' ? c.gender : null;
+    return { s, an, age, ag: Persona.ageGroup(age), animal, animalEst, sign, blood, mbti, gender,
+      shin: s ? Persona.shinsal(s) : [], rel: an && gender ? Persona.relation(an, gender) : null,
+      daeun: s && gender ? Persona.daeun(s, gender) : null, month: s ? Persona.monthLuck(s) : null };
   }
   function personaCard(c, compact) {
     const P = window.Persona; if (!P) return '';
@@ -1526,24 +1566,82 @@
   }
   // 사주 화면용 상세 성향 (상대 생일만 있어도 표시)
   function personaDetail(c, s) {
-    const P = window.Persona; if (!P || !s) return '';
-    const L = P.lang(uiLang), U = P.t(uiLang); const an = P.analyze(s); const dm = P.dm(s.dayMaster, L); const T = P.TG[L];
+    const P = window.Persona; if (!P) return '';
+    if (!s) return personaLite(c);
+    const L = P.lang(uiLang), U = P.t(uiLang), U2 = P.UI2[L] || P.UI2.en; const an = P.analyze(s); const dm = P.dm(s.dayMaster, L); const dmx = (P.DMX[L] || P.DMX.en)[s.dayMaster]; const T = P.TG[L];
     const li = (arr) => arr.map((x) => `<li>${esc(x)}</li>`).join('');
     const top = an.raw.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
     const luck = P.LUCK[L][an.useful];
+    const d = personaData(c) || {};
+    const kv = (k, v) => `<div class="pc-kv"><span class="pc-kk">${esc(k)}</span><span>${esc(v)}</span></div>`;
+    // 신살
+    const shin = (d.shin || []).map((k) => P.SHIN[L][k]);
+    // 혈액형·별자리·띠·MBTI 상세
+    const bloodP = d.blood ? (P.BLOODP[L] || P.BLOODP.en)[d.blood] : null;
+    const signP = d.sign ? (P.SIGNP[L] || P.SIGNP.en)[d.sign] : null;
+    const animP = d.animal ? (P.ANIMALP[L] || P.ANIMALP.en)[d.animal] : null;
+    const mbtiP = d.mbti ? (P.MBTIP[L] || P.MBTIP.en)[d.mbti] : null;
+    const signName = d.sign ? (SIGN_NAMES[uiLang] || SIGN_NAMES.en)[d.sign] : '';
+    const animName = d.animal ? (ANIMALS[uiLang] ? ANIMALS[uiLang][ANIMAL_INDEX.indexOf(d.animal)] : d.animal) : '';
+    // 대운
+    let daeunHtml = '';
+    if (d.daeun) {
+      const now = d.age || 0;
+      daeunHtml = `<div><p class="pc-k">🧭 ${esc(U2.daeun)}</p><div class="daeun-row">${d.daeun.list.map((x) => {
+        const on = now >= x.age && now < x.age + 10;
+        return `<div class="daeun-cell${on ? ' on' : ''}"><b>${x.age}</b><span>${Saju.STEMS[x.stem]}${Saju.BRANCHES[x.branch]}</span><small>${esc(T.names[x.g])}</small>${on ? `<em>${esc(U2.now)}</em>` : ''}</div>`;
+      }).join('')}</div></div>`;
+    }
+    const mo = d.month ? `<p class="small">🗓 ${esc(U2.month)} (${Saju.STEMS[d.month.stem]}${Saju.BRANCHES[d.month.branch]}): ${esc(P.YEAR[L][d.month.g])}</p>` : '';
     return `<div class="card stack persona-detail">
       <div class="between wrap"><h3>🔮 ${esc(U.title)} · ${esc(c.nickname)}</h3><span class="small muted">${esc(U.sub)}</span></div>
+      <div class="row wrap" style="gap:4px">${[d.animal ? `${esc(U.zod)} ${esc(animName)}${d.animalEst ? ' ' + esc(U.est) : ''}` : '', d.sign ? `${esc(U.sign)} ${esc(signName)}` : '', d.blood ? `${esc(U.blood)} ${d.blood}` : '', d.mbti || '', d.age ? t('c_age') + ' ' + d.age + esc(U2.age) : ''].filter(Boolean).map((x) => `<span class="badge gray">${x}</span>`).join('')}</div>
       <div class="pc-dm big"><span class="small muted">${esc(U.dm)} · ${Saju.STEMS[s.dayMaster]}${uiLang === 'ko' ? '(' + Saju.STEMS_KO[s.dayMaster] + ')' : ''} · ${t('el_' + s.dayMasterEl)}</span><b>${esc(dm[0])}</b><p>${esc(dm[1])}</p></div>
       <div class="two">
         <div><p class="pc-k">✨ ${esc(U.str)}</p><ul class="pc-l">${li(dm[2])}</ul></div>
         <div><p class="pc-k">⚠ ${esc(U.avoid)}</p><ul class="pc-l">${li(dm[3])}</ul></div>
       </div>
       <div><p class="pc-k">💬 ${esc(U.tips)}</p><ul class="pc-l">${li(dm[4])}</ul><p class="small"><span class="muted">${esc(U.likes)}:</span> ${esc(dm[5].join(' · '))}</p></div>
+      ${dmx ? `<div class="pc-kvs">${kv('💞 ' + U2.love, dmx[0])}${kv('💼 ' + U2.work, dmx[1])}${kv('😣 ' + U2.stress, dmx[2])}${kv('🤗 ' + U2.comfort, dmx[3])}${kv('🧩 ' + U2.decide, dmx[4])}${kv('🎁 ' + U2.gift, dmx[5])}${kv('👍 ' + U2.praise, dmx[6])}</div>` : ''}
+      ${shin.length ? `<div><p class="pc-k">🌟 ${esc(U2.shin)}</p>${shin.map((x) => `<p class="small"><span class="badge">${esc(x[0])}</span> ${esc(x[1])}</p>`).join('')}</div>` : ''}
+      ${d.rel ? `<p class="small">💗 <b>${esc(P.REL[L].title)}:</b> ${esc(P.REL[L][d.rel])}</p>` : (d.gender ? '' : `<p class="tiny muted">${esc(U2.needG)}</p>`)}
       <div><p class="pc-k">📊 ${esc(U.tg)}</p><div class="mini-bars">${T.names.map((n, i) => `<div class="row"><span class="small" style="width:118px">${esc(n)}</span><div class="bar"><span style="width:${an.groups[i]}%"></span></div><span class="tiny muted" style="width:34px;text-align:end">${an.groups[i]}%</span></div>`).join('')}</div>
         <ul class="pc-l">${li([T.hi[top[0][1]], T.hi[top[1][1]], T.lo[top[4][1]]])}</ul></div>
       <p class="small">⚖ ${esc(P.STR[L][an.strength])}</p>
       <div class="row wrap" style="gap:6px"><span class="badge">${esc(U.luck)}: ${t('el_' + an.useful)}</span><span class="badge gray">${esc(P.LUCK[L].h[0])} ${esc(luck[0])}</span><span class="badge gray">${esc(P.LUCK[L].h[1])} ${esc(luck[1])}</span><span class="badge gray">${esc(P.LUCK[L].h[2])} ${esc(luck[2])}</span></div>
       <p class="small">📅 ${esc(U.year)} (${new Date().getFullYear()} ${Saju.STEMS[an.yearStem]}${Saju.BRANCHES[an.yearBranch]}): ${esc(P.YEAR[L][an.yearG])}</p>
+      ${mo}
+      ${daeunHtml}
+      ${bloodP || signP || animP || mbtiP ? `<div class="pc-other"><p class="pc-k">🧬 ${esc(U.title)}</p>
+        ${bloodP ? `<p class="small"><span class="muted">${esc(U2.blood)} (${d.blood}):</span> ${esc(bloodP[0])}<br>💬 ${esc(bloodP[1].join(' · '))}</p>` : ''}
+        ${signP ? `<p class="small"><span class="muted">${esc(U2.sign)} (${esc(signName)} · ${esc(U2.el[signP[0]] || signP[0])}):</span> ${esc(signP[1])}<br>💬 ${esc(signP[2])}</p>` : ''}
+        ${animP ? `<p class="small"><span class="muted">${esc(U2.animal)} (${esc(animName)}):</span> ${esc(animP[0])}<br>💬 ${esc(animP[1])}</p>` : ''}
+        ${mbtiP ? `<p class="small"><span class="muted">${esc(U2.mbti)} (${d.mbti}):</span> ${esc(mbtiP[0])}<br>💬 ${esc(mbtiP[1])}</p>` : ''}
+      </div>` : ''}
+      <div class="persona-ai" id="pa-box">${personaAiHtml(c)}</div>
+      <p class="tiny muted">${esc(U.fun)}</p>
+    </div>`;
+  }
+  // 사주(생년월일) 없이 혈액형·별자리·띠·MBTI만 있을 때의 간이 상세
+  function personaLite(c) {
+    const P = window.Persona; const d = personaData(c); if (!d) return '';
+    const L = P.lang(uiLang), U = P.t(uiLang), U2 = P.UI2[L] || P.UI2.en;
+    const bloodP = d.blood ? (P.BLOODP[L] || P.BLOODP.en)[d.blood] : null;
+    const signP = d.sign ? (P.SIGNP[L] || P.SIGNP.en)[d.sign] : null;
+    const animP = d.animal ? (P.ANIMALP[L] || P.ANIMALP.en)[d.animal] : null;
+    const mbtiP = d.mbti ? (P.MBTIP[L] || P.MBTIP.en)[d.mbti] : null;
+    const signName = d.sign ? (SIGN_NAMES[uiLang] || SIGN_NAMES.en)[d.sign] : '';
+    const animName = d.animal ? (ANIMALS[uiLang] ? ANIMALS[uiLang][ANIMAL_INDEX.indexOf(d.animal)] : d.animal) : '';
+    if (!bloodP && !signP && !animP && !mbtiP && !d.ag) return '';
+    return `<div class="card stack persona-detail">
+      <div class="between wrap"><h3>🔮 ${esc(U.title)} · ${esc(c.nickname)}</h3><span class="small muted">${esc(U.sub)}</span></div>
+      <div class="row wrap" style="gap:4px">${[d.animal ? `${esc(U.zod)} ${esc(animName)}${d.animalEst ? ' ' + esc(U.est) : ''}` : '', d.sign ? `${esc(U.sign)} ${esc(signName)}` : '', d.blood ? `${esc(U.blood)} ${d.blood}` : '', d.mbti || ''].filter(Boolean).map((x) => `<span class="badge gray">${x}</span>`).join('')}</div>
+      ${bloodP ? `<p class="small"><span class="muted">${esc(U2.blood)} (${d.blood}):</span> ${esc(bloodP[0])}<br>💬 ${esc(bloodP[1].join(' · '))}</p>` : ''}
+      ${signP ? `<p class="small"><span class="muted">${esc(U2.sign)} (${esc(signName)} · ${esc(U2.el[signP[0]] || signP[0])}):</span> ${esc(signP[1])}<br>💬 ${esc(signP[2])}</p>` : ''}
+      ${animP ? `<p class="small"><span class="muted">${esc(U2.animal)} (${esc(animName)}):</span> ${esc(animP[0])}<br>💬 ${esc(animP[1])}</p>` : ''}
+      ${mbtiP ? `<p class="small"><span class="muted">${esc(U2.mbti)} (${d.mbti}):</span> ${esc(mbtiP[0])}<br>💬 ${esc(mbtiP[1])}</p>` : ''}
+      ${d.ag ? `<p class="small pc-age">👤 ${esc(P.AGE[L][d.ag])}</p>` : ''}
+      <p class="small muted">${esc(U.need)}</p>
       <div class="persona-ai" id="pa-box">${personaAiHtml(c)}</div>
       <p class="tiny muted">${esc(U.fun)}</p>
     </div>`;
@@ -1552,12 +1650,18 @@
     const U = Persona.t(uiLang); const r = c.personaAi && c.personaAi[uiLang];
     if (!r) return `<button type="button" class="btn secondary" id="pa-go">🤖 ${esc(U.ai)}</button>`;
     const li = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('');
-    return `<div class="stack-sm"><p class="pc-k">🤖 ${esc(U.ai)}</p><p>${esc(r.summary || '')}</p>
+    return `<div class="stack-sm ai-report"><p class="pc-k">🤖 ${esc(U.ai)}</p><p>${esc(r.summary || '')}</p>
+      ${r.saju_reading ? `<p class="pc-k">🔮 ${esc(U.aiReading)}</p><p class="small">${esc(r.saju_reading)}</p>` : ''}
       ${r.traits ? `<ul class="pc-l">${li(r.traits)}</ul>` : ''}
+      ${r.strengths || r.cautions ? `<div class="two">${r.strengths ? `<div><p class="pc-k">✨ ${esc(U.aiStr)}</p><ul class="pc-l">${li(r.strengths)}</ul></div>` : ''}${r.cautions ? `<div><p class="pc-k">⚠ ${esc(U.aiCautions)}</p><ul class="pc-l">${li(r.cautions)}</ul></div>` : ''}</div>` : ''}
+      ${r.communication_style ? `<p class="small"><b>${esc(U.aiComm)}:</b> ${esc(r.communication_style)}</p>` : ''}
       ${r.talk ? `<p class="pc-k">💬 ${esc(U.tips)}</p><ul class="pc-l">${li(r.talk)}</ul>` : ''}
       ${r.avoid ? `<p class="pc-k">⚠ ${esc(U.avoid)}</p><ul class="pc-l">${li(r.avoid)}</ul>` : ''}
       ${r.topics ? `<p class="small"><span class="muted">${esc(U.likes)}:</span> ${esc((r.topics || []).join(' · '))}</p>` : ''}
-      ${r.chat_evidence && r.chat_evidence.length ? `<ul class="pc-l tiny muted">${li(r.chat_evidence)}</ul>` : ''}
+      ${r.gift_ideas ? `<p class="small"><span class="muted">${esc(U.aiGift)}:</span> ${esc((r.gift_ideas || []).join(' · '))}</p>` : ''}
+      ${r.care ? `<p class="pc-k">🤝 ${esc(U.aiCare)}</p><ul class="pc-l">${li(r.care)}</ul>` : ''}
+      ${r.timing ? `<p class="small pc-age">⏳ <b>${esc(U.aiTiming)}:</b> ${esc(r.timing)}</p>` : ''}
+      ${r.chat_evidence && r.chat_evidence.length ? `<p class="pc-k">🗂 ${esc(U.tips)}</p><ul class="pc-l tiny muted">${li(r.chat_evidence)}</ul>` : ''}
       <button type="button" class="link tiny" id="pa-go">↻ ${esc(U.ai)}</button></div>`;
   }
   function bindPersonaAi(c, s) {
@@ -1567,11 +1671,25 @@
       if (!Engine.aiConfig().key) { toast(U.nopro); return; }
       box.innerHTML = `<p class="small muted">⏳ ${esc(U.aiwait)}</p>`;
       try {
-        const an = s ? Persona.analyze(s) : null;
-        const charts = s ? { pillars: s.pillars.map((p) => p.hanja), dayMaster: Saju.STEMS[s.dayMaster] + ' ' + s.dayMasterEl, elements: s.counts, tenGods: an && Object.fromEntries(Persona.TG.en.names.map((n, i) => [n, an.groups[i] + '%'])), strength: an && an.strength, useful: an && an.useful, zodiac: s.animal } : {};
-        const d = personaData(c) || {};
-        if (d.sign) charts.starSign = d.sign; if (d.blood) charts.blood = d.blood; if (d.mbti) charts.mbti = d.mbti; if (!charts.zodiac && d.animal) charts.zodiac = d.animal;
-        const out = await Engine.aiPersona({ uiLang, contactLang: c.lang, nickname: c.nickname, age: ageOf(c), gender: c.gender === 'f' ? 'female' : c.gender === 'm' ? 'male' : '', charts, messages: Store.messagesOf(c.id) });
+        const an = s ? Persona.analyze(s) : null; const d = personaData(c) || {};
+        let charts = {};
+        if (s) {
+          charts = {
+            pillars: s.pillars.map((p) => p.key + ':' + p.hanja + '(' + p.stemEl + '/' + p.branchEl + ')'),
+            dayMaster: Saju.STEMS[s.dayMaster] + ' (' + s.dayMasterEl + ', ' + (s.dayMasterYang ? 'yang' : 'yin') + ')',
+            elements: s.counts, strongElements: s.strong, missingElements: s.lacking,
+            tenGods: an && Object.fromEntries(Persona.TG.en.names.map((n, i) => [n, an.groups[i] + '%'])),
+            strength: an && an.strength, usefulElement: an && an.useful,
+            specialStars: (Persona.shinsal(s) || []).map((k) => Persona.SHIN.en[k][0]),
+            thisYear: an && { ganzhi: Saju.STEMS[an.yearStem] + Saju.BRANCHES[an.yearBranch], tenGod: Persona.TG.en.names[an.yearG] },
+            thisMonth: d.month && { ganzhi: Saju.STEMS[d.month.stem] + Saju.BRANCHES[d.month.branch], tenGod: Persona.TG.en.names[d.month.g] },
+          };
+          if (d.daeun) charts.currentLuckCycle = (() => { const now = d.age || 0; const cur = d.daeun.list.find((x) => now >= x.age && now < x.age + 10) || d.daeun.list[0]; return { fromAge: cur.age, ganzhi: Saju.STEMS[cur.stem] + Saju.BRANCHES[cur.branch], tenGod: Persona.TG.en.names[cur.g] }; })();
+          if (d.rel) charts.relationshipEnergy = d.rel;
+        }
+        if (d.animal) charts.chineseZodiac = d.animal;
+        if (d.sign) charts.starSign = d.sign; if (d.blood) charts.bloodType = d.blood; if (d.mbti) charts.mbti = d.mbti;
+        const out = await Engine.aiPersona({ uiLang, contactLang: c.lang, nickname: c.nickname, age: ageOf(c), gender: c.gender === 'f' ? 'f' : c.gender === 'm' ? 'm' : '', relation: c.relation, charts, messages: Store.messagesOf(c.id) });
         if (!out || !out.summary) throw new Error('empty');
         const pa = Object.assign({}, c.personaAi || {}, { [uiLang]: Object.assign(out, { at: Date.now() }) });
         Store.updateContact(c.id, { personaAi: pa }); c.personaAi = pa;
@@ -2508,7 +2626,7 @@
       const a = sajuOf(meData.birth, meData.birthTime, meData.lunar, meData.leap, meData.tz);
       const b = sajuOf(val('c-birth'), val('c-time'), val('c-lunar') === '1', val('c-leap'), val('c-tz'));
       const out = document.getElementById('sj-out');
-      if (!b) { out.innerHTML = `<div class="card notice small">${t('saju_need')}</div>`; Store.save(); return; }
+      if (!b) { const lite = personaLite(c); out.innerHTML = lite || `<div class="card notice small">${t('saju_need')}</div>`; if (lite) bindPersonaAi(c, null); Store.save(); return; }
       if (!a) { out.innerHTML = `<div class="stack-lg">${personaDetail(c, b)}<div class="card notice small">${t('saju_need')}</div></div>`; bindPersonaAi(c, b); Store.save(); return; }
       const pf = Engine.profile(Store.messagesOf(c.id));
       const sA = Saju.zodiacSign(a.solar.month, a.solar.day), sB = Saju.zodiacSign(b.solar.month, b.solar.day);
@@ -2533,6 +2651,7 @@
     };
     document.getElementById('sj-go').addEventListener('click', run);
     if (c.birthday && c.birthday.length === 10 && !c.birthdayNoYear) run();
+    else { const lite = personaLite(c); if (lite) { const o = document.getElementById('sj-out'); if (o) { o.innerHTML = lite; bindPersonaAi(c, null); } } }
   }
 
   /* ================= 선물 ================= */

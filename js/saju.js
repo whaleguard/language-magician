@@ -160,6 +160,7 @@
       yearBranch: yBranch,
       animal: ZODIAC_ANIMALS[yBranch],
       counts, total, strong, lacking,
+      utcMs, yearStem: yStem, monthStem: mStem, monthBranch: mBranch, lon,
     };
   }
 

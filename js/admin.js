@@ -104,14 +104,16 @@
 
   /* ---------- 로그인 ---------- */
   function login() {
-    $app.innerHTML = `<div class="screen admin" lang="ko"><div class="content stack-lg" style="max-width:420px;margin:8vh auto">
-      <span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 운영</span>
+    $app.innerHTML = `<div class="screen admin" lang="ko"><div class="content stack-lg login-wrap admin-login">
+      ${window.LMTestPanel ? window.LMTestPanel('ko') : ''}
+      <div class="login-main"><span class="brand"><img class="brand-img" src="assets/lm-mark.png" alt="LM">상담매직 운영</span>
       <form class="card stack" id="al"><h1>관리자 로그인</h1><p class="small muted">아이디와 비밀번호를 입력하세요. 모든 대화 열람은 감사로그에 기록됩니다.</p>
         <label class="stack-xs"><span class="label">아이디</span><input class="field" name="id" value="admin" autocomplete="username"></label>
         <label class="stack-xs"><span class="label">비밀번호</span><input class="field" name="pin" type="password" autocomplete="current-password" value=""></label>
         <button class="btn full" type="submit">로그인</button>
         <p class="tiny muted">상담원은 <a class="link" href="#/agent">상담원 로그인</a> · 테스트 버전 · 최종 admin · 일반고객 personal1 · 기업고객 business1 · 거래처 company1 · 팀장 leader1 (비밀번호 모두 1234)</p>
-      </form><a class="link" href="#/home">← 앱으로</a></div></div>`;
+      </form><a class="link" href="#/home">← 앱으로</a></div></div></div>`;
+    if (window.LMApplyTest) window.LMApplyTest('admin', 'al');
     document.getElementById('al').addEventListener('submit', async (e) => {
       e.preventDefault(); Store.reload(); const f = new FormData(e.target);
       // 이 기기에 없는 아이디면 공용 서버에서 받아온 뒤 다시 확인 (다른 PC에서 만든 팀장·거래처)

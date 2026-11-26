@@ -362,3 +362,31 @@ body.has-lead .ws > :is(.ws-rail, .ws-main, .ws-side) { height: calc(100dvh - 40
 .pc-l li { margin: 1px 0; }
 .pc-age { padding: 6px 9px; border-radius: 9px; background: #fff8e6; color: #5c4400; }
 .persona-ai { border-top: 1px dashed #d8dfe8; padding-top: 10px; }
+/* 성향 상세 확장 */
+.pc-kvs { display: grid; gap: 6px; margin: 2px 0; }
+.pc-kv { display: grid; grid-template-columns: 112px 1fr; gap: 8px; font-size: 13px; line-height: 1.5; }
+.pc-kv .pc-kk { color: #6b7a8c; font-weight: 600; }
+@media (max-width: 480px) { .pc-kv { grid-template-columns: 96px 1fr; } }
+.pc-other p, .persona-detail .pc-other { margin-top: 2px; }
+.daeun-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.daeun-cell { flex: none; min-width: 60px; display: grid; justify-items: center; gap: 1px; padding: 8px 6px; border-radius: 10px; background: #f3f6fa; border: 1px solid #e3ebf3; position: relative; }
+.daeun-cell b { font-size: 13px; color: #34465b; }
+.daeun-cell span { font-size: 15px; font-weight: 700; color: #3b2a86; }
+.daeun-cell small { font-size: 10px; color: #8795a6; }
+.daeun-cell.on { background: #eaf3ff; border-color: #7aa7f5; }
+.daeun-cell.on em { position: absolute; top: -8px; right: -4px; font-style: normal; font-size: 9px; font-weight: 800; color: #fff; background: #036da3; padding: 1px 5px; border-radius: 999px; }
+/* 로그인 테스트 패널 */
+.login-wrap { display: flex; gap: 20px; align-items: flex-start; justify-content: center; flex-wrap: wrap; max-width: 760px; margin: 6vh auto 0; }
+.login-wrap .login-main { flex: 1 1 320px; max-width: 420px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+.login-wrap .login-main > * { width: 100%; }
+.test-panel { flex: 0 0 280px; align-self: stretch; }
+.test-panel .tp-h { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.test-panel .tp-h b { font-size: 15px; }
+.tp-list { display: grid; gap: 7px; }
+.tp-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line, #e3ebf3); border-radius: 10px; background: #fff; cursor: pointer; font: inherit; text-align: left; transition: border-color .12s, background .12s; }
+.tp-row:hover { border-color: #036da3; background: #f2f8fc; }
+.tp-ic { font-size: 18px; }
+.tp-role { flex: 1; font-weight: 700; font-size: 14px; color: #1b2733; }
+.tp-id { font-size: 12px; color: #8795a6; font-family: ui-monospace, monospace; }
+.tp-man { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line, #e3ebf3); display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 680px) { .login-wrap { flex-direction: column-reverse; align-items: stretch; margin-top: 3vh; } .test-panel { flex: none; } .login-wrap .login-main { max-width: none; } }
